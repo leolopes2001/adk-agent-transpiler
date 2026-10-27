@@ -12,6 +12,14 @@
 
 name: lab-agent
 
+# Every project container: read-only root filesystem (writable /tmp in memory),
+# no Linux capabilities and no privilege gain through setuid binaries.
+x-hardening: &hardening
+  read_only: true
+  tmpfs: ["/tmp:size=64m"]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
 services:
   postgres:
     image: postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
@@ -23,6 +31,14 @@ services:
       - pgdata:/var/lib/postgresql/data
     networks: [backend]
     restart: unless-stopped
+    # The official image starts as root to fix the data directory's ownership,
+    # then drops to the postgres user: it needs these capabilities and a
+    # writable socket directory, nothing else.
+    read_only: true
+    tmpfs: ["/tmp:size=64m", "/var/run/postgresql:size=1m"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler"]
       interval: 5s
@@ -30,6 +46,7 @@ services:
       retries: 10
 
   scheduler-api:
+    <<: *hardening
     build: { context: ., dockerfile: docker/scheduler-api.Dockerfile }
     environment:
       DATABASE_URL: postgresql+psycopg://scheduler:${POSTGRES_PASSWORD}@postgres:5432/scheduler
@@ -55,6 +72,7 @@ services:
       retries: 20
 
   ocr-mcp:
+    <<: *hardening
     build: { context: ., dockerfile: docker/ocr-mcp.Dockerfile }
     environment:
       MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?set MCP_AUTH_TOKEN in .env}
@@ -76,6 +94,7 @@ services:
       retries: 20
 
   rag-mcp:
+    <<: *hardening
     build: { context: ., dockerfile: docker/rag-mcp.Dockerfile }
     environment:
       MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?set MCP_AUTH_TOKEN in .env}
@@ -98,6 +117,7 @@ services:
   # A CLI, not a long-running service: `docker compose run --rm agent ...`.
   # The `cli` profile keeps it out of `docker compose up`.
   agent:
+    <<: *hardening
     build: { context: ., dockerfile: docker/agent.Dockerfile }
     profiles: [cli]
     environment:
@@ -130,7 +150,11 @@ networks:
   backend:
     internal: true
   egress: {}
-  edge: {}
+  # Only for publishing the API port: without IP masquerading, inbound connections
+  # to the published port work but containers get no outbound internet access.
+  edge:
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
 
 volumes:
   pgdata: {}

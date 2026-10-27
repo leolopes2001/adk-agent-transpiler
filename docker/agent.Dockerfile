@@ -16,11 +16,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable --extra agent
 
 FROM python:3.12.16-slim-trixie@sha256:12316debbfb86890f6b2d825820612741ba527ad5a44e3902759141d572bfe8f
+# Unprivileged user; no setuid/setgid binaries left to escalate from.
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent \
-        --shell /usr/sbin/nologin app
+        --shell /usr/sbin/nologin app \
+    && find / -xdev -perm /6000 -type f -exec chmod a-s {} +
 COPY --from=builder /opt/venv /opt/venv
-ENV PATH=/opt/venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# The root filesystem is read-only at run time; HOME points at the /tmp tmpfs.
+ENV PATH=/opt/venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/tmp
 WORKDIR /app
 USER 10001:10001
 ENTRYPOINT ["lab-agent"]
