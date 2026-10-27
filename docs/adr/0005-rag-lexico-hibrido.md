@@ -20,8 +20,12 @@ score em [0, 1]. Match exato de nome ou alias vale 1.0. A normalização é
 se o que o LLM extraiu aparece no texto.
 
 O servidor só recupera e pontua. Quem decide é o nó `confidence_gate`, com
-thresholds definidos na spec e calibrados contra um conjunto de avaliação
-versionado.
+thresholds definidos na spec (0,85 / 0,60 / margem 0,05) e calibrados por
+`scripts/calibrate_rag.py` contra um conjunto de avaliação versionado
+(`tests/data/rag_eval.jsonl`). A regra do gate fica em
+`lab_common.gate.gate_decision`, usada pelo nó, pelo teste de regressão do
+RAG e pelo script de calibração; a margem é comparada com 4 casas
+(`round(c1 - c2, 4)`), a mesma precisão dos scores.
 
 ## Consequências
 

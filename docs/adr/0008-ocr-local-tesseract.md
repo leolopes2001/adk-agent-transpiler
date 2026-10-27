@@ -18,6 +18,11 @@ container, com pré-processamento em OpenCV/Pillow (escala de cinza,
 binarização, correção de inclinação). A imagem nunca sai do servidor OCR; só
 texto mascarado é devolvido.
 
+O binário do Tesseract é chamado por subprocesso, sem shell, com a imagem no
+stdin e a tabela TSV no stdout. O `pytesseract` não é usado porque grava a
+imagem e o texto reconhecido em arquivos temporários; assim, nada do
+documento toca o disco.
+
 As imagens de teste são geradas por `scripts/make_sample_images.py`, com
 fonte e semente fixas, para que a qualidade do OCR possa ser medida sobre
 entradas reproduzíveis.

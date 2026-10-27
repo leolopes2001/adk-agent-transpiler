@@ -12,9 +12,9 @@ deve criar duas solicitações.
 
 ## Decisão
 
-O agente calcula a `Idempotency-Key` a partir do conteúdo: hash do documento,
-`patient_ref` e códigos aceitos em ordem. Reexecutar com a mesma imagem e o
-mesmo resultado gera a mesma chave.
+O agente calcula a `Idempotency-Key` a partir do conteúdo:
+`sha256("v1|<hash do documento>|<patient_ref>|<códigos aceitos ordenados>")`.
+Reexecutar com a mesma imagem e o mesmo resultado gera a mesma chave.
 
 A API guarda a chave com o hash canônico do corpo da requisição, em uma
 tabela cuja chave primária é a própria `Idempotency-Key`:
@@ -32,6 +32,11 @@ a segunda falha na constraint e relê o registro gravado pela primeira.
 - Retries são seguros; o nó de agendamento pode ter `RetryConfig` sem risco
   de duplicar.
 - A garantia vale sob concorrência porque está no banco, não em memória.
-- A chave expira (TTL), então uma reexecução muito posterior cria uma nova
-  solicitação; isso é aceitável para o caso de uso.
-- Implementação na fase 03 (API) e na fase 06 (cliente no runtime).
+- A chave expira (`IDEMPOTENCY_TTL_HOURS`, padrão 24 h), então uma
+  reexecução muito posterior cria uma nova solicitação; isso é aceitável para
+  o caso de uso.
+- A validação do catálogo vem antes da idempotência: uma requisição inválida
+  não grava nem consome a chave.
+- Implementação: `scheduler_api.domain.services` e
+  `scheduler_api.infra.repositories` (API), `agent_runtime.nodes.schedule`
+  (chave e cliente).

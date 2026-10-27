@@ -17,10 +17,11 @@ factories de `agent_runtime.nodes` com parâmetros literais vindos da spec,
 arestas e rotas. Toda a lógica de negócio vive em `agent_runtime`, que é uma
 biblioteca comum com testes próprios.
 
-Para validar a ideia cedo, a fase 02 entrega um *walking skeleton*: factories
-com a assinatura final que ainda levantam `NotImplementedError`. O código
-gerado já importa e monta o grafo; a fase 06 preenche as implementações sem
-mudar o que o transpilador emite.
+A ideia foi validada cedo com um *walking skeleton*: factories com a
+assinatura final que ainda levantavam `NotImplementedError`, e um código
+gerado que já importava e montava o grafo. As implementações vieram depois
+sem mudar o que o transpilador emite: os golden files em `tests/golden/`
+continuaram os mesmos.
 
 ## Consequências
 

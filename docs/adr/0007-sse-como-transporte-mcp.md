@@ -17,8 +17,9 @@ Verificamos com `mcp` 2.3.0: o cliente `mcp.client.sse.sse_client` e o
 
 ## Decisão
 
-- Os servidores usam `FastMCP` com `sse_app()`; o runtime conecta com
-  `McpToolset` + `SseConnectionParams`.
+- Os servidores usam `FastMCP` com `sse_app()`. O runtime conecta pelo
+  `SessionMcpGateway` (`mcp.client.sse.sse_client`); o `AdkMcpGateway`
+  (`McpToolset` + `SseConnectionParams`) fica como alternativa (ADR-0009).
 - O `pyproject.toml` fixa `mcp>=1.24,<2`. O limite inferior é o mínimo aceito
   pelo `google-adk`; o superior evita a quebra de API da série 2.x. O lock
   resolveu para `mcp` 1.30.0.

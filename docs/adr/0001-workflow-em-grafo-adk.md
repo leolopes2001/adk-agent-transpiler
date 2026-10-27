@@ -32,5 +32,5 @@ decididos por nós determinísticos.
 - Retries e timeouts são configuração por nó, não instrução em prompt.
 - Custo: o grafo precisa ser descrito na spec e validado, o que exige um
   transpilador mais elaborado do que gerar um agente único.
-- A API do Workflow do ADK 2 é recente; suposições sobre ela serão fixadas em
-  testes de contrato na fase 06 (ADR-0009).
+- A API do Workflow do ADK 2 é recente; as suposições sobre ela estão fixadas
+  em testes de contrato (`tests/contract/test_adk_contract.py`, ADR-0009).
