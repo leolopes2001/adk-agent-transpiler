@@ -1,0 +1,37 @@
+"""Request dependencies shared by the routes."""
+
+import hmac
+from typing import Annotated
+
+from fastapi import Depends, HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader
+
+from scheduler_api.log import get_logger
+from scheduler_api.settings import Settings
+
+API_KEY_HEADER = "X-API-Key"
+
+_log = get_logger(__name__)
+
+# auto_error=False so a missing header goes through the same 401 path as a wrong one.
+api_key_header = APIKeyHeader(
+    name=API_KEY_HEADER,
+    auto_error=False,
+    description="Shared API key configured on the server (`SCHEDULER_API_KEY`).",
+)
+
+
+def get_settings(request: Request) -> Settings:
+    settings: Settings = request.app.state.settings
+    return settings
+
+
+def require_api_key(
+    settings: Annotated[Settings, Depends(get_settings)],
+    api_key: Annotated[str | None, Security(api_key_header)],
+) -> None:
+    expected = settings.scheduler_api_key.get_secret_value().encode()
+    # Constant-time comparison; bytes so a non-ASCII header cannot raise TypeError.
+    if api_key is None or not hmac.compare_digest(api_key.encode(), expected):
+        _log.warning("auth_failed", reason="missing" if api_key is None else "invalid")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing or invalid API key.")
