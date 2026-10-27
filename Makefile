@@ -1,4 +1,4 @@
-.PHONY: setup lint typecheck test-unit check
+.PHONY: setup lint typecheck lint-imports test-unit check
 
 setup:
 	uv sync --all-extras --group dev
@@ -11,7 +11,10 @@ lint:
 typecheck:
 	uv run mypy src
 
+lint-imports:
+	uv run lint-imports
+
 test-unit:
 	uv run pytest -m "unit or contract"
 
-check: lint typecheck test-unit
+check: lint typecheck lint-imports test-unit
