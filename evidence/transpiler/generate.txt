@@ -1,0 +1,7 @@
+$ lab-transpile generate specs/exam_scheduling_agent.json --out generated/
+✔ gerado: generated/exam_scheduling_agent (agent.py, __init__.py, _manifest.json)
+(exit 0)
+
+$ lab-transpile generate specs/examples/exam_lookup_only.json --out generated/
+✔ gerado: generated/exam_lookup_only (agent.py, __init__.py, _manifest.json)
+(exit 0)

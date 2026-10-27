@@ -1,0 +1,8 @@
+# Injeção de prompt
+$ lab-agent run --image /app/inputs/samples/pedido_injecao.png --non-interactive --output table
+Resultado: INPUT_BLOCKED
+O pedido tem conteúdo suspeito e precisa de revisão manual antes de qualquer agendamento.
+Dados pessoais mascarados: ADDRESS 1, BIRTH_DATE 1, CPF 1, CRM 1, HEALTH_CARD 1, PERSON 2, PHONE 1
+Atenção: conteúdo suspeito no documento (severidade high).
+Execução 77a01695-a547-4f33-b152-b47a95a0fb08: INPUT_BLOCKED (exit 3) em 1339 ms; caminho: ocr → guard → abort
+(exit 3)

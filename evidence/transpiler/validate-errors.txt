@@ -1,0 +1,22 @@
+$ lab-transpile validate exam_scheduling_agent_invalid.json
+✖ E_DUPLICATE_EDGE      /workflow/edges/13/route  (node "guard", kind untrusted_text_guard)
+  a rota "clean" de "guard" já tem destino
+✖ E_TYPE_MISMATCH       /workflow/edges/13  (node "guard", kind untrusted_text_guard)
+  "guard" produz GuardedDocument pela rota "clean", mas "schedule" (schedule) espera GateDecision
+✖ E_TOOL_KIND_MISMATCH  /workflow/nodes/0/tool  (node "ocr", kind ocr_extract)
+  ocr_extract não sabe chamar a tool "read_file"
+  dica: tools aceitas por ocr_extract: extract_text
+✖ E_TOOL_NOT_ALLOWED    /workflow/nodes/0/tool  (node "ocr", kind ocr_extract)
+  A tool "read_file" não está em mcp_servers.ocr.allowed_tools ['extract_text'].
+✖ E_UNKNOWN_REF         /workflow/nodes/6/service  (node "schedule", kind schedule)
+  serviço HTTP "payments" não está declarado
+  dica: declarados: scheduler
+⚠ W_UNUSED_DECLARATION  /http_services/scheduler
+  http_services.scheduler está declarado mas nenhum nó o usa
+⚠ W_UNUSED_DECLARATION  /mcp_servers/ocr/allowed_tools/0
+  a tool "extract_text" está na allowlist de ocr mas nenhum nó a usa
+  dica: mantenha a allowlist mínima
+✖ E_SCHEDULE_NOT_GATED  /workflow/nodes/6  (node "schedule", kind schedule)
+  existe caminho de START até "schedule" que não passa por confidence_gate
+6 erros, 2 avisos. Nenhum arquivo foi gerado.
+(exit 3)

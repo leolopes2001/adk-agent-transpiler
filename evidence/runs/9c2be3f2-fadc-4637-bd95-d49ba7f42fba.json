@@ -1,0 +1,99 @@
+{
+  "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba",
+  "agent": "exam_scheduling_agent",
+  "spec_sha256": "54dcc984c29c9de186c13927fbda49acabde99dabd28452fd0a0ce6637164d02",
+  "outcome": "scheduled",
+  "exit_code": 0,
+  "path": [
+    "ocr",
+    "guard",
+    "extraction",
+    "resolve",
+    "gate",
+    "schedule",
+    "present"
+  ],
+  "timings_ms": {
+    "ocr": 1003,
+    "guard": 2,
+    "extraction": 4202,
+    "resolve": 29,
+    "gate": 2,
+    "schedule": 46,
+    "present": 1,
+    "total": 5287
+  },
+  "retries": {},
+  "pii_masked": {
+    "ADDRESS": 1,
+    "BIRTH_DATE": 1,
+    "CPF": 1,
+    "CRM": 1,
+    "HEALTH_CARD": 1,
+    "PERSON": 2,
+    "PHONE": 1
+  },
+  "injection_severity": "none",
+  "exams": [
+    {
+      "mention": "Hemograma completo",
+      "code": "LAB-10001",
+      "score": 1.0,
+      "status": "accepted",
+      "source": "both",
+      "reason": null
+    },
+    {
+      "mention": "Glicemia de jejum",
+      "code": "LAB-10012",
+      "score": 1.0,
+      "status": "accepted",
+      "source": "both",
+      "reason": null
+    },
+    {
+      "mention": "Hormônio tireoestimulante (TSH)",
+      "code": "LAB-10043",
+      "score": 0.8792,
+      "status": "accepted",
+      "source": "both",
+      "reason": null
+    },
+    {
+      "mention": "T4 livre",
+      "code": "LAB-10044",
+      "score": 1.0,
+      "status": "accepted",
+      "source": "both",
+      "reason": null
+    },
+    {
+      "mention": "Colesterol total e frações",
+      "code": "LAB-10016",
+      "score": 1.0,
+      "status": "accepted",
+      "source": "both",
+      "reason": null
+    },
+    {
+      "mention": "Urina tipo 1 (EAS)",
+      "code": "LAB-10079",
+      "score": 0.9,
+      "status": "accepted",
+      "source": "both",
+      "reason": null
+    },
+    {
+      "mention": "Proteína C-reativa",
+      "code": "LAB-10037",
+      "score": 1.0,
+      "status": "accepted",
+      "source": "both",
+      "reason": null
+    }
+  ],
+  "appointment": {
+    "id": "apt_01M5ZCEM44HX5JPKZFWV6TVMPG",
+    "status": "scheduled"
+  }
+}

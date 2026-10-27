@@ -1,0 +1,211 @@
+--- specs/exam_scheduling_agent.json
++++ specs/examples/exam_lookup_only.json
+@@ -1,17 +1,9 @@
+ {
+   "spec_version": "1.0",
+   "agent": {
+-    "name": "exam_scheduling_agent",
+-    "description": "Agenda exames a partir da imagem de um pedido m\u00e9dico: OCR, resolu\u00e7\u00e3o no cat\u00e1logo e solicita\u00e7\u00e3o de agendamento.",
++    "name": "exam_lookup_only",
++    "description": "Consulta os exames de um pedido m\u00e9dico no cat\u00e1logo, sem LLM e sem agendar.",
+     "version": "1.0.0"
+-  },
+-  "models": {
+-    "extractor": {
+-      "provider": "gemini",
+-      "name": "gemini-flash-latest",
+-      "temperature": 0.0,
+-      "max_output_tokens": 2048
+-    }
+   },
+   "mcp_servers": {
+     "ocr": {
+@@ -33,22 +25,6 @@
+       ],
+       "connect_timeout_s": 5,
+       "read_timeout_s": 15
+-    }
+-  },
+-  "http_services": {
+-    "scheduler": {
+-      "base_url_env": "SCHEDULER_API_URL",
+-      "api_key_env": "SCHEDULER_API_KEY",
+-      "timeout_s": 10
+-    }
+-  },
+-  "llm_agents": {
+-    "exam_extractor": {
+-      "model": "extractor",
+-      "instruction_file": "instructions/exam_extractor.md",
+-      "output_schema": "ExtractedExams",
+-      "tools": [],
+-      "input_trust": "untrusted"
+     }
+   },
+   "workflow": {
+@@ -78,9 +54,15 @@
+         }
+       },
+       {
+-        "id": "extraction",
+-        "kind": "subworkflow",
+-        "ref": "extraction"
++        "id": "lexical_extract",
++        "kind": "lexical_extract",
++        "server": "rag",
++        "tool": "batch_search",
++        "params": {
++          "min_score": 0.8,
++          "max_lines": 60
++        },
++        "timeout_s": 20
+       },
+       {
+         "id": "resolve",
+@@ -102,28 +84,9 @@
+         "kind": "confidence_gate",
+         "params": {
+           "accept_threshold": 0.85,
+-          "review_threshold": 0.6,
++          "review_threshold": 0.85,
+           "min_margin": 0.05
+         }
+-      },
+-      {
+-        "id": "review",
+-        "kind": "human_review",
+-        "params": {
+-          "on_non_interactive": "reject",
+-          "max_candidates": 3
+-        }
+-      },
+-      {
+-        "id": "schedule",
+-        "kind": "schedule",
+-        "service": "scheduler",
+-        "retry": {
+-          "max_attempts": 3,
+-          "initial_delay_s": 0.5,
+-          "max_delay_s": 4
+-        },
+-        "timeout_s": 15
+       },
+       {
+         "id": "present",
+@@ -154,7 +117,7 @@
+       },
+       {
+         "from": "guard",
+-        "to": "extraction",
++        "to": "lexical_extract",
+         "route": "clean"
+       },
+       {
+@@ -163,7 +126,7 @@
+         "route": "blocked"
+       },
+       {
+-        "from": "extraction",
++        "from": "lexical_extract",
+         "to": "resolve"
+       },
+       {
+@@ -172,96 +135,20 @@
+       },
+       {
+         "from": "gate",
+-        "to": "schedule",
++        "to": "present",
+         "route": "accepted"
+       },
+       {
+         "from": "gate",
+-        "to": "review",
++        "to": "present",
+         "route": "review"
+       },
+       {
+         "from": "gate",
+         "to": "abort",
+         "route": "empty"
+-      },
+-      {
+-        "from": "review",
+-        "to": "schedule",
+-        "route": "confirmed"
+-      },
+-      {
+-        "from": "review",
+-        "to": "present",
+-        "route": "rejected"
+-      },
+-      {
+-        "from": "schedule",
+-        "to": "present"
+       }
+     ]
+-  },
+-  "subworkflows": {
+-    "extraction": {
+-      "nodes": [
+-        {
+-          "id": "llm_extract",
+-          "kind": "llm_extract",
+-          "agent": "exam_extractor",
+-          "retry": {
+-            "max_attempts": 2,
+-            "initial_delay_s": 1,
+-            "max_delay_s": 4
+-          },
+-          "timeout_s": 30
+-        },
+-        {
+-          "id": "lexical_extract",
+-          "kind": "lexical_extract",
+-          "server": "rag",
+-          "tool": "batch_search",
+-          "params": {
+-            "min_score": 0.8,
+-            "max_lines": 60
+-          },
+-          "timeout_s": 20
+-        },
+-        {
+-          "id": "merge",
+-          "kind": "join"
+-        },
+-        {
+-          "id": "reconcile",
+-          "kind": "reconcile",
+-          "params": {
+-            "grounding_min_ratio": 90,
+-            "max_items": 30
+-          }
+-        }
+-      ],
+-      "edges": [
+-        {
+-          "from": "START",
+-          "to": "llm_extract"
+-        },
+-        {
+-          "from": "START",
+-          "to": "lexical_extract"
+-        },
+-        {
+-          "from": "llm_extract",
+-          "to": "merge"
+-        },
+-        {
+-          "from": "lexical_extract",
+-          "to": "merge"
+-        },
+-        {
+-          "from": "merge",
+-          "to": "reconcile"
+-        }
+-      ]
+-    }
+   },
+   "policies": {
+     "pii": {

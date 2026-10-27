@@ -1,0 +1,381 @@
+scheduler-api-1  | {"event": "Context impl PostgresqlImpl.", "level": "info", "ts": "2026-10-27T19:12:17.515511Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "Will assume transactional DDL.", "level": "info", "ts": "2026-10-27T19:12:17.515598Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "Running upgrade  -> 0001_initial, Initial schema: appointments, their exams and idempotency keys.", "level": "info", "ts": "2026-10-27T19:12:17.525682Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "Started server process [1]", "level": "info", "ts": "2026-10-27T19:12:18.162305Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "Waiting for application startup.", "level": "info", "ts": "2026-10-27T19:12:18.162450Z", "service": "scheduler-api"}
+scheduler-api-1  | {"catalog_version": "2026.10.0", "catalog_exams": 120, "event": "startup", "level": "info", "ts": "2026-10-27T19:12:18.204765Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "Application startup complete.", "level": "info", "ts": "2026-10-27T19:12:18.204998Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)", "level": "info", "ts": "2026-10-27T19:12:18.209346Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:52720 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "34de71ac-6f66-4d11-96d6-1e19af2134ab", "level": "info", "ts": "2026-10-27T19:12:22.087458Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:52724 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "3fa9e126-7f6b-4de8-9e0c-b1561402afc5", "level": "info", "ts": "2026-10-27T19:12:27.229279Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:52500 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "9b6bd99e-dad7-4c97-9ac5-b54c0f4d8fdd", "level": "info", "ts": "2026-10-27T19:12:32.403989Z", "service": "scheduler-api"}
+scheduler-api-1  | {"appointment_id": "apt_01M5ZCEM44HX5JPKZFWV6TVMPG", "exam_count": 7, "event": "appointment_created", "request_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.936344Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "192.168.155.6:37876 - \"POST /v1/appointments HTTP/1.1\" 201", "request_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.937059Z", "service": "scheduler-api"}
+scheduler-api-1  | {"method": "POST", "route": "/v1/appointments", "status": 201, "duration_ms": 38.5, "event": "request", "request_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.937197Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:52514 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "feb036c4-f617-41ed-9cbd-1cfbc97e6af1", "level": "info", "ts": "2026-10-27T19:12:37.563589Z", "service": "scheduler-api"}
+scheduler-api-1  | {"appointment_id": "apt_01M5ZCEM44HX5JPKZFWV6TVMPG", "event": "idempotent_replay", "request_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.629649Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "192.168.155.6:51116 - \"POST /v1/appointments HTTP/1.1\" 200", "request_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.631317Z", "service": "scheduler-api"}
+scheduler-api-1  | {"method": "POST", "route": "/v1/appointments", "status": 200, "duration_ms": 25.3, "event": "request", "request_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.631499Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:59778 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "93258e8e-1945-4a63-83cd-c50e0f3f8fdb", "level": "info", "ts": "2026-10-27T19:12:42.702583Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:49476 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "8cbcd278-026b-490d-8c45-69f1ea2ed97d", "level": "info", "ts": "2026-10-27T19:12:47.842347Z", "service": "scheduler-api"}
+scheduler-api-1  | {"appointment_id": "apt_01M5ZCF6DFV0NM41BKM4X0X64X", "exam_count": 1, "event": "appointment_created", "request_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.666490Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "192.168.155.6:41782 - \"POST /v1/appointments HTTP/1.1\" 201", "request_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.667381Z", "service": "scheduler-api"}
+scheduler-api-1  | {"method": "POST", "route": "/v1/appointments", "status": 201, "duration_ms": 22.7, "event": "request", "request_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.667578Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:49488 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "2b96b2f2-bb83-42f6-94e9-7c6a3980c701", "level": "info", "ts": "2026-10-27T19:12:52.971915Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:38042 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "dad545f6-a90d-4a48-b1b7-a5fc060c8bfd", "level": "info", "ts": "2026-10-27T19:12:58.116024Z", "service": "scheduler-api"}
+scheduler-api-1  | {"appointment_id": "apt_01M5ZCFF69RY67SNJ0TQVAE3CE", "exam_count": 7, "event": "appointment_created", "request_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.659815Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "192.168.155.6:50534 - \"POST /v1/appointments HTTP/1.1\" 201", "request_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.660502Z", "service": "scheduler-api"}
+scheduler-api-1  | {"method": "POST", "route": "/v1/appointments", "status": 201, "duration_ms": 28.0, "event": "request", "request_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.660649Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:38046 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "fc09f45e-ef16-4274-9918-17ad3728707c", "level": "info", "ts": "2026-10-27T19:13:03.254096Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:58436 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "353f589a-7cbe-418e-91a3-137865044f9d", "level": "info", "ts": "2026-10-27T19:13:08.400790Z", "service": "scheduler-api"}
+scheduler-api-1  | {"appointment_id": "apt_01M5ZCFF69RY67SNJ0TQVAE3CE", "event": "idempotent_replay", "request_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.882635Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "192.168.155.6:34756 - \"POST /v1/appointments HTTP/1.1\" 200", "request_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.883293Z", "service": "scheduler-api"}
+scheduler-api-1  | {"method": "POST", "route": "/v1/appointments", "status": 200, "duration_ms": 10.9, "event": "request", "request_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.883411Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:58444 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "a211a68f-e4b1-4d10-9639-150337a313a5", "level": "info", "ts": "2026-10-27T19:13:13.577043Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:51930 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "689ed105-3a25-4097-b784-3dc0baf270c5", "level": "info", "ts": "2026-10-27T19:13:18.707778Z", "service": "scheduler-api"}
+scheduler-api-1  | {"appointment_id": "apt_01M5ZCG4FT7AT0AWRANW18KC7F", "exam_count": 2, "event": "appointment_created", "request_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.463225Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "192.168.155.6:42590 - \"POST /v1/appointments HTTP/1.1\" 201", "request_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.468374Z", "service": "scheduler-api"}
+scheduler-api-1  | {"method": "POST", "route": "/v1/appointments", "status": 201, "duration_ms": 26.6, "event": "request", "request_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.468557Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:51946 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "9d313b19-3752-4df1-9128-1a22ea6f61c0", "level": "info", "ts": "2026-10-27T19:13:23.848507Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:39216 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "0875d651-d0eb-4db0-8564-98fbb78ccda2", "level": "info", "ts": "2026-10-27T19:13:29.014270Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "192.168.156.1:46536 - \"GET /v1/appointments/apt_01M5ZCFF69RY67SNJ0TQVAE3CE HTTP/1.1\" 200", "request_id": "4b6f8a2c-144c-42aa-864a-8587f7e1e5ee", "level": "info", "ts": "2026-10-27T19:13:33.834797Z", "service": "scheduler-api"}
+scheduler-api-1  | {"method": "GET", "route": "/v1/appointments/{appointment_id}", "status": 200, "duration_ms": 8.3, "event": "request", "request_id": "4b6f8a2c-144c-42aa-864a-8587f7e1e5ee", "level": "info", "ts": "2026-10-27T19:13:33.835157Z", "service": "scheduler-api"}
+scheduler-api-1  | {"event": "127.0.0.1:39220 - \"GET /health/ready HTTP/1.1\" 200", "request_id": "49797e74-f4f6-406a-97de-a1ccd523b77d", "level": "info", "ts": "2026-10-27T19:13:34.137839Z", "service": "scheduler-api"}
+postgres-1       | The files belonging to this database system will be owned by user "postgres".
+postgres-1       | This user must also own the server process.
+postgres-1       | 
+postgres-1       | The database cluster will be initialized with locale "en_US.utf8".
+postgres-1       | The default database encoding has accordingly been set to "UTF8".
+postgres-1       | The default text search configuration will be set to "english".
+postgres-1       | 
+postgres-1       | Data page checksums are disabled.
+postgres-1       | 
+postgres-1       | fixing permissions on existing directory /var/lib/postgresql/data ... ok
+postgres-1       | creating subdirectories ... ok
+postgres-1       | selecting dynamic shared memory implementation ... posix
+postgres-1       | selecting default max_connections ... 100
+postgres-1       | selecting default shared_buffers ... 128MB
+postgres-1       | selecting default time zone ... UTC
+postgres-1       | creating configuration files ... ok
+postgres-1       | running bootstrap script ... ok
+postgres-1       | sh: locale: not found
+postgres-1       | 2026-10-27 19:12:11.816 UTC [35] WARNING:  no usable system locales were found
+postgres-1       | performing post-bootstrap initialization ... ok
+postgres-1       | syncing data to disk ... ok
+postgres-1       | 
+postgres-1       | 
+postgres-1       | Success. You can now start the database server using:
+postgres-1       | 
+postgres-1       |     pg_ctl -D /var/lib/postgresql/data -l logfile start
+postgres-1       | 
+postgres-1       | initdb: warning: enabling "trust" authentication for local connections
+postgres-1       | initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+postgres-1       | waiting for server to start....2026-10-27 19:12:15.061 UTC [41] LOG:  starting PostgreSQL 16.15 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1       | 2026-10-27 19:12:15.061 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1       | 2026-10-27 19:12:15.067 UTC [44] LOG:  database system was shut down at 2026-10-27 19:12:12 UTC
+postgres-1       | 2026-10-27 19:12:15.075 UTC [41] LOG:  database system is ready to accept connections
+postgres-1       |  done
+postgres-1       | server started
+postgres-1       | CREATE DATABASE
+postgres-1       | 
+postgres-1       | 
+postgres-1       | /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+postgres-1       | 
+postgres-1       | waiting for server to shut down....2026-10-27 19:12:15.322 UTC [41] LOG:  received fast shutdown request
+postgres-1       | 2026-10-27 19:12:15.323 UTC [41] LOG:  aborting any active transactions
+postgres-1       | 2026-10-27 19:12:15.324 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
+postgres-1       | 2026-10-27 19:12:15.325 UTC [42] LOG:  shutting down
+postgres-1       | 2026-10-27 19:12:15.326 UTC [42] LOG:  checkpoint starting: shutdown immediate
+postgres-1       | 2026-10-27 19:12:16.010 UTC [42] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.030 s, sync=0.649 s, total=0.685 s; sync files=301, longest=0.036 s, average=0.003 s; distance=4283 kB, estimate=4283 kB; lsn=0/1925D20, redo lsn=0/1925D20
+postgres-1       | 2026-10-27 19:12:16.012 UTC [41] LOG:  database system is shut down
+postgres-1       |  done
+postgres-1       | server stopped
+postgres-1       | 
+postgres-1       | PostgreSQL init process complete; ready for start up.
+postgres-1       | 
+postgres-1       | 2026-10-27 19:12:16.057 UTC [1] LOG:  starting PostgreSQL 16.15 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1       | 2026-10-27 19:12:16.058 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+postgres-1       | 2026-10-27 19:12:16.058 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+postgres-1       | 2026-10-27 19:12:16.059 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1       | 2026-10-27 19:12:16.061 UTC [57] LOG:  database system was shut down at 2026-10-27 19:12:16 UTC
+postgres-1       | 2026-10-27 19:12:16.063 UTC [1] LOG:  database system is ready to accept connections
+ocr-mcp-1        | {"event": "Started server process [1]", "level": "info", "ts": "2026-10-27T19:12:16.045570Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Waiting for application startup.", "level": "info", "ts": "2026-10-27T19:12:16.045706Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Application startup complete.", "level": "info", "ts": "2026-10-27T19:12:16.045877Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Uvicorn running on http://0.0.0.0:8101 (Press CTRL+C to quit)", "level": "info", "ts": "2026-10-27T19:12:16.046116Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:28.741378Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"encoded_chars": 994916, "event": "ocr_request", "request_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:28.742512Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"duration_ms": 576, "skew_degrees": -1.51, "scale": 1.0, "event": "ocr_preprocess_done", "request_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:29.348128Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "event": "pii_redacted", "request_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:29.652408Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"lines": 20, "mean_confidence": 0.9491, "ocr_ms": 303, "pii_ms": 1, "event": "ocr_done", "request_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:29.652566Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:29.655426Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:36.879826Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"encoded_chars": 994916, "event": "ocr_request", "request_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:36.880575Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"duration_ms": 689, "skew_degrees": -1.51, "scale": 1.0, "event": "ocr_preprocess_done", "request_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:37.588633Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "event": "pii_redacted", "request_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:37.874307Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"lines": 20, "mean_confidence": 0.9491, "ocr_ms": 285, "pii_ms": 1, "event": "ocr_done", "request_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:37.874464Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:37.879197Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:44.370295Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"encoded_chars": 1016180, "event": "ocr_request", "request_id": "5a34871e-1456-4566-854b-e6e19f34eb56", "level": "info", "ts": "2026-10-27T19:12:44.370668Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"duration_ms": 537, "skew_degrees": -1.51, "scale": 1.0, "event": "ocr_preprocess_done", "request_id": "5a34871e-1456-4566-854b-e6e19f34eb56", "level": "info", "ts": "2026-10-27T19:12:44.927902Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "event": "pii_redacted", "request_id": "5a34871e-1456-4566-854b-e6e19f34eb56", "level": "info", "ts": "2026-10-27T19:12:45.252692Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"lines": 21, "mean_confidence": 0.9488, "ocr_ms": 324, "pii_ms": 1, "event": "ocr_done", "request_id": "5a34871e-1456-4566-854b-e6e19f34eb56", "level": "info", "ts": "2026-10-27T19:12:45.252870Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:45.255804Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:47.950279Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"encoded_chars": 962892, "event": "ocr_request", "request_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:47.950421Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"duration_ms": 598, "skew_degrees": -1.45, "scale": 1.0, "event": "ocr_preprocess_done", "request_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:48.565190Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "event": "pii_redacted", "request_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:48.866857Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"lines": 15, "mean_confidence": 0.9306, "ocr_ms": 301, "pii_ms": 0, "event": "ocr_done", "request_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:48.867017Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:48.870773Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:55.693095Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"encoded_chars": 994916, "event": "ocr_request", "request_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:55.693847Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"duration_ms": 692, "skew_degrees": -1.51, "scale": 1.0, "event": "ocr_preprocess_done", "request_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:56.406483Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "event": "pii_redacted", "request_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:57.129965Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"lines": 20, "mean_confidence": 0.9491, "ocr_ms": 722, "pii_ms": 1, "event": "ocr_done", "request_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:57.130649Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:57.143890Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:04.737453Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"encoded_chars": 994916, "event": "ocr_request", "request_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:04.738255Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"duration_ms": 552, "skew_degrees": -1.51, "scale": 1.0, "event": "ocr_preprocess_done", "request_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:05.316469Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "event": "pii_redacted", "request_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:05.644682Z", "service": "ocr-mcp"}
+rag-mcp-1        | {"catalog_version": "2026.10.0", "catalog_sha256": "28eb7825865727be894151836eef70b1134ba85dc128c9e9016dc2b91dab45e1", "exam_count": 120, "event": "catalog_loaded", "level": "info", "ts": "2026-10-27T19:12:14.379349Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Started server process [1]", "level": "info", "ts": "2026-10-27T19:12:14.419606Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Waiting for application startup.", "level": "info", "ts": "2026-10-27T19:12:14.419759Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Application startup complete.", "level": "info", "ts": "2026-10-27T19:12:14.419903Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Uvicorn running on http://0.0.0.0:8102 (Press CTRL+C to quit)", "level": "info", "ts": "2026-10-27T19:12:14.420208Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:29.740086Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 5, "queries": 12, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:12:29.746265Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:29.748007Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:33.882367Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 3, "queries": 9, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:12:33.885337Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:33.888483Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:37.959080Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 3, "queries": 12, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:12:37.962799Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:37.964447Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:41.578519Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 3, "queries": 9, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:12:41.581374Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:41.583654Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:48.941619Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 8, "queries": 7, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:12:48.950990Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:48.952815Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:52.631029Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 1, "queries": 3, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:12:52.632287Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:52.634225Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:12:57.297913Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 6, "queries": 12, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:12:57.304908Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:12:57.307072Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:01.617793Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 3, "queries": 10, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:13:01.621245Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:01.623401Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:05.714979Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 5, "queries": 12, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:13:05.724209Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:05.726034Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:09.860012Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 2, "queries": 8, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:13:09.862618Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:09.864331Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:18.208551Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 18, "queries": 7, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:13:18.227670Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:18.229478Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:23.427741Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 2, "queries": 3, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:13:23.430147Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:23.431929Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:30.656477Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 3, "queries": 12, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:13:30.661115Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:30.662762Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:30.671994Z", "service": "rag-mcp"}
+rag-mcp-1        | {"tool": "batch_search", "duration_ms": 1, "queries": 7, "empty_results": 0, "event": "rag_done", "level": "info", "ts": "2026-10-27T19:13:30.673294Z", "service": "rag-mcp"}
+rag-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:30.674533Z", "service": "rag-mcp"}
+ocr-mcp-1        | {"lines": 20, "mean_confidence": 0.9491, "ocr_ms": 327, "pii_ms": 1, "event": "ocr_done", "request_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:05.644851Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:05.647569Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:12.987379Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"encoded_chars": 1016180, "event": "ocr_request", "request_id": "77a01695-a547-4f33-b152-b47a95a0fb08", "level": "info", "ts": "2026-10-27T19:13:12.988320Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"duration_ms": 756, "skew_degrees": -1.51, "scale": 1.0, "event": "ocr_preprocess_done", "request_id": "77a01695-a547-4f33-b152-b47a95a0fb08", "level": "info", "ts": "2026-10-27T19:13:13.802306Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "event": "pii_redacted", "request_id": "77a01695-a547-4f33-b152-b47a95a0fb08", "level": "info", "ts": "2026-10-27T19:13:14.235301Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"lines": 21, "mean_confidence": 0.9488, "ocr_ms": 426, "pii_ms": 1, "event": "ocr_done", "request_id": "77a01695-a547-4f33-b152-b47a95a0fb08", "level": "info", "ts": "2026-10-27T19:13:14.235623Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:14.243517Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:17.323223Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"encoded_chars": 962892, "event": "ocr_request", "request_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:17.323776Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"duration_ms": 539, "skew_degrees": -1.45, "scale": 1.0, "event": "ocr_preprocess_done", "request_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:17.882594Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "event": "pii_redacted", "request_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:18.128254Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"lines": 15, "mean_confidence": 0.9306, "ocr_ms": 245, "pii_ms": 0, "event": "ocr_done", "request_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:18.128412Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:18.131111Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:26.419922Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"encoded_chars": 9028, "event": "ocr_request", "request_id": "52dd6f20-287c-4add-8391-fab06f578280", "level": "info", "ts": "2026-10-27T19:13:26.420687Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"duration_ms": 541, "skew_degrees": 0.0, "scale": 1.0, "event": "ocr_preprocess_done", "request_id": "52dd6f20-287c-4add-8391-fab06f578280", "level": "info", "ts": "2026-10-27T19:13:26.974259Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"counts": {}, "has_patient_ref": false, "event": "pii_redacted", "request_id": "52dd6f20-287c-4add-8391-fab06f578280", "level": "info", "ts": "2026-10-27T19:13:27.057228Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"lines": 0, "mean_confidence": 0.0, "ocr_ms": 83, "pii_ms": 0, "event": "ocr_done", "request_id": "52dd6f20-287c-4add-8391-fab06f578280", "level": "info", "ts": "2026-10-27T19:13:27.057358Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:27.060114Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type CallToolRequest", "level": "info", "ts": "2026-10-27T19:13:29.732201Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"encoded_chars": 994916, "event": "ocr_request", "request_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:29.732636Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"duration_ms": 549, "skew_degrees": -1.51, "scale": 1.0, "event": "ocr_preprocess_done", "request_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.300445Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "event": "pii_redacted", "request_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.635548Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"lines": 20, "mean_confidence": 0.9491, "ocr_ms": 334, "pii_ms": 1, "event": "ocr_done", "request_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.635764Z", "service": "ocr-mcp"}
+ocr-mcp-1        | {"event": "Processing request of type ListToolsRequest", "level": "info", "ts": "2026-10-27T19:13:30.639195Z", "service": "ocr-mcp"}
+agent-run-01 | {"agent": "exam_scheduling_agent", "interactive": false, "event": "run_started", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:28.655110Z", "service": "agent"}
+agent-run-01 | {"node": "ocr", "lines": 20, "mean_confidence": 0.9491, "pii_counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "low_quality": false, "event": "ocr_result", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:29.656241Z", "service": "agent"}
+agent-run-01 | {"node": "ocr", "route": "ok", "event": "node_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:29.656833Z", "service": "agent"}
+agent-run-01 | {"node": "guard", "route": "clean", "event": "node_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:29.658607Z", "service": "agent"}
+agent-run-01 | {"node": "llm_extract_input", "route": null, "event": "node_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:29.664091Z", "service": "agent"}
+agent-run-01 | {"event": "Sending out request, model: [REDACTED:PAYLOAD]", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:29.708914Z", "service": "agent"}
+agent-run-01 | {"event": "AFC is enabled with max remote calls: [REDACTED:PAYLOAD]", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:29.709130Z", "service": "agent"}
+agent-run-01 | {"node": "lexical_extract", "segments": 12, "found": 7, "event": "lexical_extract_done", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:29.748808Z", "service": "agent"}
+agent-run-01 | {"node": "lexical_extract", "route": null, "event": "node_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:29.749090Z", "service": "agent"}
+agent-run-01 | {"event": "Response received from the model.", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.848277Z", "service": "agent"}
+agent-run-01 | {"node": "exam_extractor", "route": null, "event": "node_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.851405Z", "service": "agent"}
+agent-run-01 | {"node": "merge", "route": null, "event": "node_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.856959Z", "service": "agent"}
+agent-run-01 | {"node": "reconcile", "llm": 7, "lexical": 7, "llm_missing": false, "items": 9, "both": 7, "event": "reconcile_done", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.860578Z", "service": "agent"}
+agent-run-01 | {"node": "reconcile", "route": null, "event": "node_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.860981Z", "service": "agent"}
+agent-run-01 | {"node": "resolve", "mentions": 9, "without_candidates": 0, "catalog_sha256": "28eb7825865727be894151836eef70b1134ba85dc128c9e9016dc2b91dab45e1", "event": "rag_resolve_done", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.889858Z", "service": "agent"}
+agent-run-01 | {"node": "resolve", "route": null, "event": "node_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.890557Z", "service": "agent"}
+agent-run-01 | {"node": "gate", "route": "accepted", "accepted": ["LAB-10001", "LAB-10012", "LAB-10043", "LAB-10044", "LAB-10016", "LAB-10079", "LAB-10037"], "review": 0, "rejected": 0, "event": "gate_decision", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.892094Z", "service": "agent"}
+agent-run-01 | {"node": "gate", "route": "accepted", "event": "node_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.892457Z", "service": "agent"}
+agent-run-01 | {"node": "schedule", "status": "scheduled", "reason": null, "appointment_id": "apt_01M5ZCEM44HX5JPKZFWV6TVMPG", "exams": ["LAB-10001", "LAB-10012", "LAB-10016", "LAB-10037", "LAB-10043", "LAB-10044", "LAB-10079"], "event": "schedule_result", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.937726Z", "service": "agent"}
+agent-run-01 | {"node": "schedule", "route": null, "event": "node_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.938201Z", "service": "agent"}
+agent-run-01 | {"node": "present", "route": null, "event": "node_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.939507Z", "service": "agent"}
+agent-run-01 | {"outcome": "scheduled", "exit_code": 0, "duration_ms": 5287, "event": "run_finished", "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba", "level": "info", "ts": "2026-10-27T19:12:33.940931Z", "service": "agent"}
+agent-run-02 | {"agent": "exam_scheduling_agent", "interactive": false, "event": "run_started", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:36.820947Z", "service": "agent"}
+agent-run-02 | {"node": "ocr", "lines": 20, "mean_confidence": 0.9491, "pii_counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "low_quality": false, "event": "ocr_result", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:37.880648Z", "service": "agent"}
+agent-run-02 | {"node": "ocr", "route": "ok", "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:37.881708Z", "service": "agent"}
+agent-run-02 | {"node": "guard", "route": "clean", "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:37.884095Z", "service": "agent"}
+agent-run-02 | {"node": "llm_extract_input", "route": null, "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:37.889908Z", "service": "agent"}
+agent-run-02 | {"event": "Sending out request, model: [REDACTED:PAYLOAD]", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:37.936559Z", "service": "agent"}
+agent-run-02 | {"event": "AFC is enabled with max remote calls: [REDACTED:PAYLOAD]", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:37.936773Z", "service": "agent"}
+agent-run-02 | {"node": "lexical_extract", "segments": 12, "found": 7, "event": "lexical_extract_done", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:37.965289Z", "service": "agent"}
+agent-run-02 | {"node": "lexical_extract", "route": null, "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:37.965578Z", "service": "agent"}
+agent-run-02 | {"event": "Response received from the model.", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.548947Z", "service": "agent"}
+agent-run-02 | {"node": "exam_extractor", "route": null, "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.550869Z", "service": "agent"}
+agent-run-02 | {"node": "merge", "route": null, "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.554573Z", "service": "agent"}
+agent-run-02 | {"node": "reconcile", "llm": 7, "lexical": 7, "llm_missing": false, "items": 9, "both": 7, "event": "reconcile_done", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.558249Z", "service": "agent"}
+agent-run-02 | {"node": "reconcile", "route": null, "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.558900Z", "service": "agent"}
+agent-run-02 | {"node": "resolve", "mentions": 9, "without_candidates": 0, "catalog_sha256": "28eb7825865727be894151836eef70b1134ba85dc128c9e9016dc2b91dab45e1", "event": "rag_resolve_done", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.585235Z", "service": "agent"}
+agent-run-02 | {"node": "resolve", "route": null, "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.586442Z", "service": "agent"}
+agent-run-02 | {"node": "gate", "route": "review", "accepted": ["LAB-10001", "LAB-10012", "LAB-10043", "LAB-10044", "LAB-10016", "LAB-10079", "LAB-10037"], "review": 1, "rejected": 0, "event": "gate_decision", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.589044Z", "service": "agent"}
+agent-run-02 | {"node": "gate", "route": "review", "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.589829Z", "service": "agent"}
+agent-run-02 | {"node": "review", "interactive": false, "reasons": ["needs_human_review"], "event": "review_resolved", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.591730Z", "service": "agent"}
+agent-run-02 | {"node": "review", "route": "confirmed", "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.592315Z", "service": "agent"}
+agent-run-02 | {"node": "schedule", "status": "replayed", "reason": null, "appointment_id": "apt_01M5ZCEM44HX5JPKZFWV6TVMPG", "exams": ["LAB-10001", "LAB-10012", "LAB-10016", "LAB-10037", "LAB-10043", "LAB-10044", "LAB-10079"], "event": "schedule_result", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.632449Z", "service": "agent"}
+agent-run-02 | {"node": "schedule", "route": null, "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.633205Z", "service": "agent"}
+agent-run-02 | {"node": "present", "route": null, "event": "node_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.635532Z", "service": "agent"}
+agent-run-02 | {"outcome": "replayed", "exit_code": 0, "duration_ms": 4817, "event": "run_finished", "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657", "level": "info", "ts": "2026-10-27T19:12:41.637775Z", "service": "agent"}
+agent-run-03 | {"agent": "exam_scheduling_agent", "interactive": false, "event": "run_started", "run_id": "5a34871e-1456-4566-854b-e6e19f34eb56", "level": "info", "ts": "2026-10-27T19:12:44.325612Z", "service": "agent"}
+agent-run-03 | {"node": "ocr", "lines": 21, "mean_confidence": 0.9488, "pii_counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "low_quality": false, "event": "ocr_result", "run_id": "5a34871e-1456-4566-854b-e6e19f34eb56", "level": "info", "ts": "2026-10-27T19:12:45.256968Z", "service": "agent"}
+agent-run-03 | {"node": "ocr", "route": "ok", "event": "node_finished", "run_id": "5a34871e-1456-4566-854b-e6e19f34eb56", "level": "info", "ts": "2026-10-27T19:12:45.257476Z", "service": "agent"}
+agent-run-03 | {"node": "guard", "severity": "high", "rule_ids": ["ignore_instructions", "schedule_more"], "event": "injection_detected", "run_id": "5a34871e-1456-4566-854b-e6e19f34eb56", "level": "warning", "ts": "2026-10-27T19:12:45.259417Z", "service": "agent"}
+agent-run-03 | {"node": "guard", "route": "blocked", "event": "node_finished", "run_id": "5a34871e-1456-4566-854b-e6e19f34eb56", "level": "info", "ts": "2026-10-27T19:12:45.259662Z", "service": "agent"}
+agent-run-03 | {"node": "abort", "route": null, "event": "node_finished", "run_id": "5a34871e-1456-4566-854b-e6e19f34eb56", "level": "info", "ts": "2026-10-27T19:12:45.260539Z", "service": "agent"}
+agent-run-03 | {"outcome": "INPUT_BLOCKED", "exit_code": 3, "duration_ms": 937, "event": "run_finished", "run_id": "5a34871e-1456-4566-854b-e6e19f34eb56", "level": "info", "ts": "2026-10-27T19:12:45.261099Z", "service": "agent"}
+agent-run-04 | {"agent": "exam_scheduling_agent", "interactive": false, "event": "run_started", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:47.914570Z", "service": "agent"}
+agent-run-04 | {"node": "ocr", "lines": 15, "mean_confidence": 0.9306, "pii_counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "low_quality": false, "event": "ocr_result", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:48.871879Z", "service": "agent"}
+agent-run-04 | {"node": "ocr", "route": "ok", "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:48.872387Z", "service": "agent"}
+agent-run-04 | {"node": "guard", "route": "clean", "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:48.874168Z", "service": "agent"}
+agent-run-04 | {"node": "llm_extract_input", "route": null, "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:48.879632Z", "service": "agent"}
+agent-run-04 | {"event": "Sending out request, model: [REDACTED:PAYLOAD]", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:48.921914Z", "service": "agent"}
+agent-run-04 | {"event": "AFC is enabled with max remote calls: [REDACTED:PAYLOAD]", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:48.922146Z", "service": "agent"}
+agent-run-04 | {"node": "lexical_extract", "segments": 7, "found": 2, "event": "lexical_extract_done", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:48.953796Z", "service": "agent"}
+agent-run-04 | {"node": "lexical_extract", "route": null, "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:48.954044Z", "service": "agent"}
+agent-run-04 | {"event": "Response received from the model.", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.596825Z", "service": "agent"}
+agent-run-04 | {"node": "exam_extractor", "route": null, "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.600170Z", "service": "agent"}
+agent-run-04 | {"node": "merge", "route": null, "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.605966Z", "service": "agent"}
+agent-run-04 | {"node": "reconcile", "llm": 2, "lexical": 2, "llm_missing": false, "items": 3, "both": 2, "event": "reconcile_done", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.608437Z", "service": "agent"}
+agent-run-04 | {"node": "reconcile", "route": null, "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.609060Z", "service": "agent"}
+agent-run-04 | {"node": "resolve", "mentions": 3, "without_candidates": 0, "catalog_sha256": "28eb7825865727be894151836eef70b1134ba85dc128c9e9016dc2b91dab45e1", "event": "rag_resolve_done", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.635197Z", "service": "agent"}
+agent-run-04 | {"node": "resolve", "route": null, "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.636166Z", "service": "agent"}
+agent-run-04 | {"node": "gate", "route": "review", "accepted": ["LAB-10001"], "review": 2, "rejected": 0, "event": "gate_decision", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.637445Z", "service": "agent"}
+agent-run-04 | {"node": "gate", "route": "review", "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.637806Z", "service": "agent"}
+agent-run-04 | {"node": "review", "interactive": false, "reasons": ["needs_human_review", "needs_human_review"], "event": "review_resolved", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.638646Z", "service": "agent"}
+agent-run-04 | {"node": "review", "route": "confirmed", "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.638893Z", "service": "agent"}
+agent-run-04 | {"node": "schedule", "status": "scheduled", "reason": null, "appointment_id": "apt_01M5ZCF6DFV0NM41BKM4X0X64X", "exams": ["LAB-10001"], "event": "schedule_result", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.668206Z", "service": "agent"}
+agent-run-04 | {"node": "schedule", "route": null, "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.668669Z", "service": "agent"}
+agent-run-04 | {"node": "present", "route": null, "event": "node_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.669973Z", "service": "agent"}
+agent-run-04 | {"outcome": "scheduled", "exit_code": 0, "duration_ms": 4757, "event": "run_finished", "run_id": "463df54a-e242-4ca2-b22c-73219742153a", "level": "info", "ts": "2026-10-27T19:12:52.671432Z", "service": "agent"}
+agent-run-05 | {"agent": "exam_scheduling_agent", "interactive": false, "event": "run_started", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:55.632287Z", "service": "agent"}
+agent-run-05 | {"node": "ocr", "lines": 20, "mean_confidence": 0.9491, "pii_counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "low_quality": false, "event": "ocr_result", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:57.147605Z", "service": "agent"}
+agent-run-05 | {"node": "ocr", "route": "ok", "event": "node_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:57.149856Z", "service": "agent"}
+agent-run-05 | {"node": "guard", "route": "clean", "event": "node_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:57.155110Z", "service": "agent"}
+agent-run-05 | {"node": "llm_extract_input", "route": null, "event": "node_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:57.166386Z", "service": "agent"}
+agent-run-05 | {"event": "Sending out request, model: [REDACTED:PAYLOAD]", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:57.269915Z", "service": "agent"}
+agent-run-05 | {"event": "AFC is enabled with max remote calls: [REDACTED:PAYLOAD]", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:57.270196Z", "service": "agent"}
+agent-run-05 | {"node": "lexical_extract", "segments": 12, "found": 7, "event": "lexical_extract_done", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:57.308526Z", "service": "agent"}
+agent-run-05 | {"node": "lexical_extract", "route": null, "event": "node_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:12:57.308873Z", "service": "agent"}
+agent-run-05 | {"event": "Response received from the model.", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.572904Z", "service": "agent"}
+agent-run-05 | {"node": "exam_extractor", "route": null, "event": "node_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.578328Z", "service": "agent"}
+agent-run-05 | {"node": "merge", "route": null, "event": "node_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.585827Z", "service": "agent"}
+agent-run-05 | {"node": "reconcile", "llm": 7, "lexical": 7, "llm_missing": false, "items": 10, "both": 7, "event": "reconcile_done", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.590023Z", "service": "agent"}
+agent-run-05 | {"node": "reconcile", "route": null, "event": "node_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.591011Z", "service": "agent"}
+agent-run-05 | {"node": "resolve", "mentions": 10, "without_candidates": 0, "catalog_sha256": "28eb7825865727be894151836eef70b1134ba85dc128c9e9016dc2b91dab45e1", "event": "rag_resolve_done", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.624962Z", "service": "agent"}
+agent-run-05 | {"node": "resolve", "route": null, "event": "node_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.625459Z", "service": "agent"}
+agent-run-05 | {"node": "gate", "route": "accepted", "accepted": ["LAB-10001", "LAB-10012", "LAB-10043", "LAB-10044", "LAB-10016", "LAB-10079", "LAB-10037"], "review": 0, "rejected": 1, "event": "gate_decision", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.626794Z", "service": "agent"}
+agent-run-05 | {"node": "gate", "route": "accepted", "event": "node_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.627134Z", "service": "agent"}
+agent-run-05 | {"node": "schedule", "status": "scheduled", "reason": null, "appointment_id": "apt_01M5ZCFF69RY67SNJ0TQVAE3CE", "exams": ["LAB-10001", "LAB-10012", "LAB-10016", "LAB-10037", "LAB-10043", "LAB-10044", "LAB-10079"], "event": "schedule_result", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.661129Z", "service": "agent"}
+agent-run-05 | {"node": "schedule", "route": null, "event": "node_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.661622Z", "service": "agent"}
+agent-run-05 | {"node": "present", "route": null, "event": "node_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.662951Z", "service": "agent"}
+agent-run-05 | {"outcome": "scheduled", "exit_code": 0, "duration_ms": 6034, "event": "run_finished", "run_id": "5d09130b-9c12-40e2-a35e-94b5a78b3ea3", "level": "info", "ts": "2026-10-27T19:13:01.664962Z", "service": "agent"}
+agent-run-06 | {"agent": "exam_scheduling_agent", "interactive": false, "event": "run_started", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:04.682293Z", "service": "agent"}
+agent-run-06 | {"node": "ocr", "lines": 20, "mean_confidence": 0.9491, "pii_counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "low_quality": false, "event": "ocr_result", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:05.648636Z", "service": "agent"}
+agent-run-06 | {"node": "ocr", "route": "ok", "event": "node_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:05.649118Z", "service": "agent"}
+agent-run-06 | {"node": "guard", "route": "clean", "event": "node_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:05.650668Z", "service": "agent"}
+agent-run-06 | {"node": "llm_extract_input", "route": null, "event": "node_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:05.656147Z", "service": "agent"}
+agent-run-06 | {"event": "Sending out request, model: [REDACTED:PAYLOAD]", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:05.694623Z", "service": "agent"}
+agent-run-06 | {"event": "AFC is enabled with max remote calls: [REDACTED:PAYLOAD]", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:05.694930Z", "service": "agent"}
+agent-run-06 | {"node": "lexical_extract", "segments": 12, "found": 7, "event": "lexical_extract_done", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:05.727561Z", "service": "agent"}
+agent-run-06 | {"node": "lexical_extract", "route": null, "event": "node_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:05.727846Z", "service": "agent"}
+agent-run-06 | {"event": "Response received from the model.", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.830682Z", "service": "agent"}
+agent-run-06 | {"node": "exam_extractor", "route": null, "event": "node_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.833093Z", "service": "agent"}
+agent-run-06 | {"node": "merge", "route": null, "event": "node_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.839256Z", "service": "agent"}
+agent-run-06 | {"node": "reconcile", "llm": 7, "lexical": 7, "llm_missing": false, "items": 8, "both": 7, "event": "reconcile_done", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.841645Z", "service": "agent"}
+agent-run-06 | {"node": "reconcile", "route": null, "event": "node_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.841935Z", "service": "agent"}
+agent-run-06 | {"node": "resolve", "mentions": 8, "without_candidates": 0, "catalog_sha256": "28eb7825865727be894151836eef70b1134ba85dc128c9e9016dc2b91dab45e1", "event": "rag_resolve_done", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.865921Z", "service": "agent"}
+agent-run-06 | {"node": "resolve", "route": null, "event": "node_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.866273Z", "service": "agent"}
+agent-run-06 | {"node": "gate", "route": "accepted", "accepted": ["LAB-10001", "LAB-10012", "LAB-10043", "LAB-10044", "LAB-10016", "LAB-10079", "LAB-10037"], "review": 0, "rejected": 0, "event": "gate_decision", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.867340Z", "service": "agent"}
+agent-run-06 | {"node": "gate", "route": "accepted", "event": "node_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.867663Z", "service": "agent"}
+agent-run-06 | {"node": "schedule", "status": "replayed", "reason": null, "appointment_id": "apt_01M5ZCFF69RY67SNJ0TQVAE3CE", "exams": ["LAB-10001", "LAB-10012", "LAB-10016", "LAB-10037", "LAB-10043", "LAB-10044", "LAB-10079"], "event": "schedule_result", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.883766Z", "service": "agent"}
+agent-run-06 | {"node": "schedule", "route": null, "event": "node_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.884162Z", "service": "agent"}
+agent-run-06 | {"node": "present", "route": null, "event": "node_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.885315Z", "service": "agent"}
+agent-run-06 | {"outcome": "replayed", "exit_code": 0, "duration_ms": 5205, "event": "run_finished", "run_id": "362b2bbe-1c3f-4a5b-a466-4e4e42715228", "level": "info", "ts": "2026-10-27T19:13:09.886945Z", "service": "agent"}
+agent-run-07 | {"agent": "exam_scheduling_agent", "interactive": false, "event": "run_started", "run_id": "77a01695-a547-4f33-b152-b47a95a0fb08", "level": "info", "ts": "2026-10-27T19:13:12.914414Z", "service": "agent"}
+agent-run-07 | {"node": "ocr", "lines": 21, "mean_confidence": 0.9488, "pii_counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "low_quality": false, "event": "ocr_result", "run_id": "77a01695-a547-4f33-b152-b47a95a0fb08", "level": "info", "ts": "2026-10-27T19:13:14.246883Z", "service": "agent"}
+agent-run-07 | {"node": "ocr", "route": "ok", "event": "node_finished", "run_id": "77a01695-a547-4f33-b152-b47a95a0fb08", "level": "info", "ts": "2026-10-27T19:13:14.247615Z", "service": "agent"}
+agent-run-07 | {"node": "guard", "severity": "high", "rule_ids": ["ignore_instructions", "schedule_more"], "event": "injection_detected", "run_id": "77a01695-a547-4f33-b152-b47a95a0fb08", "level": "warning", "ts": "2026-10-27T19:13:14.250206Z", "service": "agent"}
+agent-run-07 | {"node": "guard", "route": "blocked", "event": "node_finished", "run_id": "77a01695-a547-4f33-b152-b47a95a0fb08", "level": "info", "ts": "2026-10-27T19:13:14.250589Z", "service": "agent"}
+agent-run-07 | {"node": "abort", "route": null, "event": "node_finished", "run_id": "77a01695-a547-4f33-b152-b47a95a0fb08", "level": "info", "ts": "2026-10-27T19:13:14.252081Z", "service": "agent"}
+agent-run-07 | {"outcome": "INPUT_BLOCKED", "exit_code": 3, "duration_ms": 1339, "event": "run_finished", "run_id": "77a01695-a547-4f33-b152-b47a95a0fb08", "level": "info", "ts": "2026-10-27T19:13:14.252716Z", "service": "agent"}
+agent-run-08 | {"agent": "exam_scheduling_agent", "interactive": false, "event": "run_started", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:17.277164Z", "service": "agent"}
+agent-run-08 | {"node": "ocr", "lines": 15, "mean_confidence": 0.9306, "pii_counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "low_quality": false, "event": "ocr_result", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:18.132075Z", "service": "agent"}
+agent-run-08 | {"node": "ocr", "route": "ok", "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:18.132611Z", "service": "agent"}
+agent-run-08 | {"node": "guard", "route": "clean", "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:18.134457Z", "service": "agent"}
+agent-run-08 | {"node": "llm_extract_input", "route": null, "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:18.140006Z", "service": "agent"}
+agent-run-08 | {"event": "Sending out request, model: [REDACTED:PAYLOAD]", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:18.181123Z", "service": "agent"}
+agent-run-08 | {"event": "AFC is enabled with max remote calls: [REDACTED:PAYLOAD]", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:18.181407Z", "service": "agent"}
+agent-run-08 | {"node": "lexical_extract", "segments": 7, "found": 2, "event": "lexical_extract_done", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:18.230482Z", "service": "agent"}
+agent-run-08 | {"node": "lexical_extract", "route": null, "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:18.230764Z", "service": "agent"}
+agent-run-08 | {"event": "Response received from the model.", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.379620Z", "service": "agent"}
+agent-run-08 | {"node": "exam_extractor", "route": null, "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.382766Z", "service": "agent"}
+agent-run-08 | {"node": "merge", "route": null, "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.388013Z", "service": "agent"}
+agent-run-08 | {"node": "reconcile", "llm": 2, "lexical": 2, "llm_missing": false, "items": 3, "both": 2, "event": "reconcile_done", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.390462Z", "service": "agent"}
+agent-run-08 | {"node": "reconcile", "route": null, "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.390921Z", "service": "agent"}
+agent-run-08 | {"node": "resolve", "mentions": 3, "without_candidates": 0, "catalog_sha256": "28eb7825865727be894151836eef70b1134ba85dc128c9e9016dc2b91dab45e1", "event": "rag_resolve_done", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.433501Z", "service": "agent"}
+agent-run-08 | {"node": "resolve", "route": null, "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.433931Z", "service": "agent"}
+agent-run-08 | {"node": "gate", "route": "review", "accepted": ["LAB-10001", "LAB-10045"], "review": 1, "rejected": 0, "event": "gate_decision", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.435332Z", "service": "agent"}
+agent-run-08 | {"node": "gate", "route": "review", "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.435612Z", "service": "agent"}
+agent-run-08 | {"node": "review", "interactive": false, "reasons": ["needs_human_review"], "event": "review_resolved", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.436353Z", "service": "agent"}
+agent-run-08 | {"node": "review", "route": "confirmed", "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.436565Z", "service": "agent"}
+agent-run-08 | {"node": "schedule", "status": "scheduled", "reason": null, "appointment_id": "apt_01M5ZCG4FT7AT0AWRANW18KC7F", "exams": ["LAB-10001", "LAB-10045"], "event": "schedule_result", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.469047Z", "service": "agent"}
+agent-run-08 | {"node": "schedule", "route": null, "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.469479Z", "service": "agent"}
+agent-run-08 | {"node": "present", "route": null, "event": "node_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.470871Z", "service": "agent"}
+agent-run-08 | {"outcome": "scheduled", "exit_code": 0, "duration_ms": 6196, "event": "run_finished", "run_id": "ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f", "level": "info", "ts": "2026-10-27T19:13:23.472292Z", "service": "agent"}
+agent-run-09 | {"agent": "exam_scheduling_agent", "interactive": false, "event": "run_started", "run_id": "52dd6f20-287c-4add-8391-fab06f578280", "level": "info", "ts": "2026-10-27T19:13:26.379782Z", "service": "agent"}
+agent-run-09 | {"node": "ocr", "lines": 0, "mean_confidence": 0.0, "pii_counts": {}, "has_patient_ref": false, "low_quality": true, "event": "ocr_result", "run_id": "52dd6f20-287c-4add-8391-fab06f578280", "level": "info", "ts": "2026-10-27T19:13:27.061445Z", "service": "agent"}
+agent-run-09 | {"node": "ocr", "route": "low_quality", "event": "node_finished", "run_id": "52dd6f20-287c-4add-8391-fab06f578280", "level": "info", "ts": "2026-10-27T19:13:27.061872Z", "service": "agent"}
+agent-run-09 | {"node": "abort", "route": null, "event": "node_finished", "run_id": "52dd6f20-287c-4add-8391-fab06f578280", "level": "info", "ts": "2026-10-27T19:13:27.063011Z", "service": "agent"}
+agent-run-09 | {"outcome": "OCR_LOW_QUALITY", "exit_code": 4, "duration_ms": 685, "event": "run_finished", "run_id": "52dd6f20-287c-4add-8391-fab06f578280", "level": "info", "ts": "2026-10-27T19:13:27.063557Z", "service": "agent"}
+agent-run-10 | {"agent": "exam_lookup_only", "interactive": false, "event": "run_started", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:29.688367Z", "service": "agent"}
+agent-run-10 | {"node": "ocr", "lines": 20, "mean_confidence": 0.9491, "pii_counts": {"ADDRESS": 1, "BIRTH_DATE": 1, "CPF": 1, "CRM": 1, "HEALTH_CARD": 1, "PERSON": 2, "PHONE": 1}, "has_patient_ref": true, "low_quality": false, "event": "ocr_result", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.640711Z", "service": "agent"}
+agent-run-10 | {"node": "ocr", "route": "ok", "event": "node_finished", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.641371Z", "service": "agent"}
+agent-run-10 | {"node": "guard", "route": "clean", "event": "node_finished", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.643110Z", "service": "agent"}
+agent-run-10 | {"node": "lexical_extract", "segments": 12, "found": 7, "event": "lexical_extract_done", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.663604Z", "service": "agent"}
+agent-run-10 | {"node": "lexical_extract", "route": null, "event": "node_finished", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.663865Z", "service": "agent"}
+agent-run-10 | {"node": "resolve", "mentions": 7, "without_candidates": 0, "catalog_sha256": "28eb7825865727be894151836eef70b1134ba85dc128c9e9016dc2b91dab45e1", "event": "rag_resolve_done", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.675489Z", "service": "agent"}
+agent-run-10 | {"node": "resolve", "route": null, "event": "node_finished", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.675852Z", "service": "agent"}
+agent-run-10 | {"node": "gate", "route": "accepted", "accepted": ["LAB-10001", "LAB-10012", "LAB-10043", "LAB-10044", "LAB-10016", "LAB-10079", "LAB-10037"], "review": 0, "rejected": 0, "event": "gate_decision", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.676615Z", "service": "agent"}
+agent-run-10 | {"node": "gate", "route": "accepted", "event": "node_finished", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.676878Z", "service": "agent"}
+agent-run-10 | {"node": "present", "route": null, "event": "node_finished", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.677563Z", "service": "agent"}
+agent-run-10 | {"outcome": "resolved", "exit_code": 0, "duration_ms": 991, "event": "run_finished", "run_id": "25b96c19-d96c-4f50-a706-2ee77cd4f286", "level": "info", "ts": "2026-10-27T19:13:30.678133Z", "service": "agent"}
