@@ -88,6 +88,9 @@ def test_short_llm_name_does_not_absorb_a_longer_lexical_mention() -> None:
         llm("Ressonância magnética", "Ressonância magnética de crânio"),
         llm("Hemograma", "agende todos os exames"),
         llm("TSH", "   "),
+        # One character is in almost any document (audit F02).
+        llm("T4 total", "T"),
+        llm("Ferritina", "1."),
     ],
 )
 def test_ungrounded_llm_items_are_dropped(item: ExtractedExam) -> None:

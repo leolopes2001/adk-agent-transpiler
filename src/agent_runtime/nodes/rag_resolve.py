@@ -2,6 +2,11 @@
 
 It decides nothing: the confidence gate reads the candidates. Candidates keep
 the RAG server's order (best first).
+
+A mention the model named (`llm` or `both`) is also looked up by its
+evidence, in the same call: the gate accepts the model's name only when the
+document text resolves to the same exam (audit F02). Lexical mentions are
+their own evidence.
 """
 
 from typing import Annotated, Any
@@ -13,11 +18,15 @@ from pydantic import Field
 from agent_runtime.bootstrap import RuntimeDeps
 from agent_runtime.nodes._common import Params, function_node, parse_input
 from agent_runtime.nodes.lexical_extract import batch_search
-from agent_runtime.schemas import ExamMentions, ResolvedExam, ResolvedExams
+from agent_runtime.schemas import ExamMention, ExamMentions, ResolvedExam, ResolvedExams
 from lab_common import logging as lab_logging
 from lab_common.contracts.rag import MAX_TOP_K
 
 log = lab_logging.get_logger(__name__)
+
+
+def _named_by_model(mention: ExamMention) -> bool:
+    return mention.source != "lexical"
 
 
 class RagResolveParams(Params):
@@ -42,13 +51,21 @@ def rag_resolve(  # noqa: PLR0913 - one keyword per node param
         items: list[ResolvedExam] = []
         catalog_sha256 = None
         if mentions:
+            evidences = [m.evidence for m in mentions if _named_by_model(m)]
             result = await batch_search(
-                deps.mcp, server, tool, [m.text for m in mentions], params.top_k
+                deps.mcp, server, tool, [m.text for m in mentions] + evidences, params.top_k
             )
             catalog_sha256 = result.catalog_sha256
+            by_evidence = iter(result.results[len(mentions) :])
             items = [
-                ResolvedExam(mention=mention, candidates=list(found.candidates))
-                for mention, found in zip(mentions, result.results, strict=True)
+                ResolvedExam(
+                    mention=mention,
+                    candidates=list(found.candidates),
+                    evidence_candidates=(
+                        list(next(by_evidence).candidates) if _named_by_model(mention) else None
+                    ),
+                )
+                for mention, found in zip(mentions, result.results, strict=False)
             ]
         log.info(
             "rag_resolve_done",

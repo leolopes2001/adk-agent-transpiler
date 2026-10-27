@@ -95,6 +95,8 @@ Candidate = rag.Candidate
 class ResolvedExam(_Schema):
     mention: ExamMention
     candidates: list[Candidate]
+    evidence_candidates: list[Candidate] | None = None
+    """Candidates for the mention's evidence; only for mentions the model named."""
 
 
 class ResolvedExams(_Schema):

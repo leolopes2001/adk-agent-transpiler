@@ -19,7 +19,7 @@ def _deps(fake: FakeMcp) -> RuntimeDeps:
 
 
 def _mentions(*texts: str) -> ExamMentions:
-    return ExamMentions(items=[ExamMention(text=t, source="llm", evidence=t) for t in texts])
+    return ExamMentions(items=[ExamMention(text=t, source="lexical", evidence=t) for t in texts])
 
 
 async def test_one_call_for_all_mentions_with_candidates_kept_in_order() -> None:
@@ -42,6 +42,37 @@ async def test_one_call_for_all_mentions_with_candidates_kept_in_order() -> None
     assert [item.mention.text for item in items] == ["T4", "Ressonância"]
     assert [c.code for c in items[0].candidates] == ["LAB-10044", "LAB-10045"]
     assert items[1].candidates == []
+
+
+async def test_model_items_also_resolve_their_evidence_in_the_same_call() -> None:
+    by_query = {
+        "Proteína C reativa": [candidate("LAB-10037", "Proteína C reativa", 1.0)],
+        "TSH": [candidate("LAB-10043", "TSH", 1.0)],
+        "7. PCR": [candidate("LAB-10037", "Proteína C reativa", 1.0)],
+    }
+
+    def respond(args: Mapping[str, Any]) -> dict[str, Any]:
+        queries = list(args["queries"])
+        return rag_body(*[by_query[q] for q in queries], queries=queries)
+
+    fake = FakeMcp()
+    fake.script("rag", "batch_search", respond)
+    node = rag_resolve(name="resolve", deps=_deps(fake), server="rag", tool="batch_search")
+    mentions = ExamMentions(
+        items=[
+            ExamMention(text="Proteína C reativa", source="both", evidence="7. PCR"),
+            ExamMention(text="TSH", source="lexical", evidence="TSH"),
+        ]
+    )
+
+    run = await run_node(node, mentions)
+
+    [(_, _, args)] = fake.calls
+    assert args["queries"] == ["Proteína C reativa", "TSH", "7. PCR"]
+    model_item, lexical_item = ResolvedExams.model_validate(run.output).items
+    assert model_item.evidence_candidates is not None
+    assert [c.code for c in model_item.evidence_candidates] == ["LAB-10037"]
+    assert lexical_item.evidence_candidates is None
 
 
 async def test_no_mentions_no_call() -> None:

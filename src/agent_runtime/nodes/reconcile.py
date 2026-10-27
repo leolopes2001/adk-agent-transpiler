@@ -4,7 +4,9 @@
 2. LLM items must be grounded: their evidence has to be in the guarded text
    (`partial_ratio >= grounding_min_ratio` on the search form). Items without
    grounding, or with a name outside the allowed characters (placeholders,
-   markup), are dropped and counted in the log.
+   markup), are dropped and counted in the log. Evidence shorter than
+   `MIN_EVIDENCE_CHARS` (in search form) grounds nothing: one character is
+   in almost any document.
 3. An LLM item absorbs a lexical item only when their names are
    near-identical (`token_sort_ratio >= 90`): both would send the same query
    to the catalog. When the LLM evidence is the lexical segment but the
@@ -36,6 +38,7 @@ from lab_common import logging as lab_logging
 from lab_common.text import normalize_for_search
 
 DUPLICATE_MIN_RATIO = 90
+MIN_EVIDENCE_CHARS = 2
 _NAME_CHARSET = re.compile(r"^[^\W_]+(?:[ .,()/+%'\-][^\W_]*)*[.)%]?$")
 
 log = lab_logging.get_logger(__name__)
@@ -62,7 +65,7 @@ def valid_name(name: str) -> bool:
 
 def grounded(evidence: str, document_form: str, min_ratio: int) -> bool:
     form = search_form(evidence)
-    return bool(form) and fuzz.partial_ratio(form, document_form) >= min_ratio
+    return len(form) >= MIN_EVIDENCE_CHARS and fuzz.partial_ratio(form, document_form) >= min_ratio
 
 
 def _same_name(llm: ExtractedExam, lexical: ExamMention) -> bool:

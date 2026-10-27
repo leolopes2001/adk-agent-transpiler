@@ -15,6 +15,15 @@ highest scores:
 The margin is rounded to 4 places, the precision of the RAG scores: in
 floating point 0.85 - 0.80 is 0.04999..., which would send a clear case to
 review.
+
+A mention named by the model is also resolved by its evidence (the text it
+copied from the document), and `evidence_decision` combines both: the name
+is accepted only when the evidence is accepted too and both point to the
+same exam. Otherwise an accepted name goes to `review`
+(`evidence_ambiguous` when the evidence itself needs review, as "T4" for
+"T4 total"; `evidence_mismatch` when it points elsewhere or nowhere, as
+"Hemograma completo" for "Ferritina"). The evidence never makes a mention
+more certain than its name.
 """
 
 from collections.abc import Iterable
@@ -23,12 +32,20 @@ from typing import Literal
 MARGIN_DIGITS = 4
 
 GateStatus = Literal["accepted", "review", "rejected"]
-GateReason = Literal["not_found", "low_margin", "below_accept", "low_confidence"]
+GateReason = Literal[
+    "not_found",
+    "low_margin",
+    "below_accept",
+    "low_confidence",
+    "evidence_ambiguous",
+    "evidence_mismatch",
+]
+type Decision = tuple[GateStatus, GateReason | None]
 
 
 def gate_decision(
     scores: Iterable[float], *, accept: float, review: float, margin: float
-) -> tuple[GateStatus, GateReason | None]:
+) -> Decision:
     """Status and reason for a mention whose candidates have `scores` (any order)."""
     ranked = sorted(scores, reverse=True)
     if not ranked:
@@ -41,3 +58,13 @@ def gate_decision(
     if best >= review:
         return "review", "low_margin" if best >= accept else "below_accept"
     return "rejected", "low_confidence"
+
+
+def evidence_decision(name: Decision, evidence: Decision, *, same_best: bool) -> Decision:
+    """Decision for a model mention from its name's and its evidence's decisions.
+
+    `same_best` tells whether both searches ranked the same exam first.
+    """
+    if name[0] != "accepted" or (evidence[0] == "accepted" and same_best):
+        return name
+    return "review", "evidence_ambiguous" if evidence[0] == "review" else "evidence_mismatch"

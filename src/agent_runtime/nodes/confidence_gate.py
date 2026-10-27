@@ -2,7 +2,10 @@
 
 Each mention is decided by `lab_common.gate.gate_decision` (the same rule
 the RAG evaluation and the calibration script measure); an accepted mention
-selects its best candidate.
+selects its best candidate. A mention the model named is accepted only if
+its evidence resolves, by the same rule, to the same exam
+(`lab_common.gate.evidence_decision`); otherwise it goes to review with the
+candidates of both searches.
 Accepted items are deduplicated by code (first mention wins), and a review
 item whose candidates at or above `review_threshold` are all already
 accepted is rejected (`already_accepted`): no choice could add an exam, so
@@ -28,7 +31,7 @@ from agent_runtime.schemas import (
     RunFailure,
 )
 from lab_common import logging as lab_logging
-from lab_common.gate import gate_decision
+from lab_common.gate import Decision, evidence_decision, gate_decision
 
 EMPTY_MESSAGE = (
     "Nenhum exame do pedido foi reconhecido no catálogo com confiança suficiente. "
@@ -56,14 +59,35 @@ def ranked(candidates: list[Candidate]) -> list[Candidate]:
     return sorted(candidates, key=lambda c: (-c.score, c.code))
 
 
-def classify(item: ResolvedExam, params: ConfidenceGateParams) -> GateItem:
-    candidates = ranked(item.candidates)
-    status, reason = gate_decision(
+def _decision(candidates: list[Candidate], params: ConfidenceGateParams) -> Decision:
+    return gate_decision(
         (c.score for c in candidates),
         accept=params.accept_threshold,
         review=params.review_threshold,
         margin=params.min_margin,
     )
+
+
+def _union(first: list[Candidate], second: list[Candidate]) -> list[Candidate]:
+    """Both lists ranked together, each code once with its best score."""
+    best: dict[str, Candidate] = {}
+    for c in [*first, *second]:
+        if c.code not in best or c.score > best[c.code].score:
+            best[c.code] = c
+    return ranked(list(best.values()))
+
+
+def classify(item: ResolvedExam, params: ConfidenceGateParams) -> GateItem:
+    candidates = ranked(item.candidates)
+    status, reason = _decision(candidates, params)
+    if item.evidence_candidates is not None:
+        evidence = ranked(item.evidence_candidates)
+        same_best = bool(candidates and evidence) and candidates[0].code == evidence[0].code
+        status, reason = evidence_decision(
+            (status, reason), _decision(evidence, params), same_best=same_best
+        )
+        if status == "review" and reason in {"evidence_ambiguous", "evidence_mismatch"}:
+            candidates = _union(candidates, evidence)
     selected = candidates[0] if status == "accepted" else None
     gate_item = GateItem.model_validate(
         {

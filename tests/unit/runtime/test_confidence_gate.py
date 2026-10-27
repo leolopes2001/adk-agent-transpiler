@@ -112,6 +112,63 @@ def test_review_item_covered_by_accepted_codes_is_not_asked() -> None:
     assert route == "review"
 
 
+def from_model(
+    name: str, evidence: str, found: list[Candidate], evidence_found: list[Candidate]
+) -> ResolvedExam:
+    mention = ExamMention(text=name, source="both", evidence=evidence)
+    return ResolvedExam(mention=mention, candidates=found, evidence_candidates=evidence_found)
+
+
+HEMOGRAMA = cand("LAB-10001", 1.0)
+
+
+def test_model_name_the_evidence_does_not_support_adds_no_code() -> None:
+    decision, _ = decide(
+        ResolvedExams(
+            items=[
+                resolved("Hemograma completo", HEMOGRAMA),
+                from_model(
+                    "Ferritina", "Hemograma completo", [cand("LAB-10109", 1.0)], [HEMOGRAMA]
+                ),
+            ]
+        ),
+        PARAMS,
+    )
+
+    assert [item.selected.code for item in decision.items if item.selected] == ["LAB-10001"]
+    ferritina = decision.items[1]
+    assert (ferritina.status, ferritina.reason) == ("review", "evidence_mismatch")
+    # The operator sees what the name and what the document point to.
+    assert {c.code for c in ferritina.candidates} == {"LAB-10109", "LAB-10001"}
+
+
+def test_specific_name_for_an_ambiguous_evidence_goes_to_review() -> None:
+    t4 = [cand("LAB-10044", 0.925), cand("LAB-10045", 0.925)]
+
+    item = classify(from_model("T4 total", "2. T4", [cand("LAB-10045", 1.0)], t4), PARAMS)
+
+    assert (item.status, item.reason, item.selected) == ("review", "evidence_ambiguous", None)
+    assert [c.code for c in item.candidates] == ["LAB-10045", "LAB-10044"]
+
+
+@pytest.mark.parametrize(
+    ("name", "evidence", "code"),
+    [
+        ("Proteína C reativa", "7. PCR", "LAB-10037"),
+        ("Hormônio tireoestimulante", "TSH", "LAB-10043"),
+    ],
+)
+def test_model_name_confirmed_by_its_evidence_is_accepted(
+    name: str, evidence: str, code: str
+) -> None:
+    item = classify(
+        from_model(name, evidence, [cand(code, 1.0)], [cand(code, 1.0), cand("LAB-10104", 0.9)]),
+        PARAMS,
+    )
+
+    assert (item.status, item.selected) == ("accepted", cand(code, 1.0))
+
+
 @pytest.mark.parametrize(
     ("scores", "route"),
     [

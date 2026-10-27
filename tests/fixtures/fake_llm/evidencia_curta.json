@@ -1,0 +1,7 @@
+{
+  "exams": [
+    {"name": "Hemograma completo", "evidence": "1. Hemograma completo"},
+    {"name": "T4 total", "evidence": "T"},
+    {"name": "Ferritina", "evidence": "H"}
+  ]
+}
