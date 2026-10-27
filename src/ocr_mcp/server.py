@@ -14,7 +14,6 @@ Errors are tool results with `isError: true` and a JSON body
 raised, because FastMCP would prefix the message of a raised exception.
 """
 
-import hmac
 import json
 import logging
 import time
@@ -28,10 +27,11 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp
 
 from lab_common import logging as lab_logging
 from lab_common.contracts.ocr import EngineInfo, OcrLine, OcrResult
+from lab_common.mcp_server import BearerAuthMiddleware
 from lab_common.pii import PiiRedactor, default_detectors
 from lab_common.text import sanitize
 from ocr_mcp.engine import OcrEngine, RecognizedLine
@@ -222,43 +222,6 @@ def _ensure_json_logging(settings: OcrSettings) -> None:
         configure_logging(settings.log_level)
 
 
-class BearerAuthMiddleware:
-    """Rejects HTTP requests without the bearer token, except on public paths.
-
-    The token is compared in constant time; the 401 body and the log line never
-    include what the client sent.
-    """
-
-    def __init__(self, app: ASGIApp, token: str, public_paths: frozenset[str]) -> None:
-        self._app = app
-        self._expected = f"bearer {token}".encode()
-        self._public_paths = public_paths
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["path"] in self._public_paths:
-            await self._app(scope, receive, send)
-            return
-        if not self._authorized(scope):
-            log.warning("auth_failed", path=scope["path"] if scope["path"] in _MCP_PATHS else None)
-            response = JSONResponse(
-                {"code": "UNAUTHORIZED", "message": "missing or invalid bearer token"},
-                status_code=401,
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-            await response(scope, receive, send)
-            return
-        await self._app(scope, receive, send)
-
-    def _authorized(self, scope: Scope) -> bool:
-        values = [v for k, v in scope["headers"] if k == b"authorization"]
-        if len(values) != 1:
-            return False
-        scheme, _, credentials = values[0].partition(b" ")
-        # The scheme is case-insensitive (RFC 9110); the token is not.
-        return hmac.compare_digest(scheme.lower() + b" " + credentials, self._expected)
-
-
-_MCP_PATHS = frozenset({"/sse", "/messages/"})
 HEALTH_PATH = "/health"
 
 
