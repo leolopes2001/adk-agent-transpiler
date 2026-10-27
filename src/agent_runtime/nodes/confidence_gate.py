@@ -10,7 +10,10 @@ For each mention, with `c1` and `c2` the two best candidates from the RAG:
 
 The margin is rounded to 4 places, the precision of the scores: in floating
 point 0.85 - 0.80 is 0.04999..., which would send a clear case to review.
-Accepted items are deduplicated by code (first mention wins). Route: any
+Accepted items are deduplicated by code (first mention wins), and a review
+item whose candidates at or above `review_threshold` are all already
+accepted is rejected (`already_accepted`): no choice could add an exam, so
+asking would only be noise. Route: any
 `review` -> `review`; else any `accepted` -> `accepted`; else `empty` with a
 `NO_EXAMS_RESOLVED` failure. `selected` is always one of the item's own
 candidates, never a value from the model.
@@ -97,6 +100,17 @@ def classify(item: ResolvedExam, params: ConfidenceGateParams) -> GateItem:
     return gate_item
 
 
+def _unless_covered(
+    item: GateItem, accepted_codes: set[str], params: ConfidenceGateParams
+) -> GateItem:
+    if item.status != "review":
+        return item
+    options = {c.code for c in item.candidates if c.score >= params.review_threshold}
+    if options and options <= accepted_codes:
+        return item.model_copy(update={"status": "rejected", "reason": "already_accepted"})
+    return item
+
+
 def decide(resolved: ResolvedExams, params: ConfidenceGateParams) -> tuple[GateDecision, str]:
     """Decision for every mention and the route it takes."""
     items: list[GateItem] = []
@@ -108,6 +122,7 @@ def decide(resolved: ResolvedExams, params: ConfidenceGateParams) -> tuple[GateD
                 continue
             accepted_codes.add(item.selected.code)
         items.append(item)
+    items = [_unless_covered(item, accepted_codes, params) for item in items]
     statuses = {item.status for item in items}
     route = "review" if "review" in statuses else "accepted" if "accepted" in statuses else "empty"
     return GateDecision(items=items), route

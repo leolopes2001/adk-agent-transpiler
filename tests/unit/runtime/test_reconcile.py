@@ -49,14 +49,26 @@ def test_duplicates_merge_as_both_and_keep_document_order() -> None:
         PARAMS,
     )
 
+    # Same name: absorbed. Same segment only: marked `both`, the lexical item stays.
     assert _texts(items) == [
         ("Hemograma completo", "both"),
         ("Glicemia de jejum", "lexical"),
         ("TSH", "both"),
         ("T4 livre", "both"),
+        ("TSH + T4L", "lexical"),
         ("Proteína C reativa", "both"),
+        ("PCR", "lexical"),
     ]
     assert (counts.llm, counts.lexical, counts.ungrounded) == (4, 4, 0)
+
+
+@pytest.mark.parametrize("name", ["LAB-10099", "Ressonância", "completo"])
+def test_a_misnamed_llm_item_cannot_hide_the_lexical_mention(name: str) -> None:
+    items, _ = merge(
+        [llm(name, "1. Hemograma completo")], [lex("Hemograma completo")], DOCUMENT, PARAMS
+    )
+
+    assert ("Hemograma completo", "lexical") in _texts(items)
 
 
 def test_short_llm_name_does_not_absorb_a_longer_lexical_mention() -> None:

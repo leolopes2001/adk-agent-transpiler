@@ -5,9 +5,13 @@
    (`partial_ratio >= grounding_min_ratio` on the search form). Items without
    grounding, or with a name outside the allowed characters (placeholders,
    markup), are dropped and counted in the log.
-3. An LLM item and a lexical item are the same mention when their names are
-   near-identical (`token_sort_ratio >= 90`) or the LLM evidence is the
-   lexical segment; the merged item keeps the LLM name and is `both`.
+3. An LLM item absorbs a lexical item only when their names are
+   near-identical (`token_sort_ratio >= 90`): both would send the same query
+   to the catalog. When the LLM evidence is the lexical segment but the
+   names differ ("Proteína C reativa" from "PCR"), the LLM item is marked
+   `both` and the lexical item stays: the model's name must never hide what
+   the document says (a model can be steered to name things wrongly). The
+   gate later collapses mentions that resolve to the same code.
 4. Items are ordered by where they appear in the document, then capped.
 
 A missing source (the agent produced nothing) counts as an empty list.
@@ -61,12 +65,13 @@ def grounded(evidence: str, document_form: str, min_ratio: int) -> bool:
     return bool(form) and fuzz.partial_ratio(form, document_form) >= min_ratio
 
 
-def _same(llm: ExtractedExam, lexical: ExamMention) -> bool:
-    lexical_form = search_form(lexical.text)
-    return (
-        fuzz.token_sort_ratio(search_form(llm.name), lexical_form) >= DUPLICATE_MIN_RATIO
-        or search_form(llm.evidence) == lexical_form
-    )
+def _same_name(llm: ExtractedExam, lexical: ExamMention) -> bool:
+    ratio = fuzz.token_sort_ratio(search_form(llm.name), search_form(lexical.text))
+    return ratio >= DUPLICATE_MIN_RATIO
+
+
+def _same_segment(llm: ExtractedExam, lexical: ExamMention) -> bool:
+    return search_form(llm.evidence) == search_form(lexical.text)
 
 
 def _position(text: str, document: str) -> int:
@@ -96,10 +101,11 @@ def merge(
     absorbed: set[int] = set()
     merged: list[tuple[int, int, ExamMention]] = []
     for order, item in enumerate(accepted):
-        twins = [i for i, lex in enumerate(lexical_items) if _same(item, lex)]
+        twins = [i for i, lex in enumerate(lexical_items) if _same_name(item, lex)]
         absorbed.update(twins)
+        confirmed = bool(twins) or any(_same_segment(item, lex) for lex in lexical_items)
         mention = ExamMention(
-            text=item.name.strip(), source="both" if twins else "llm", evidence=item.evidence
+            text=item.name.strip(), source="both" if confirmed else "llm", evidence=item.evidence
         )
         merged.append((_position(item.evidence, document), order, mention))
     offset = len(accepted)

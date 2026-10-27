@@ -88,6 +88,30 @@ def test_accepted_items_are_deduplicated_by_code() -> None:
     assert route == "accepted"
 
 
+def test_review_item_covered_by_accepted_codes_is_not_asked() -> None:
+    decision, route = decide(
+        ResolvedExams(
+            items=[
+                resolved("TSH", cand("LAB-10043", 1.0)),
+                resolved("T4 livre", cand("LAB-10044", 1.0)),
+                resolved(
+                    "TSH + T4L",
+                    cand("LAB-10043", 0.8),
+                    cand("LAB-10044", 0.8),
+                    cand("LAB-10001", 0.3),
+                ),
+                resolved("T4", cand("LAB-10044", 0.8), cand("LAB-10045", 0.8)),
+            ]
+        ),
+        PARAMS,
+    )
+
+    by_text = {item.mention.text: (item.status, item.reason) for item in decision.items}
+    assert by_text["TSH + T4L"] == ("rejected", "already_accepted")
+    assert by_text["T4"] == ("review", "below_accept")
+    assert route == "review"
+
+
 @pytest.mark.parametrize(
     ("scores", "route"),
     [
