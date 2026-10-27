@@ -1,0 +1,17 @@
+.PHONY: setup lint typecheck test-unit check
+
+setup:
+	uv sync --all-extras --group dev
+	uv run pre-commit install
+
+lint:
+	uv run ruff check .
+	uv run ruff format --check .
+
+typecheck:
+	uv run mypy src
+
+test-unit:
+	uv run pytest -m "unit or contract"
+
+check: lint typecheck test-unit

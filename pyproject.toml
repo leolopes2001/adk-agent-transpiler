@@ -60,6 +60,71 @@ dev = [
     "ruff",
     "mypy",
     "import-linter",
+    "pre-commit",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "BLE", "SIM", "RUF", "PL", "PT", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+# assert is the pytest idiom; literal expected values are clearer than named constants.
+"tests/**" = ["S101", "PLR2004"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["lab_common", "transpiler", "agent_runtime", "ocr_mcp", "rag_mcp", "scheduler_api"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+explicit_package_bases = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+strict_equality = true
+check_untyped_defs = true
+
+# Equivalent of --strict, which mypy only accepts globally.
+[[tool.mypy.overrides]]
+module = ["lab_common.*", "transpiler.*", "agent_runtime.*"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+warn_return_any = true
+no_implicit_reexport = true
+extra_checks = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "unit: fast, isolated tests with no I/O outside tmp_path",
+    "contract: checks agreements between components (registry/factories, client/OpenAPI, ADK API)",
+    "integration: needs a real dependency (Postgres, Tesseract, MCP server over SSE)",
+    "security: PII leakage, injection and authentication checks",
+    "e2e: runs the full Docker Compose stack",
+    "llm: calls a real LLM; requires GOOGLE_API_KEY",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["lab_common", "transpiler", "agent_runtime", "ocr_mcp", "rag_mcp", "scheduler_api"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    'if __name__ == "__main__":',
 ]
 
 [build-system]
