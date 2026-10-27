@@ -123,7 +123,9 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["lab_common", "transpiler", "agent_runtime", "ocr_mcp", "rag_mcp", "scheduler_api"]
+# A directory, not package names: with package names coverage matches on the
+# module name, and alembic loads migrations/env.py as a module named "env_py".
+source = ["src"]
 
 [tool.coverage.report]
 show_missing = true
