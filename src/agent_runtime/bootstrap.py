@@ -17,6 +17,7 @@ from types import MappingProxyType
 
 from agent_runtime.errors import ConfigurationError
 from agent_runtime.gateways.mcp import AdkMcpGateway, McpEndpoint, McpGateway, SessionMcpGateway
+from agent_runtime.gateways.scheduler import SchedulerClient, SchedulerGateway
 
 MCP_GATEWAY_ENV = "AGENT_MCP_GATEWAY"
 """`session` (default) or `adk`; see ADR-0009."""
@@ -61,6 +62,8 @@ class RuntimeDeps:
         self._http_services = MappingProxyType(dict(http_services))
         self._mcp: McpGateway | None = None
         self._injected_mcp: McpGateway | None = None
+        self._schedulers: dict[str, SchedulerGateway] = {}
+        self._injected_schedulers: dict[str, SchedulerGateway] = {}
 
     @classmethod
     def lazy(
@@ -123,12 +126,35 @@ class RuntimeDeps:
             )
         return gateway(endpoints)
 
-    def use(self, *, mcp: McpGateway | None = None) -> None:
+    def scheduler(self, service: str) -> SchedulerGateway:
+        """Client of a declared HTTP service; built from the environment on first use."""
+        if service in self._injected_schedulers:
+            return self._injected_schedulers[service]
+        client = self._schedulers.get(service)
+        if client is None:
+            config = self._http_services.get(service)
+            if config is None:
+                raise ConfigurationError("UNKNOWN_SERVICE", f"service {service!r} is not declared")
+            base_url, api_key = self._env(config.base_url_env, config.api_key_env)
+            client = SchedulerClient(base_url, api_key, config.timeout_s)
+            self._schedulers[service] = client
+        return client
+
+    def use(
+        self,
+        *,
+        mcp: McpGateway | None = None,
+        schedulers: Mapping[str, SchedulerGateway] | None = None,
+    ) -> None:
         """Replace gateways with given ones (tests, fakes); `aclose` keeps them."""
         self._injected_mcp = mcp
+        self._injected_schedulers = dict(schedulers or {})
 
     async def aclose(self) -> None:
         """Release the gateways built from the environment; the next use rebuilds them."""
         mcp, self._mcp = self._mcp, None
+        schedulers, self._schedulers = self._schedulers, {}
         if mcp is not None:
             await mcp.aclose()
+        for client in schedulers.values():
+            await client.aclose()
