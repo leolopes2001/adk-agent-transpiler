@@ -162,7 +162,7 @@ São 13 *kinds* de nó registrados em [`registry.py`](src/transpiler/registry.py
 
 ### Validação
 
-Todos os erros de uma execução são acumulados e mostrados juntos, com código, JSON Pointer, nó e dica. Exit codes: 0 ok, 1 E/S ou uso, 2 schema, 3 semântica, 4 geração. Exemplo real ([`evidence/transpiler/validate-errors.txt`](evidence/transpiler/validate-errors.txt)), com a spec principal alterada para usar uma tool fora da allowlist, um serviço não declarado e uma aresta que pula o gate:
+Todos os erros de uma execução são acumulados e mostrados juntos, com código, JSON Pointer, nó e dica. Exit codes: 0 ok, 1 E/S ou uso, 2 schema, 3 semântica, 4 geração. Uma spec com mais de 32 níveis de aninhamento é erro de schema (exit 2), antes de qualquer outra verificação. Exemplo real ([`evidence/transpiler/validate-errors.txt`](evidence/transpiler/validate-errors.txt)), com a spec principal alterada para usar uma tool fora da allowlist, um serviço não declarado e uma aresta que pula o gate:
 
 ```text
 ✖ E_TOOL_NOT_ALLOWED    /workflow/nodes/0/tool  (node "ocr", kind ocr_extract)
@@ -182,6 +182,7 @@ Algumas regras semânticas que vão além do schema:
 - **Tipos entre nós:** a saída de um nó precisa ser a entrada que o próximo espera. O `reconcile` precisa receber diretamente um `join` do mesmo grafo, que combine exatamente uma saída do LLM e uma lexical; um join dentro de outro subworkflow é rejeitado com `E_RECONCILE_WITHOUT_JOIN`.
 - **Segurança:** agente que lê texto não confiável não pode ter tools, e `fail_closed: false` é rejeitado.
 - **Orçamento de tempo:** o timeout do nó não pode ser menor que o timeout de leitura do servidor que ele chama.
+- **Ambiguidade visível ao gate:** o `rag_resolve` que alimenta o `confidence_gate` precisa pedir pelo menos 2 candidatos (`top_k >= 2`, senão `E_GATE_CANDIDATES`); com um só, o empate entre "T4 livre" e "T4 total" passaria por aceite.
 
 O corpus de specs inválidas tem um arquivo por código de erro, em [`tests/data/specs/invalid/`](tests/data/specs/invalid/).
 
@@ -254,7 +255,7 @@ Exit codes:
 
 | Camada | O que faz |
 |---|---|
-| `ocr-mcp` | Detecta CPF, CNS, RG, telefone, e-mail, CEP, endereço, data de nascimento, CRM, carteirinha e nomes após rótulo, e devolve só texto com placeholders (`[PESSOA_1]`, `[CPF_1]`). Se o motor de PII falhar ou sobrar resíduo, a tool falha sem texto. |
+| `ocr-mcp` | Detecta CPF, CNS, RG, telefone, e-mail, CEP, endereço, data de nascimento, CRM, carteirinha e nomes após rótulo (em qualquer caixa, inclusive quando o nome vem na linha seguinte ao rótulo), e devolve só texto com placeholders (`[PESSOA_1]`, `[CPF_1]`). Se o motor de PII falhar ou sobrar resíduo, a tool falha sem texto. |
 | `patient_ref` | `pt_` + HMAC-SHA256 do identificador, calculado no `ocr-mcp` com um segredo que só ele recebe. É o único vínculo com o paciente que a API conhece. |
 | `guard` | Reescaneia o texto recebido; se ainda houver PII depois de mascarar de novo, a execução para. |
 | `before_model_callback` | Escaneia a requisição inteira ao modelo; identificador válido ou parte binária bloqueia a chamada. |
@@ -268,10 +269,10 @@ Como é provado: [`tests/security/test_e2e_pii.py`](tests/security/test_e2e_pii.
 - o `guard` pontua padrões de injection (pt/en, caracteres invisíveis) e bloqueia em severidade alta antes do LLM;
 - o documento chega ao modelo entre `<documento_nao_confiavel>`;
 - o `Agent` não tem tools e só devolve um schema;
-- cada exame do LLM precisa aparecer no texto (grounding);
+- cada exame do LLM precisa citar um trecho que exista no texto (grounding). Isso prova que o trecho existe, não que o nome devolvido corresponde a ele; por isso o RAG resolve também o trecho, e o nome só é aceito quando os dois apontam para o mesmo código e ambos passam pelo gate. Se divergirem ou se o trecho for ambíguo ("T4"), o item vai para revisão;
 - os códigos vêm só do catálogo, pelo RAG.
 
-No pior caso, uma injeção faz o LLM omitir exames, e a extração léxica em paralelo os recupera. Com `pedido_injecao.png`, o fluxo para em `ocr → guard → abort`, sem chamar o LLM nem a API ([`evidence/cli/03-injection.txt`](evidence/cli/03-injection.txt)).
+Essas camadas reduzem o efeito de uma injeção que passe pelo `guard`, mas não o anulam. O modelo ainda pode omitir exames: a extração léxica em paralelo recupera os que estão escritos como no catálogo, não todos. Pode também dar a um trecho o nome de outro exame: a conferência pelo trecho manda esse item para revisão em vez de aceitá-lo. O que ele não consegue é criar um código fora do catálogo, chamar tools ou chegar ao agendamento sem passar pelo gate. Com `pedido_injecao.png`, o fluxo para em `ocr → guard → abort`, sem chamar o LLM nem a API ([`evidence/cli/03-injection.txt`](evidence/cli/03-injection.txt)).
 
 **Autenticação.** A API exige `X-API-Key`, e os MCPs exigem bearer token. Os dois segredos têm pelo menos 32 caracteres e são comparados em tempo constante. Cada container recebe só os segredos que usa: `GOOGLE_API_KEY` só no agente, `PII_HMAC_SECRET` só no OCR.
 
@@ -292,7 +293,7 @@ Ele copia o código gerado e passa a posse dos arquivos para o dono de `./specs`
 
 ## Decisões de arquitetura
 
-**O LLM varia, a decisão é determinística.** O Gemini só normaliza menções a partir de texto mascarado. Código do exame, aceitação, roteamento, retries e agendamento são decididos por código. Nas execuções reais, o nome que o modelo devolve muda: para a linha "TSH" do pedido, ele já devolveu "Hormônio tireoestimulante (TSH)" e "TSH (Hormônio tireoestimulante)"; para "Urina tipo 1 (EAS)", "Urina tipo 1", "Exame de urina tipo 1 (EAS)" e "EAS (Elementos Anormais e Sedimento)". Em todas as execuções registradas, o resultado final foi o mesmo: os 7 códigos de [`samples/expected/`](samples/expected/pedido_medico_ficticio.json) e o mesmo agendamento. Uma variante que pontua abaixo do limiar vai para revisão ou é rejeitada, e o item léxico do mesmo trecho garante o código ([`evidence/cli/01-feliz.txt`](evidence/cli/01-feliz.txt) mostra os dois casos).
+**O LLM varia, a decisão é determinística.** O Gemini só normaliza menções a partir de texto mascarado. Código do exame, aceitação, roteamento, retries e agendamento são decididos por código. Nas execuções reais, o nome que o modelo devolve muda: para a linha "TSH" do pedido, ele já devolveu "Hormônio tireoestimulante (TSH)" e "TSH (Hormônio tireoestimulante)"; para "Urina tipo 1 (EAS)", "Urina tipo 1", "Exame de urina tipo 1 (EAS)" e "EAS (Elementos Anormais e Sedimento)". Em todas as execuções registradas, o resultado final foi o mesmo: os 7 códigos de [`samples/expected/`](samples/expected/pedido_medico_ficticio.json) e o mesmo agendamento. Uma variante que pontua abaixo do limiar, ou cujo trecho aponta para outro exame, vai para revisão ou é rejeitada, e o item léxico do mesmo trecho garante o código ([`evidence/cli/01-feliz.txt`](evidence/cli/01-feliz.txt) mostra os dois casos).
 
 | ADR | Decisão |
 |---|---|
@@ -332,7 +333,7 @@ bash scripts/check_isolation.sh                                            # com
 
 O pre-commit roda ruff, ruff format, mypy (strict em `transpiler`, `lab_common` e `agent_runtime`) e import-linter.
 
-**Cobertura atual: 98%** em todos os testes menos os E2E (2107 testes, [`evidence/coverage.txt`](evidence/coverage.txt)). O check de desenvolvimento roda 1767 testes, e a suíte E2E, 17. O CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) roda qualidade, unit/contract, integração/segurança e E2E; o job com Gemini real é manual.
+**Cobertura atual: 98%** em todos os testes menos os E2E (2185 testes, [`evidence/coverage.txt`](evidence/coverage.txt)). O check de desenvolvimento roda 1840 testes, e a suíte E2E, 18. O CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) roda qualidade, unit/contract, integração/segurança e E2E; o job com Gemini real é manual.
 
 ## Limitações e próximos passos
 
@@ -397,6 +398,19 @@ Capturas tiradas à mão; a preparação está em [`evidence/screenshots/README.
 - **Código gerado em volume nomeado.** Na simulação do avaliador, o bind mount de `./generated` funcionava no macOS, mas no Docker Engine do Linux o UID 10001 não conseguiria gravar nele. Isso levou ao volume nomeado e ao serviço `export-generated` (`5ebb95f`, `0afa0fd`).
 - **Achados dos próprios testes.** O teste do catálogo mostrou que "Anti-HAV IgM" era mascarado como nome de pessoa (`57094f2`). O teste de injection no fluxo mostrou que um item do LLM chamado "LAB-10099" conseguia esconder o "Hemograma completo" da extração léxica (`081a5d7`). A primeira chamada real ao Gemini mostrou que a API rejeita `additionalProperties` no schema de resposta (`829a693`).
 - **Falhas de processo, registradas como tal.** Dois commits entraram com o check vermelho: um por validar com `make check | tail && git commit` (o `&&` olhou o exit do `tail`) e outro por encadear com `;`. Nenhum foi reescrito; o segundo foi corrigido num commit que cita o original (`e5778ca`), e o fluxo de commit passou a exigir o check com `&&` e sem pipe.
+
+**Auditoria independente antes da entrega.** Uma revisão independente do projeto, com o PDF do desafio como fonte de verdade, encontrou seis falhas que a suíte não cobria, cada uma com arquivo, linha e contraexemplo. Concordei com todas. Cada correção começou por um teste que reproduzia o contraexemplo e falhava, e entrou num commit próprio:
+
+| Achado | Falha | Correção |
+|---|---|---|
+| F01 (alto) | Nome rotulado em minúsculas, em caixa mista ou na linha seguinte ao rótulo ("Paciente: maria fictícia da silva") escapava do mascaramento e chegava ao modelo e à sessão. | O valor de campos pessoais rotulados é mascarado em qualquer caixa, até o próximo campo; teste com OCR real numa imagem fictícia nova (`1160601`). |
+| F02 (alto) | O grounding só provava que o trecho existia: "Ferritina" com evidência "Hemograma completo" era aceita, e a evidência do pedido ambíguo mostrava "T4 total" aceito a partir de "T4". | O RAG resolve também o trecho; o nome só é aceito se os dois tiverem o mesmo top-1 e ambos passarem pelo gate, senão vai para revisão (`03b95b7`). |
+| F03 (médio) | Com `top_k: 1` no `rag_resolve`, o gate não via o empate de "T4" e aceitava um dos dois. | `E_GATE_CANDIDATES`: o transpilador exige `top_k >= 2` antes do gate (`7f865e7`). |
+| F04 (médio) | O cliente da API confirmava um 201 só com `appointment_id`, com `status` errado ou de outro paciente, hash ou exames. | O corpo é validado inteiro e conferido contra a requisição; qualquer divergência é `SCHEDULER_UNEXPECTED_RESPONSE` (`780339c`). |
+| F05 (médio) | `reconcile` depois de um subworkflow com o join passava na semântica e derrubava o lowering com `StopIteration`. | `E_RECONCILE_WITHOUT_JOIN`, com JSON Pointer e exit 3 (`9b39f56`). |
+| F06 (baixo) | Um JSON de 2 KB com listas aninhadas terminava em `RecursionError` (exit 1). | Limite de 32 níveis e travessia sem recursão; erro de schema, exit 2 (`9139b9d`). |
+
+A auditoria também apontou duas afirmações deste README como excessivas, ajustadas na seção de segurança: o "pior caso" de uma injeção e o que o grounding garante. E mostrou que a captura do pedido ambíguo e o relatório JSON do mesmo cenário vinham de execuções diferentes; o coletor passou a tirar os dois de uma única execução.
 
 **Referências consultadas.**
 
