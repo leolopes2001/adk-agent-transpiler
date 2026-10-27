@@ -101,6 +101,26 @@ class TestNormalizeForSearch:
         assert normalize_for_search("Dosagem de Vitamina D") == "vitamina d"
         assert normalize_for_search("Exame da urina com sedimento") == "urina sedimento"
 
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("Vitamina E", "vitamina e"),
+            ("Vitamina A", "vitamina a"),
+            ("VITAMINA E.", "vitamina e"),
+            ("Hepatite A", "hepatite a"),
+            ("Colesterol total e frações", "colesterol total fracoes"),
+            ("Vitamina E e ferro", "vitamina ferro"),
+            ("Dosagem de vitamina D", "vitamina d"),
+            ("Glicemia de", "glicemia"),
+        ],
+    )
+    def test_keeps_only_a_trailing_one_letter_stopword(self, text: str, expected: str) -> None:
+        assert normalize_for_search(text) == expected
+
+    @pytest.mark.parametrize("text", ["e", " a ", "de e", "exame e"])
+    def test_a_lone_letter_is_still_dropped(self, text: str) -> None:
+        assert normalize_for_search(text) == ""
+
     def test_only_stopwords_yields_empty(self) -> None:
         assert normalize_for_search("exame de dosagem") == ""
 
@@ -125,7 +145,9 @@ class TestNormalizeForSearch:
         result = normalize_for_search(text)
         assert result == result.strip()
         assert "  " not in result
-        assert STOPWORDS.isdisjoint(result.split())
+        *body, last = result.split() or [""]
+        assert STOPWORDS.isdisjoint(body)
+        assert last not in STOPWORDS or len(last) == 1
 
 
 class TestTokens:
@@ -136,5 +158,9 @@ class TestTokens:
         assert tokens("  ...  ") == []
 
     @given(st.text())
-    def test_matches_normalized_form(self, text: str) -> None:
-        assert " ".join(tokens(text)) == normalize_for_search(text)
+    def test_matches_normalized_form_except_a_trailing_letter(self, text: str) -> None:
+        normalized = normalize_for_search(text).split()
+        assert tokens(text) in (normalized, normalized[:-1])
+
+    def test_tokens_drop_a_trailing_letter(self) -> None:
+        assert tokens("Vitamina E") == ["vitamina"]

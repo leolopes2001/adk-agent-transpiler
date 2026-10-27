@@ -82,14 +82,28 @@ def _strip_accents(text: str) -> str:
     return "".join(c for c in decomposed if not unicodedata.category(c).startswith("M"))
 
 
-def tokens(text: str) -> list[str]:
-    """Search tokens of `text`, in order and with repetitions, stopwords removed."""
+def _words(text: str) -> list[str]:
     # Case folding can itself produce combining marks (U+0130 -> "i" + U+0307),
     # so accents are stripped both before and after it.
     folded = _strip_accents(_strip_accents(text).casefold())
-    return [t for t in _NON_WORD.sub(" ", folded).split() if t not in STOPWORDS]
+    return _NON_WORD.sub(" ", folded).split()
+
+
+def tokens(text: str) -> list[str]:
+    """Search tokens of `text`, in order and with repetitions, stopwords removed."""
+    return [t for t in _words(text) if t not in STOPWORDS]
 
 
 def normalize_for_search(text: str) -> str:
-    """Accent-free, lowercase, punctuation-free form of `text` without stopwords."""
-    return " ".join(tokens(text))
+    """Accent-free, lowercase, punctuation-free form of `text` without stopwords.
+
+    A one-letter stopword that ends the text after other words is kept: there
+    it names the exam ("Vitamina E", "Vitamina A"), while in the middle it is
+    a conjunction ("Colesterol total e frações").
+    """
+    words = _words(text)
+    kept = [t for t in words if t not in STOPWORDS]
+    last = words[-1] if words else ""
+    if last in STOPWORDS and len(last) == 1 and kept:
+        kept.append(last)
+    return " ".join(kept)

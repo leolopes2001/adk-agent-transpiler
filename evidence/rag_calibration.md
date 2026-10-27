@@ -4,10 +4,10 @@ Gerado por `scripts/calibrate_rag.py`; não editar à mão.
 
 ## Entradas
 
-- Conjunto de avaliação: `tests/data/rag_eval.jsonl` (103 consultas; sha256 `706772e20447bb3a…`).
+- Conjunto de avaliação: `tests/data/rag_eval.jsonl` (104 consultas; sha256 `e8dc0616ec21608e…`).
 - Catálogo: `data/exams_catalog.json`, versão 2026.10.0 (sha256 `28eb7825865727be…`).
 - Thresholds atuais: `specs/exam_scheduling_agent.json`.
-- Consultas por tipo: abbrev 15, alias 12, ambiguous 8, exact 17, negative 26, ocr_noise 13, typo 12.
+- Consultas por tipo: abbrev 15, alias 12, ambiguous 8, exact 17, negative 27, ocr_noise 13, typo 12.
 
 ## Método
 
@@ -26,9 +26,9 @@ Critério: precisão dos aceitos = 100% e zero negativos aceitos; entre essas co
 
 | | accept / review / margin | precisão dos aceitos | recall dos aceitos | taxa de revisão | negativos aceitos | ambíguos aceitos | positivos rejeitados |
 |---|---|---|---|---|---|---|---|
-| atual (spec) | 0.85 / 0.60 / 0.05 | 100.0% | 79.7% (55/69) | 31.1% (32/103) | 0 | 0 | 1 |
-| **escolhido** | 0.85 / 0.60 / 0.05 | 100.0% | 79.7% (55/69) | 31.1% (32/103) | 0 | 0 | 1 |
-| grade fina (0,01), só referência | 0.81 / 0.60 / 0.05 | 100.0% | 87.0% (60/69) | 26.2% (27/103) | 0 | 0 | 1 |
+| atual (spec) | 0.85 / 0.60 / 0.05 | 100.0% | 79.7% (55/69) | 31.7% (33/104) | 0 | 0 | 1 |
+| **escolhido** | 0.85 / 0.60 / 0.05 | 100.0% | 79.7% (55/69) | 31.7% (33/104) | 0 | 0 | 1 |
+| grade fina (0,01), só referência | 0.81 / 0.60 / 0.05 | 100.0% | 87.0% (60/69) | 26.9% (28/104) | 0 | 0 | 1 |
 
 Precision@1 nas consultas não negativas: 98.7% (76/77).
 
@@ -124,7 +124,8 @@ Combinações admissíveis: 360; com o mesmo recall máximo: 56.
 | negative | `Mamografia bilateral` | — | LAB-10075 | 0.5400 | 0.0535 | rejected |
 | negative | `Ecocardiograma` | — | LAB-10001 | 0.5400 | 0.0000 | rejected |
 | negative | `Endoscopia digestiva alta` | — | LAB-10011 | 0.4909 | 0.0409 | rejected |
-| negative | `Vitamina E` | — | LAB-10107 | 0.9625 | 0.0000 | review |
+| negative | `Vitamina E` | — | LAB-10107 | 0.8000 | 0.0000 | review |
+| negative | `Vitamina A` | — | LAB-10107 | 0.8000 | 0.0000 | review |
 | negative | `Testosterona livre` | — | LAB-10055 | 0.8000 | 0.0338 | review |
 | negative | `Cálcio iônico` | — | LAB-10033 | 0.8000 | 0.2600 | review |
 | negative | `Ultrassonografia de mamas` | — | LAB-10115 | 0.7250 | 0.0000 | review |
@@ -148,11 +149,11 @@ Combinações admissíveis: 360; com o mesmo recall máximo: 56.
 
 Negativos com maior score (top-1):
 
-- `Vitamina E` → LAB-10107 0.9625 (margem 0.0000; review)
+- `Vitamina E` → LAB-10107 0.8000 (margem 0.0000; review)
+- `Vitamina A` → LAB-10107 0.8000 (margem 0.0000; review)
 - `Testosterona livre` → LAB-10055 0.8000 (margem 0.0338; review)
 - `Cálcio iônico` → LAB-10033 0.8000 (margem 0.2600; review)
 - `Cortisol salivar` → LAB-10056 0.8000 (margem 0.3091; review)
-- `Tomografia de tórax` → LAB-10119 0.7662 (margem 0.2797; review)
 
 Aceitos com menor score:
 
