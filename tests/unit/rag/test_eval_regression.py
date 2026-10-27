@@ -3,7 +3,7 @@
 `tests/data/rag_eval.jsonl` has one mention per line: `expected` is the right
 catalog code (null for exams the catalog does not have and OCR debris), `kind`
 says what the mention exercises, and ambiguous mentions list every reading in
-`acceptable`. The gate below follows the runtime's confidence gate rule.
+`acceptable`. Decisions use the runtime's gate rule (`lab_common.gate`).
 """
 
 import json
@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 from lab_common.contracts.rag import SearchResult
+from lab_common.gate import gate_decision
 from lab_common.text import normalize_for_search
 from rag_mcp.catalog import Catalog, load_catalog
 from rag_mcp.scoring import ExamSearcher
@@ -48,17 +49,13 @@ class Thresholds:
 
 def gate(result: SearchResult, thresholds: Thresholds) -> str:
     """Decision of the runtime's confidence gate for one mention."""
-    if not result.candidates:
-        return "rejected"
-    first = result.candidates[0]
-    second = result.candidates[1] if len(result.candidates) > 1 else None
-    # Scores have 4 decimals; without rounding, 0.85 - 0.80 would fall short of 0.05.
-    margin_ok = second is None or round(first.score - second.score, 4) >= thresholds.margin
-    if first.score >= thresholds.accept and margin_ok:
-        return "accepted"
-    if first.score >= thresholds.review:
-        return "review"
-    return "rejected"
+    status, _ = gate_decision(
+        (c.score for c in result.candidates),
+        accept=thresholds.accept,
+        review=thresholds.review,
+        margin=thresholds.margin,
+    )
+    return status
 
 
 def spec_thresholds() -> Thresholds:

@@ -1,15 +1,8 @@
 """`confidence_gate`: the only place where a catalog code is chosen.
 
-For each mention, with `c1` and `c2` the two best candidates from the RAG:
-
-- no candidates -> `rejected` (`not_found`);
-- `c1.score >= accept_threshold` and (`c2` absent or margin >= `min_margin`)
-  -> `accepted`, `selected = c1`;
-- `c1.score >= review_threshold` -> `review` (`low_margin` or `below_accept`);
-- otherwise -> `rejected` (`low_confidence`).
-
-The margin is rounded to 4 places, the precision of the scores: in floating
-point 0.85 - 0.80 is 0.04999..., which would send a clear case to review.
+Each mention is decided by `lab_common.gate.gate_decision` (the same rule
+the RAG evaluation and the calibration script measure); an accepted mention
+selects its best candidate.
 Accepted items are deduplicated by code (first mention wins), and a review
 item whose candidates at or above `review_threshold` are all already
 accepted is rejected (`already_accepted`): no choice could add an exam, so
@@ -35,8 +28,8 @@ from agent_runtime.schemas import (
     RunFailure,
 )
 from lab_common import logging as lab_logging
+from lab_common.gate import gate_decision
 
-MARGIN_DIGITS = 4
 EMPTY_MESSAGE = (
     "Nenhum exame do pedido foi reconhecido no catálogo com confiança suficiente. "
     "Confira o pedido ou procure o atendimento."
@@ -65,26 +58,13 @@ def ranked(candidates: list[Candidate]) -> list[Candidate]:
 
 def classify(item: ResolvedExam, params: ConfidenceGateParams) -> GateItem:
     candidates = ranked(item.candidates)
-    if not candidates:
-        return GateItem(
-            mention=item.mention,
-            status="rejected",
-            selected=None,
-            candidates=[],
-            reason="not_found",
-        )
-    best = candidates[0]
-    runner_up = candidates[1] if len(candidates) > 1 else None
-    margin_ok = (
-        runner_up is None or round(best.score - runner_up.score, MARGIN_DIGITS) >= params.min_margin
+    status, reason = gate_decision(
+        (c.score for c in candidates),
+        accept=params.accept_threshold,
+        review=params.review_threshold,
+        margin=params.min_margin,
     )
-    if best.score >= params.accept_threshold and margin_ok:
-        status, selected, reason = "accepted", best, None
-    elif best.score >= params.review_threshold:
-        reason = "low_margin" if best.score >= params.accept_threshold else "below_accept"
-        status, selected = "review", None
-    else:
-        status, selected, reason = "rejected", None, "low_confidence"
+    selected = candidates[0] if status == "accepted" else None
     gate_item = GateItem.model_validate(
         {
             "mention": item.mention,

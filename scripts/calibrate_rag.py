@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from lab_common.contracts.rag import SearchResult
+from lab_common.gate import gate_decision
 from rag_mcp.catalog import load_catalog
 from rag_mcp.scoring import ExamSearcher
 
@@ -116,17 +117,11 @@ class Metrics:
 
 
 def decide(case: Case, t: Thresholds) -> str:
-    """The runtime's confidence gate rule for one mention."""
-    _, first, second = case.top
-    if not case.result.candidates:
-        return "rejected"
-    # Scores have 4 decimals; round the margin so 0.85 - 0.80 counts as 0.05.
-    margin_ok = second is None or round(first - second, 4) >= t.margin
-    if first >= t.accept and margin_ok:
-        return "accepted"
-    if first >= t.review:
-        return "review"
-    return "rejected"
+    """The runtime's confidence gate rule (lab_common.gate) for one mention."""
+    status, _ = gate_decision(
+        (c.score for c in case.result.candidates), accept=t.accept, review=t.review, margin=t.margin
+    )
+    return status
 
 
 def measure(cases: Sequence[Case], t: Thresholds) -> Metrics:
