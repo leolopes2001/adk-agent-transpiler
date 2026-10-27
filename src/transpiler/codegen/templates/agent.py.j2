@@ -1,0 +1,134 @@
+{#- Every spec value goes through pyrepr (literals) or pyident (names). -#}
+{% macro edge(e) -%}
+{% if e.routes -%}
+({{ e.source | source }}, {{ '{' }}{% for route, target in e.routes %}{{ route | pyrepr }}: {{ target | pyident }}{{ ", " if not loop.last }}{% endfor %}{{ '}' }})
+{%- else -%}
+({{ e.source | source }}, {{ e.target | pyident }})
+{%- endif %}
+{%- endmacro %}
+{% macro workflow(var, graph, description=none) -%}
+{{ var | pyident }} = Workflow(
+    name={{ graph.name | pyrepr }},
+{% if description is not none %}
+    description={{ description | pyrepr }},
+{% endif %}
+    edges=[
+{% for e in graph.edges %}
+        {{ edge(e) }},
+{% endfor %}
+    ],
+)
+{%- endmacro %}
+{{ header }}
+from __future__ import annotations
+
+from google.adk import {{ imports.adk | join(", ") }}
+from google.adk.apps import {{ imports.apps | join(", ") }}
+{% if imports.workflow %}
+from google.adk.workflow import {{ imports.workflow | join(", ") }}
+{% endif %}
+{% if imports.genai_types %}
+from google.genai import types
+{% endif %}
+
+from agent_runtime import {{ imports.runtime | join(", ") }}
+{% if imports.bootstrap %}
+from agent_runtime.bootstrap import {{ imports.bootstrap | join(", ") }}
+{% endif %}
+{% if imports.models %}
+from agent_runtime.models import resolve_model
+{% endif %}
+{% if program.servers or program.services %}
+
+deps = RuntimeDeps.lazy(
+{% if program.servers %}
+    mcp_servers={
+{% for server in program.servers %}
+        {{ server.key | pyrepr }}: McpServerConfig(
+            url_env={{ server.url_env | pyrepr }},
+            auth_token_env={{ server.auth_token_env | pyrepr }},
+            allowed_tools={{ server.allowed_tools | pyrepr }},
+            connect_timeout_s={{ server.connect_timeout_s | pyrepr }},
+            read_timeout_s={{ server.read_timeout_s | pyrepr }},
+        ),
+{% endfor %}
+    },
+{% endif %}
+{% if program.services %}
+    http_services={
+{% for service in program.services %}
+        {{ service.key | pyrepr }}: HttpServiceConfig(
+            base_url_env={{ service.base_url_env | pyrepr }},
+            api_key_env={{ service.api_key_env | pyrepr }},
+            timeout_s={{ service.timeout_s | pyrepr }},
+        ),
+{% endfor %}
+    },
+{% endif %}
+)
+{% endif %}
+{% for node in leaf_nodes %}
+
+{% if node.primitive == "function" %}
+{{ node.var | pyident }} = nodes.{{ node.factory | pyident }}(
+    name={{ node.var | pyrepr }},
+{% if node.needs_deps %}
+    deps=deps,
+{% endif %}
+{% for key, value in node.kwargs.items() %}
+    {{ key | pyident }}={{ value | pyrepr }},
+{% endfor %}
+{% if node.retry %}
+    retry=RetryConfig(max_attempts={{ node.retry.max_attempts | pyrepr }}, initial_delay={{ node.retry.initial_delay_s | pyrepr }}, max_delay={{ node.retry.max_delay_s | pyrepr }}),
+{% endif %}
+{% if node.timeout_s is not none %}
+    timeout={{ node.timeout_s | pyrepr }},
+{% endif %}
+)
+{% elif node.primitive == "join" %}
+{{ node.var | pyident }} = JoinNode(
+    name={{ node.var | pyrepr }},
+)
+{% elif node.primitive == "agent" %}
+{{ node | instruction_constant | text_assignment(node.agent.instruction) }}
+
+{{ node.var | pyident }} = Agent(
+    name={{ node.var | pyrepr }},
+    model=resolve_model({{ node.agent.model.name | pyrepr }}),
+    mode="single_turn",
+    instruction={{ node | instruction_constant }},
+    output_schema=schemas.{{ node.agent.output_schema | pyident }},
+    generate_content_config=types.GenerateContentConfig(
+        temperature={{ node.agent.model.temperature | pyrepr }},
+        max_output_tokens={{ node.agent.model.max_output_tokens | pyrepr }},
+{% if node.retry %}
+        http_options=types.HttpOptions(
+            retry_options=types.HttpRetryOptions(
+                attempts={{ node.retry.max_attempts | pyrepr }},
+                initial_delay={{ node.retry.initial_delay_s | pyrepr }},
+                max_delay={{ node.retry.max_delay_s | pyrepr }},
+            ),
+        ),
+{% endif %}
+    ),
+{% if node.timeout_s is not none %}
+    timeout={{ node.timeout_s | pyrepr }},
+{% endif %}
+    before_model_callback=guardrails.pii_tripwire,
+)
+{% endif %}
+{% endfor %}
+{% for node in subworkflows %}
+
+{{ workflow(node.var, node.subgraph) }}
+{% endfor %}
+
+{{ workflow("root_agent", program.root, program.description) }}
+
+app = App(
+    name={{ program.agent_name | pyrepr }},
+    root_agent=root_agent,
+{% if program.needs_resumability %}
+    resumability_config=ResumabilityConfig(is_resumable=True),
+{% endif %}
+)
