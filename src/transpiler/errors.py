@@ -290,12 +290,13 @@ def render_text(diagnostics: Sequence[Diagnostic]) -> str:
     return "\n".join(lines)
 
 
-def render_json(diagnostics: Sequence[Diagnostic]) -> str:
+def render_json(diagnostics: Sequence[Diagnostic], extra: Mapping[str, Any] | None = None) -> str:
     errors = len(errors_of(diagnostics))
     document = {
         "ok": errors == 0,
         "errors": errors,
         "warnings": len(diagnostics) - errors,
+        **(extra or {}),
         "diagnostics": [d.to_dict() for d in diagnostics],
     }
     return json.dumps(document, ensure_ascii=False, indent=2)

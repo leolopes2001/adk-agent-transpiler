@@ -79,7 +79,8 @@ def check_files(package_dir: Path) -> list[Diagnostic]:
 def run_probe(
     package_dir: Path, env: Mapping[str, str], timeout: float = PROBE_TIMEOUT_S
 ) -> dict[str, Any]:
-    command = [sys.executable, "-I", "-m", "transpiler.validation.probe", str(package_dir)]
+    # -B: no __pycache__ inside the package that is about to be emitted.
+    command = [sys.executable, "-I", "-B", "-m", "transpiler.validation.probe", str(package_dir)]
     try:
         completed = subprocess.run(  # noqa: S603 - fixed argv; the package passed the AST rules
             command,

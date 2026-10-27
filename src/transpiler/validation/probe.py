@@ -84,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     if len(args) != 1:
         sys.stderr.write("usage: python -I -m transpiler.validation.probe <package-dir>\n")
         return 2
+    sys.dont_write_bytecode = True
     block_network()
     result = inspect_package(Path(args[0]).resolve())
     sys.stdout.write(json.dumps(result, sort_keys=True) + "\n")
