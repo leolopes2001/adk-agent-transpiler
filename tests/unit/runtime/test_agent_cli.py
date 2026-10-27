@@ -20,6 +20,7 @@ import pytest
 import structlog
 from google.genai import errors as genai_errors
 from runtime_fakes import FakeMcp
+from structlog.testing import capture_logs
 
 from agent_runtime import cli
 from agent_runtime.errors import ConfigurationError, PermanentError, TransientError
@@ -267,6 +268,24 @@ async def test_interactive_review_resumes_with_the_operator_choice(
     statuses = {e["mention"]: (e["status"], e["reason"]) for e in run.report["exams"]}
     assert statuses["T4"] == ("accepted", "reviewed")
     assert "review" in run.report["path"]
+
+
+async def test_events_replayed_by_the_resume_are_logged_once(
+    services: Services, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    services.lines = ["Exames:", "1. Hemograma completo", "2. T4"]
+    monkeypatch.setenv("FAKE_LLM_FIXTURE", str(FIXTURES / "pedido_ambiguo.json"))
+
+    def none(payload: Mapping[str, Any]) -> dict[str, Any]:
+        return {"choices": {str(item["index"]): "none" for item in payload["items"]}}
+
+    with capture_logs() as logs:
+        run = await _execute(review=none, interactive=True)
+
+    finished = [e["node"] for e in logs if e["event"] == "node_finished"]
+    assert run.exit_code == 0
+    assert sorted(finished) == sorted(set(finished))
+    assert finished.count("ocr") == 1
 
 
 async def test_non_interactive_review_rejects_the_ambiguous_item(

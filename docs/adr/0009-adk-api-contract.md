@@ -36,11 +36,13 @@ Diferenças e o que fazemos:
 2. **`Event(output=BaseModel)` chega ao próximo nó como a própria instância**
    (sessão em memória) e serializa no JSON da sessão. Os nós validam a entrada
    aceitando modelo ou dict.
-3. **MCP: `SessionMcpGateway` é o padrão.** Invocar uma tool do `McpToolset`
-   fora de um agente exige um `tool_context` obrigatório (funciona com `None`,
-   sem garantia), a criação de sessão tem um retry interno
-   (`retry_on_errors`), o que criaria um segundo nível de retry, e falhas de
-   transporte viram `ConnectionError` com texto, sem distinguir 401 de rede.
+3. **MCP: `SessionMcpGateway` é o padrão**, por três motivos:
+   a. invocar uma tool do `McpToolset` fora de um agente exige um
+      `tool_context` obrigatório (funciona com `None`, sem garantia);
+   b. a criação de sessão tem um retry interno (`retry_on_errors`), que
+      somaria um segundo nível de retry ao `RetryConfig` do nó;
+   c. falhas de transporte viram `ConnectionError` com texto, sem distinguir
+      um 401 (permanente) de uma queda de rede (transitória).
    O gateway usa `mcp.client.sse.sse_client` + `ClientSession.call_tool`, com
    os timeouts da spec, uma conexão por chamada. `AdkMcpGateway` existe como
    alternativa (`AGENT_MCP_GATEWAY=adk`), coberto pelo teste de integração.
@@ -57,6 +59,11 @@ Diferenças e o que fazemos:
 6. **Retry**: as factories copiam o `RetryConfig` do código gerado com
    `exceptions=[TransientError, NodeTimeoutError]`. `PermanentError` não é
    re-tentada.
+7. **Resume reemite eventos**: ao retomar uma invocação interrompida, o
+   `Runner` devolve de novo os eventos dos nós já concluídos como eventos
+   novos (id e timestamp novos, sem rota). A CLI ignora eventos já vistos em
+   uma rodada anterior, por id ou por conteúdo (caminho do nó, erro e saída),
+   para não registrar nós duas vezes.
 
 ## Consequências
 

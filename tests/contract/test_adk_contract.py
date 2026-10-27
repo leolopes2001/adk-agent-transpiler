@@ -419,6 +419,13 @@ async def test_request_input_interrupts_and_resume_reruns_the_node() -> None:
     assert runs == [{}, {"review-1": {"choice": "a"}}]
     assert _outputs(resumed)["done"] == {"done": {"choice": "a"}}
 
+    # The resume yields the finished nodes' events again, as new events with
+    # new ids. The CLI deduplicates them by content (ADR-0009).
+    original = next(e for e in events if e.node_info.name == "first" and e.output is not None)
+    replayed = next(e for e in resumed if e.node_info.name == "first" and e.output is not None)
+    assert replayed.id != original.id
+    assert Payload.model_validate(replayed.output) == Payload.model_validate(original.output)
+
 
 def test_mcp_toolset_builds_offline_with_sse_params_and_filter() -> None:
     toolset = McpToolset(

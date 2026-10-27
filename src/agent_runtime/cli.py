@@ -38,6 +38,7 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.workflow import BaseNode, NodeTimeoutError
 from google.genai import errors as genai_errors
 from google.genai import types
+from pydantic import BaseModel
 from rich.console import Console
 from rich.prompt import Prompt
 
@@ -205,6 +206,19 @@ def ask_review(payload: Mapping[str, Any]) -> dict[str, Any]:
     return {"choices": choices}
 
 
+def _event_key(event: Event) -> str:
+    """What a node run produced, independent of the event id and timestamp."""
+    if not event.node_info.path:
+        return ""
+    # A replay may carry the dump of a model the original event held as is, and
+    # it loses the route, so the route is not part of the key.
+    value = event.output
+    if isinstance(value, BaseModel):
+        value = value.model_dump(mode="json")
+    output = json.dumps(value, sort_keys=True, default=str)
+    return f"{event.invocation_id}|{event.node_info.path}|{event.error_code}|{output}"
+
+
 def _interrupt(events: list[Event]) -> tuple[Event, types.FunctionCall] | None:
     for event in events:
         if event.long_running_tool_ids and event.content and event.content.parts:
@@ -256,13 +270,25 @@ async def _drive(
     trace: RunTrace,
     review: ReviewPrompt | None,
 ) -> None:
-    """Runs to the end, answering review interrupts with `review`."""
+    """Runs to the end, answering review interrupts with `review`.
+
+    A resumed invocation yields again the events of the nodes that already
+    finished, as new events with new ids (ADR-0009). Events seen in an earlier
+    round, by id or by content, are neither traced nor logged again; repeats
+    within one round (retry attempts) are kept.
+    """
     invocation_id: str | None = None
+    earlier: set[str] = set()
     while True:
         events: list[Event] = []
+        this_round: set[str] = set()
         async for event in runner.run_async(
             user_id=USER_ID, session_id=session_id, invocation_id=invocation_id, new_message=message
         ):
+            keys = {event.id, _event_key(event)} - {""}
+            if keys & earlier:
+                continue
+            this_round |= keys
             trace.observe(event)
             events.append(event)
             name = event.node_info.name
@@ -270,6 +296,7 @@ async def _drive(
                 log.warning("node_retry", node=name, error_code=event.error_code)
             elif event.output is not None:
                 log.info("node_finished", node=name, route=event.actions.route)
+        earlier |= this_round
         pending = _interrupt(events)
         if pending is None:
             return
