@@ -1,6 +1,6 @@
 """What `lab-agent run` shows the operator on the terminal, besides the report.
 
-Review prompts go to stderr, so stdout keeps only the report. Text that
+The welcome header and the review prompts go to stderr, so stdout keeps only the report. Text that
 comes from the document (evidence, mentions) or from the catalog is always
 rendered as `Text`, never as rich markup: a document cannot style or fake
 the prompt.
@@ -26,6 +26,13 @@ LABEL_WIDTH = 20
 _READ_STYLE = "bold cyan"
 _AI_STYLE = "bold magenta"
 _CATALOG_STYLE = "bold green"
+
+
+def welcome(console: Console, name: str, description: str, image: str) -> None:
+    """Who is running and on which file; printed before the run starts."""
+    header = Text.assemble((name, "bold"), *((" — ", description) if description else ()))
+    console.print(header)
+    console.print(Text(f"Lendo {image}...", style="dim"))
 
 
 def similarity(score: float) -> str:

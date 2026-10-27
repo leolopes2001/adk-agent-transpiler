@@ -340,6 +340,44 @@ def test_main_prints_the_table_by_default(
     assert "caminho: ocr → guard" in out
 
 
+def test_table_mode_opens_with_a_welcome_header_on_stderr(
+    services: Services, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive"])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    header = " ".join(captured.err.split())
+    assert header.startswith(
+        "exam_scheduling_agent — Agenda exames a partir da imagem de um pedido médico: OCR,"
+        f" resolução no catálogo e solicitação de agendamento. Lendo {SAMPLE}..."
+    )
+    assert "Lendo" not in captured.out
+
+
+def test_json_mode_has_no_welcome_header(
+    services: Services, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = cli.main(
+        ["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive",
+         "--output", "json"]
+    )  # fmt: skip
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert json.loads(captured.out)["exit_code"] == 0
+    assert "Lendo" not in captured.err
+    assert "exam_scheduling_agent —" not in captured.err
+
+
+def test_spec_format_decides_when_output_is_not_given() -> None:
+    spec = {"workflow": {"nodes": [{"id": "p", "kind": "present", "params": {"format": "json"}}]}}
+
+    assert cli._present_format(spec) == "json"
+    assert cli._present_format({"nodes": [{"kind": "present"}]}) == "table"
+    assert cli._present_format({"nodes": []}) is None
+
+
 def _log_events(err: str) -> list[str]:
     return [json.loads(line)["event"] for line in err.splitlines() if line.startswith("{")]
 

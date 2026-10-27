@@ -9,7 +9,8 @@ variable is listed, exit 8), that the generated code matches the spec
 (manifest hash, exit 7), that the package is under GENERATED_ROOT and that
 the image is acceptable (exit 2). The workflow then runs with an in-memory
 session; review requests are answered at the terminal, choosing among the
-offered candidates only. The report goes to stdout. The JSON logs go to
+offered candidates only. In table mode a short header (agent and image)
+opens the run on stderr. The report goes to stdout. The JSON logs go to
 stderr and, by default, only errors, so the terminal shows the review
 questions, the report and the summary; --verbose (or LOG_LEVEL=INFO) shows
 every run event.
@@ -42,6 +43,7 @@ from google.adk.workflow import BaseNode, NodeTimeoutError
 from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel
+from rich.console import Console
 
 from agent_runtime.bootstrap import RuntimeDeps
 from agent_runtime.errors import AgentRuntimeError, ConfigurationError, InvalidInputError
@@ -59,7 +61,7 @@ from agent_runtime.report import (
 )
 from agent_runtime.schemas import RunInput
 from agent_runtime.settings import AgentSettings, missing
-from agent_runtime.terminal import ask_review
+from agent_runtime.terminal import ask_review, welcome
 from lab_common import logging as lab_logging
 from lab_common.mcp_server import LibraryLogFilter
 
@@ -74,6 +76,7 @@ QUIET_LOG_LEVEL = "ERROR"
 VERBOSE_LOG_LEVEL = "INFO"
 
 type ReviewPrompt = Callable[[Mapping[str, Any]], dict[str, Any]]
+type Announce = Callable[["LoadedAgent", str], None]
 
 log = lab_logging.get_logger(__name__)
 
@@ -88,9 +91,12 @@ class CliError(Exception):
 @dataclass(frozen=True)
 class LoadedAgent:
     name: str
+    description: str
     app: App
     deps: RuntimeDeps | None
     spec_sha256: str
+    output_format: str = "table"
+    """Format of the spec's `present` node, used when --output is not given."""
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -138,6 +144,20 @@ def _import(agent_dir: Path) -> ModuleType:
     return module
 
 
+def _present_format(node: object) -> str | None:
+    if isinstance(node, Mapping):
+        if node.get("kind") == "present":
+            params = node.get("params")
+            return str(params.get("format", "table")) if isinstance(params, Mapping) else "table"
+        node = list(node.values())
+    if isinstance(node, list):
+        for child in node:
+            found = _present_format(child)
+            if found is not None:
+                return found
+    return None
+
+
 def load_agent(agent_dir: Path, spec: Path, settings: AgentSettings) -> LoadedAgent:
     """Generated app after the manifest and location checks (exit 7 or 8 on failure)."""
     resolved = agent_dir.resolve()
@@ -150,6 +170,10 @@ def load_agent(agent_dir: Path, spec: Path, settings: AgentSettings) -> LoadedAg
     except (OSError, ValueError):
         raise CliError(EXIT_STALE_CODE, "generated code has no readable manifest") from None
     spec_sha256 = _sha256(spec)
+    try:
+        output_format = _present_format(json.loads(spec.read_text("utf-8"))) or "table"
+    except (OSError, ValueError):
+        raise CliError(EXIT_CONFIG, "--spec file is not valid JSON") from None
     if manifest.get("spec_sha256") != spec_sha256:
         raise CliError(
             EXIT_STALE_CODE, "generated code is out of date with the spec; run lab-transpile"
@@ -162,9 +186,11 @@ def load_agent(agent_dir: Path, spec: Path, settings: AgentSettings) -> LoadedAg
     deps = getattr(agent_module, "deps", None)
     return LoadedAgent(
         name=app.name,
+        description=getattr(app.root_agent, "description", "") or "",
         app=app,
         deps=deps if isinstance(deps, RuntimeDeps) else None,
         spec_sha256=spec_sha256,
+        output_format=output_format,
     )
 
 
@@ -316,6 +342,7 @@ async def execute(  # noqa: PLR0913 - the CLI options
     run_id: str,
     settings: AgentSettings,
     review: ReviewPrompt = ask_review,
+    announce: Announce | None = None,
 ) -> RunOutcome:
     """Checks, runs and reports; raises CliError for failures before the run."""
     try:
@@ -332,6 +359,8 @@ async def execute(  # noqa: PLR0913 - the CLI options
     del path
     resolved = (settings.input_root / image).resolve()
     relative = resolved.relative_to(settings.input_root)
+    if announce is not None:
+        announce(agent, image)
 
     trace = RunTrace()
     service = InMemorySessionService()
@@ -406,6 +435,16 @@ def _configure_logging(level: str) -> None:
     warnings.filterwarnings("ignore", message=r"\[EXPERIMENTAL\]")
 
 
+def announcer(output: str | None) -> Announce:
+    """Welcome header on stderr, only when the report will be a table."""
+
+    def announce(agent: LoadedAgent, image: str) -> None:
+        if (output or agent.output_format) == "table":
+            welcome(Console(stderr=True), agent.name, agent.description, image)
+
+    return announce
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -421,6 +460,7 @@ def main(argv: list[str] | None = None) -> int:
                 interactive=not args.non_interactive,
                 run_id=run_id,
                 settings=settings,
+                announce=announcer(args.output),
             )
         )
     except ConfigurationError as error:
