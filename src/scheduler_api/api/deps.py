@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 
+from scheduler_api.api.docs import IDEMPOTENCY_KEY_EXAMPLE
 from scheduler_api.domain.catalog import Catalog
 from scheduler_api.domain.services import AppointmentService
 from scheduler_api.log import get_logger
@@ -68,5 +69,26 @@ IdempotencyKey = Annotated[
             "Repeating a request with the same key and body returns the original "
             "appointment instead of creating another one."
         ),
+        openapi_examples={
+            "example": {
+                "summary": "Key chosen by the client",
+                "value": IDEMPOTENCY_KEY_EXAMPLE,
+            }
+        },
     ),
 ]
+
+
+def document_request_id(
+    x_request_id: Annotated[
+        str | None,
+        Header(
+            alias="X-Request-ID",
+            description=(
+                "Optional correlation id, echoed in the response and in the logs. "
+                "Values outside `[A-Za-z0-9_-:.]{1,128}` are replaced by a generated UUID."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Only documents the header; `RequestContextMiddleware` does the work."""

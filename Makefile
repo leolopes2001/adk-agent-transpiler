@@ -1,4 +1,4 @@
-.PHONY: setup lint typecheck lint-imports test-unit check golden
+.PHONY: setup lint typecheck lint-imports test-unit check golden openapi
 
 setup:
 	uv sync --all-extras --group dev
@@ -23,3 +23,7 @@ check: lint typecheck lint-imports test-unit
 golden:
 	uv run lab-transpile generate specs/exam_scheduling_agent.json --out tests/golden/
 	uv run lab-transpile generate specs/examples/exam_lookup_only.json --out tests/golden/
+
+# Regenerates the versioned OpenAPI document; test_openapi fails when it is stale.
+openapi:
+	uv run python -m scheduler_api.openapi evidence/openapi.json

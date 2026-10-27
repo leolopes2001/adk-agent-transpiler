@@ -4,16 +4,43 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, status
 
-from scheduler_api.api.deps import CatalogDep, require_api_key
+from scheduler_api.api import docs
+from scheduler_api.api.deps import CatalogDep, document_request_id, require_api_key
 from scheduler_api.api.errors import ApiError
 from scheduler_api.schemas import EXAM_CODE_PATTERN, ExamOut
 
-router = APIRouter(prefix="/v1", tags=["exams"], dependencies=[Depends(require_api_key)])
+router = APIRouter(
+    prefix="/v1",
+    tags=["exams"],
+    dependencies=[Depends(require_api_key), Depends(document_request_id)],
+)
 
 
-@router.get("/exams/{code}", summary="Get a catalog exam")
+@router.get(
+    "/exams/{code}",
+    summary="Get a catalog exam",
+    description="Returns the official name of a catalog code, as the API validates it.",
+    response_description="The catalog entry.",
+    responses={
+        200: {
+            "content": {
+                "application/json": {"example": {"code": "LAB-10001", "name": "Hemograma completo"}}
+            }
+        },
+        **docs.problem_responses(
+            {
+                401: ["unauthorized"],
+                404: ["exam_not_found"],
+                422: ["validation_error"],
+                500: ["internal_error"],
+            }
+        ),
+    },
+)
 def get_exam(
-    code: Annotated[str, Path(pattern=EXAM_CODE_PATTERN)],
+    code: Annotated[
+        str, Path(pattern=EXAM_CODE_PATTERN, description="Catalog code.", examples=["LAB-10001"])
+    ],
     catalog: CatalogDep,
 ) -> ExamOut:
     exam = catalog.get(code)

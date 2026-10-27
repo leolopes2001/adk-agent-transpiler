@@ -8,10 +8,11 @@ state. Run with `uvicorn scheduler_api.main:create_app --factory`.
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import timedelta
+from typing import Any
 
 from fastapi import FastAPI
 
-from scheduler_api.api import routes_appointments, routes_exams, routes_health
+from scheduler_api.api import docs, routes_appointments, routes_exams, routes_health
 from scheduler_api.api.errors import install_error_handlers
 from scheduler_api.api.middleware import RequestContextMiddleware
 from scheduler_api.domain.catalog import Catalog
@@ -60,6 +61,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="Lab Exam Scheduler API",
         version=API_VERSION,
+        description=docs.DESCRIPTION,
+        openapi_tags=docs.TAGS,
         lifespan=_lifespan,
     )
     app.state.settings = settings
@@ -68,4 +71,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(routes_appointments.router)
     app.include_router(routes_exams.router)
     app.include_router(routes_health.router)
+
+    generate_openapi = app.openapi
+
+    def openapi() -> dict[str, Any]:
+        return docs.fix_problem_media_types(generate_openapi())
+
+    app.openapi = openapi  # type: ignore[method-assign]
     return app

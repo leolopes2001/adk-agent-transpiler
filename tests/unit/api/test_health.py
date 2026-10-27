@@ -148,3 +148,11 @@ def test_create_app_reads_settings_from_environment(
     assert settings.catalog_path == tmp_path / "catalog.json"
     assert settings.idempotency_ttl_hours == 6
     assert settings.log_level == "WARNING"
+
+
+def test_docs_routes_are_logged_by_path(app: FastAPI, log_records: LogRecords) -> None:
+    with TestClient(app) as client:
+        client.get("/openapi.json")
+
+    [event] = [r for r in log_records() if r["event"] == "request"]
+    assert event["route"] == "/openapi.json"

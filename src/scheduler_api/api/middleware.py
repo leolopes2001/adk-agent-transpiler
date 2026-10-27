@@ -35,7 +35,12 @@ def _route_template(scope: Scope) -> str:
     # Route templates, not raw paths, so unmatched URLs never end up in the logs.
     route = scope.get("route")
     path = getattr(route, "path", None)
-    return path if isinstance(path, str) else "<unmatched>"
+    if isinstance(path, str):
+        return path
+    if scope.get("endpoint") is not None:
+        # Matched a plain Starlette route (/docs, /openapi.json): fixed paths, no parameters.
+        return str(scope["path"])
+    return "<unmatched>"
 
 
 class RequestContextMiddleware:
