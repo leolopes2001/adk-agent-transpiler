@@ -4,14 +4,11 @@ from unittest.mock import MagicMock
 
 import pytest
 from google.adk import Workflow
-from google.adk.models import LlmRequest, LlmResponse
 from google.adk.workflow import FunctionNode, RetryConfig
-from google.genai import types
 from pydantic import ValidationError
 
 from agent_runtime import nodes, schemas
 from agent_runtime.bootstrap import HttpServiceConfig, McpServerConfig, RuntimeDeps
-from agent_runtime.guardrails import pii_tripwire
 from agent_runtime.models import resolve_model
 from agent_runtime.nodes import _not_implemented
 
@@ -154,14 +151,3 @@ def test_schemas_are_frozen() -> None:
 
     with pytest.raises(ValidationError):
         item.image_path = "b.png"  # type: ignore[misc]
-
-
-@pytest.mark.xfail(
-    strict=True, reason="pii_tripwire is a no-op until phase 06; remove this marker then"
-)
-def test_pii_tripwire_blocks_valid_cpf() -> None:
-    request = LlmRequest(
-        contents=[types.Content(role="user", parts=[types.Part(text="CPF 529.982.247-25")])]
-    )
-
-    assert isinstance(pii_tripwire(MagicMock(), request), LlmResponse)

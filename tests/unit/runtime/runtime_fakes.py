@@ -2,15 +2,17 @@
 
 import json
 import warnings
-from collections.abc import Callable, Mapping
+from collections.abc import AsyncGenerator, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
 from google.adk import Context, Event, Runner, Workflow
 from google.adk.apps import App
+from google.adk.models import BaseLlm, LlmCapabilities, LlmRequest, LlmResponse
 from google.adk.sessions import InMemorySessionService
 from google.adk.workflow import BaseNode, FunctionNode
 from google.genai import types
+from pydantic import Field
 
 USER = "unit"
 
@@ -40,6 +42,24 @@ class FakeMcp:
 
     async def aclose(self) -> None:
         self.closed = True
+
+
+class ScriptedLlm(BaseLlm):
+    """Model double: the same answer to every request, requests recorded."""
+
+    model: str = "scripted"
+    answer: str = '{"exams": []}'
+    requests: list[LlmRequest] = Field(default_factory=list)
+
+    @property
+    def capabilities(self) -> LlmCapabilities:
+        return LlmCapabilities(output_schema_and_tools=False)
+
+    async def generate_content_async(
+        self, llm_request: LlmRequest, stream: bool = False
+    ) -> AsyncGenerator[LlmResponse, None]:
+        self.requests.append(llm_request)
+        yield LlmResponse(content=types.Content(role="model", parts=[types.Part(text=self.answer)]))
 
 
 @dataclass
