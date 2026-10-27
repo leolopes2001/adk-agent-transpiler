@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from scheduler_api.api import routes_health
+from scheduler_api.api.errors import install_error_handlers
 from scheduler_api.api.middleware import RequestContextMiddleware
 from scheduler_api.infra.db import make_engine, make_session_factory, ping
 from scheduler_api.log import configure_logging, get_logger
@@ -48,5 +49,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.add_middleware(RequestContextMiddleware)
+    install_error_handlers(app)
     app.include_router(routes_health.router)
     return app

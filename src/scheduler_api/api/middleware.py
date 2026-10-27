@@ -12,6 +12,7 @@ import structlog
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from scheduler_api.api.errors import internal_error_response
 from scheduler_api.log import get_logger
 
 REQUEST_ID_HEADER = "X-Request-ID"
@@ -38,7 +39,12 @@ def _route_template(scope: Scope) -> str:
 
 
 class RequestContextMiddleware:
-    """Assigns a request id, echoes it in the response and logs one `request` event."""
+    """Assigns a request id, echoes it in the response and logs one `request` event.
+
+    It also turns unexpected exceptions into a generic 500 problem, so that
+    response carries the request id like any other and the stack trace is
+    logged once, with the request id and without the request body.
+    """
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -50,7 +56,7 @@ class RequestContextMiddleware:
 
         request_id = _request_id(scope)
         scope.setdefault("state", {})["request_id"] = request_id
-        status = 500
+        status: int | None = None
         started = time.perf_counter()
 
         async def send_with_request_id(message: Message) -> None:
@@ -63,6 +69,12 @@ class RequestContextMiddleware:
         with structlog.contextvars.bound_contextvars(request_id=request_id):
             try:
                 await self.app(scope, receive, send_with_request_id)
+            except Exception:
+                _log.exception("unhandled_error", route=_route_template(scope))
+                if status is not None:
+                    # Headers already sent: nothing sensible to answer; let the server close it.
+                    raise
+                await internal_error_response(scope)(scope, receive, send_with_request_id)
             finally:
                 _log.info(
                     "request",
