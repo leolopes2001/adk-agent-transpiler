@@ -179,7 +179,7 @@ Algumas regras semânticas que vão além do schema:
 
 - **Dominância:** todo caminho até `schedule` passa pelo `confidence_gate`, e todo caminho até o LLM passa pelo `guard`.
 - **Rotas exaustivas:** cada rota que um nó pode emitir tem destino.
-- **Tipos entre nós:** a saída de um nó precisa ser a entrada que o próximo espera.
+- **Tipos entre nós:** a saída de um nó precisa ser a entrada que o próximo espera. O `reconcile` precisa receber diretamente um `join` do mesmo grafo, que combine exatamente uma saída do LLM e uma lexical; um join dentro de outro subworkflow é rejeitado com `E_RECONCILE_WITHOUT_JOIN`.
 - **Segurança:** agente que lê texto não confiável não pode ter tools, e `fail_closed: false` é rejeitado.
 - **Orçamento de tempo:** o timeout do nó não pode ser menor que o timeout de leitura do servidor que ele chama.
 

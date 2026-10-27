@@ -3,7 +3,10 @@
 A subworkflow is typed by its contents: its input is whatever the parent
 sends into it and its output is the output of its single final node. A join
 produces a `JoinResult` whose components are the types of its inputs, which
-lets `reconcile` require exactly one LLM and one lexical source.
+lets `reconcile` require exactly one LLM and one lexical source. That join
+must be reconcile's direct predecessor in the same graph: the lowering
+names the join's inputs for the runtime, which it cannot do through a
+subworkflow boundary (audit F05).
 
 The gate's margin rule compares each mention's two best candidates, so the
 `rag_resolve` that feeds a `confidence_gate` must ask for at least
@@ -132,7 +135,18 @@ class _Typer:
     ) -> Iterator[Diagnostic]:
         required = kind_of(target).join_inputs
         source = graph.nodes.get(edge.source)
-        if not required or not isinstance(source, JoinNodeSpec):
+        if not required:
+            return
+        if not isinstance(source, JoinNodeSpec):
+            what = "START" if source is None else f'"{source.id}" ({source.kind})'
+            yield edge_diagnostic(
+                graph,
+                edge,
+                Code.E_RECONCILE_WITHOUT_JOIN,
+                f'"{target.id}" ({target.kind}) precisa receber diretamente um join do mesmo '
+                f"{graph.label}; recebe de {what}",
+                hint="ponha os extratores e o join no mesmo grafo que o reconcile",
+            )
             return
         components = self.join_components(graph, source.id)
         if components is not None and components != required:

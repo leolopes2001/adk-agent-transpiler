@@ -170,3 +170,43 @@ def test_gate_fed_by_a_single_candidate_is_rejected(workdir: Path, capsys: Captu
     assert diagnostic["pointer"] == "/workflow/nodes/3/params/top_k"
     assert "confidence_gate" in diagnostic["message"]
     assert "top_k" in diagnostic["message"]
+
+
+def _join_inside_a_subworkflow(spec: dict[str, Any]) -> None:
+    """Extractors and join move to `fanout`; `extraction` keeps only reconcile after it."""
+    extraction = spec["subworkflows"]["extraction"]
+    reconcile = next(n for n in extraction["nodes"] if n["kind"] == "reconcile")
+    spec["subworkflows"]["fanout"] = {
+        "nodes": [n for n in extraction["nodes"] if n["kind"] != "reconcile"],
+        "edges": [e for e in extraction["edges"] if e["to"] != reconcile["id"]],
+    }
+    spec["subworkflows"]["extraction"] = {
+        "nodes": [{"id": "fanout", "kind": "subworkflow", "ref": "fanout"}, reconcile],
+        "edges": [
+            {"from": "START", "to": "fanout"},
+            {"from": "fanout", "to": reconcile["id"]},
+        ],
+    }
+
+
+@pytest.mark.parametrize("command", ["validate", "generate"])
+def test_reconcile_without_a_direct_join_is_a_semantic_error(
+    workdir: Path, capsys: Capture, command: str
+) -> None:
+    # Audit F05: this composition passed the semantic pass and then crashed
+    # the lowering with StopIteration (exit 1, traceback).
+    path = _edited_main_spec(workdir, _join_inside_a_subworkflow)
+    args = [command, str(path), "--format", "json"]
+    if command == "generate":
+        args += ["--out", str(workdir / "out")]
+
+    code = main(args)
+
+    captured = capsys.readouterr()
+    assert code == 3
+    assert "Traceback" not in captured.err
+    [diagnostic] = json.loads(captured.out)["diagnostics"]
+    assert diagnostic["code"] == "E_RECONCILE_WITHOUT_JOIN"
+    assert diagnostic["pointer"] == "/subworkflows/extraction/edges/1"
+    assert '"fanout"' in diagnostic["message"]
+    assert not (workdir / "out").exists()
