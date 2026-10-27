@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+import httpx
 from google.adk import Context, Event, Runner, Workflow
 from google.adk.apps import App, ResumabilityConfig
 from google.adk.models import BaseLlm, LlmCapabilities, LlmRequest, LlmResponse
@@ -195,3 +196,30 @@ def rag_body(*results: list[dict[str, Any]], queries: list[str] | None = None) -
             for query, found in zip(names, results, strict=True)
         ],
     }
+
+
+@dataclass(frozen=True)
+class Confirm:
+    """Scheduler API success answer for the request it gets (a full AppointmentOut)."""
+
+    status: int
+    appointment_id: str
+    headers: Mapping[str, str] = field(default_factory=dict)
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        sent = json.loads(request.content)
+        body = {
+            "appointment_id": self.appointment_id,
+            "status": "requested",
+            **sent,
+            "exams": sorted(sent["exams"], key=lambda e: e["code"]),
+            "created_at": "2026-10-27T12:00:00Z",
+        }
+        return httpx.Response(self.status, json=body, headers=dict(self.headers))
+
+
+type ApiAnswer = httpx.Response | Confirm
+
+
+def answer(response: ApiAnswer, request: httpx.Request) -> httpx.Response:
+    return response(request) if isinstance(response, Confirm) else response

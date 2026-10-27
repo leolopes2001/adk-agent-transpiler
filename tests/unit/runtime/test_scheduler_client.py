@@ -1,5 +1,6 @@
 import json
 from collections.abc import Callable
+from typing import Any
 
 import httpx
 import pytest
@@ -44,9 +45,7 @@ async def _create(client: SchedulerClient) -> AppointmentResult:
 
 
 def _appointment(status: int, headers: dict[str, str] | None = None) -> Handler:
-    return lambda request: httpx.Response(
-        status, json={"appointment_id": APPOINTMENT_ID}, headers=headers
-    )
+    return lambda request: httpx.Response(status, json=_full_body(), headers=headers)
 
 
 async def test_created_sends_headers_and_body() -> None:
@@ -173,3 +172,87 @@ async def test_client_is_reused_and_closed() -> None:
 
 def test_repr_hides_the_api_key() -> None:
     assert API_KEY not in repr(_client(_appointment(201)))
+
+
+def _full_body(**changes: Any) -> dict[str, Any]:
+    """What the API answers for REQUEST: exams sorted by code, official names."""
+    body = {
+        "appointment_id": APPOINTMENT_ID,
+        "status": "requested",
+        "patient_ref": REQUEST.patient_ref,
+        "exams": [
+            {"code": "LAB-10001", "name": "Hemograma completo"},
+            {"code": "LAB-10043", "name": "TSH"},
+        ],
+        "source_document_sha256": REQUEST.source_document_sha256,
+        "requested_by": REQUEST.requested_by,
+        "created_at": "2026-10-27T12:00:00Z",
+    }
+    return {**body, **changes}
+
+
+SUCCESS = [(201, {}, "scheduled"), (200, {"Idempotent-Replayed": "true"}, "replayed")]
+SUCCESS_ANSWERS = [(status, headers) for status, headers, _ in SUCCESS]
+
+
+@pytest.mark.parametrize(("status", "headers", "outcome"), SUCCESS)
+async def test_full_matching_response_is_confirmed(
+    status: int, headers: dict[str, str], outcome: str
+) -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json=_full_body(), headers=headers)
+
+    result = await _create(_client(respond))
+
+    assert (result.status, result.appointment_id) == (outcome, APPOINTMENT_ID)
+
+
+OTHER_REQUEST = {
+    "patient_ref": "pt_ABCDEFGHJKMNPQRSTVWXYZ234",
+    "source_document_sha256": "cd" * 32,
+    "exams": [{"code": "LAB-10109", "name": "Ferritina"}],
+}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # Audit F04: each of these was confirmed.
+        {"appointment_id": APPOINTMENT_ID},
+        _full_body(status="rejected"),
+        _full_body(patient_ref=OTHER_REQUEST["patient_ref"]),
+        _full_body(source_document_sha256=OTHER_REQUEST["source_document_sha256"]),
+        _full_body(exams=OTHER_REQUEST["exams"]),
+        _full_body(exams=[{"code": "LAB-10001", "name": "Hemograma completo"}]),
+        _full_body(requested_by="other_agent"),
+        _full_body(**OTHER_REQUEST),
+        _full_body(created_at="yesterday"),
+        _full_body(extra="field"),
+    ],
+    ids=[
+        "only-id",
+        "status",
+        "patient",
+        "hash",
+        "other-exams",
+        "missing-exam",
+        "requester",
+        "other-request",
+        "created-at",
+        "extra-field",
+    ],
+)
+@pytest.mark.parametrize(
+    ("status", "headers"), [(status, headers) for status, headers, _ in SUCCESS]
+)
+async def test_response_that_breaks_the_contract_or_the_request_is_unexpected(
+    body: dict[str, Any], status: int, headers: dict[str, str]
+) -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json=body, headers=headers)
+
+    with pytest.raises(PermanentError) as caught:
+        await _create(_client(respond))
+
+    assert caught.value.code == "SCHEDULER_UNEXPECTED_RESPONSE"
+    assert caught.value.__cause__ is None

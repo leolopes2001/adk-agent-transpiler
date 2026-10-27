@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 from google.adk.workflow import RetryConfig
-from runtime_fakes import candidate, run_node
+from runtime_fakes import ApiAnswer, Confirm, answer, candidate, run_node
 
 from agent_runtime.bootstrap import HttpServiceConfig, RuntimeDeps
 from agent_runtime.errors import ConfigurationError, PermanentError, TransientError
@@ -54,12 +54,12 @@ def _deps(handler: httpx.MockTransport) -> RuntimeDeps:
     return deps
 
 
-def _transport(*responses: httpx.Response, seen: list[httpx.Request]) -> httpx.MockTransport:
+def _transport(*responses: ApiAnswer, seen: list[httpx.Request]) -> httpx.MockTransport:
     queue = list(responses)
 
     def handle(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        return queue.pop(0) if len(queue) > 1 else queue[0]
+        return answer(queue.pop(0) if len(queue) > 1 else queue[0], request)
 
     return httpx.MockTransport(handle)
 
@@ -101,9 +101,7 @@ def test_accepted_exams_are_unique_and_sorted() -> None:
 
 async def test_created() -> None:
     seen: list[httpx.Request] = []
-    deps = _deps(
-        _transport(httpx.Response(201, json={"appointment_id": APPOINTMENT_ID}), seen=seen)
-    )
+    deps = _deps(_transport(Confirm(201, APPOINTMENT_ID), seen=seen))
 
     run = await run_node(_node(deps), DECISION, STATE)
 
@@ -132,9 +130,7 @@ async def test_created() -> None:
 
 async def test_replayed() -> None:
     seen: list[httpx.Request] = []
-    replay = httpx.Response(
-        200, json={"appointment_id": APPOINTMENT_ID}, headers={"Idempotent-Replayed": "true"}
-    )
+    replay = Confirm(200, APPOINTMENT_ID, {"Idempotent-Replayed": "true"})
 
     run = await run_node(_node(_deps(_transport(replay, seen=seen))), DECISION, STATE)
 
@@ -170,7 +166,7 @@ async def test_server_errors_are_retried_with_the_same_key() -> None:
     transport = _transport(
         httpx.Response(503),
         httpx.Response(500),
-        httpx.Response(201, json={"appointment_id": APPOINTMENT_ID}),
+        Confirm(201, APPOINTMENT_ID),
         seen=seen,
     )
     retry = RetryConfig(max_attempts=3, initial_delay=0.0, max_delay=0.0, jitter=0.0)

@@ -19,7 +19,7 @@ import httpx
 import pytest
 import structlog
 from google.genai import errors as genai_errors
-from runtime_fakes import FakeMcp
+from runtime_fakes import ApiAnswer, Confirm, FakeMcp, answer
 from structlog.testing import capture_logs
 
 from agent_runtime import cli
@@ -72,9 +72,7 @@ class Services:
     lines: list[str] = field(default_factory=lambda: list(ORDER_TEXT))
     confidence: float = 0.95
     patient_ref: str | None = PATIENT_REF
-    api: list[httpx.Response] = field(
-        default_factory=lambda: [httpx.Response(201, json={"appointment_id": APPOINTMENT_ID})]
-    )
+    api: list[ApiAnswer] = field(default_factory=lambda: [Confirm(201, APPOINTMENT_ID)])
     requests: list[httpx.Request] = field(default_factory=list)
     mcp: FakeMcp = field(default_factory=FakeMcp)
 
@@ -96,7 +94,7 @@ class Services:
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
-        return self.api.pop(0) if len(self.api) > 1 else self.api[0]
+        return answer(self.api.pop(0) if len(self.api) > 1 else self.api[0], request)
 
 
 @pytest.fixture(autouse=True)
@@ -204,11 +202,7 @@ async def test_scheduled_run_reports_every_exam(services: Services) -> None:
 
 
 async def test_replay_reports_the_same_appointment(services: Services) -> None:
-    services.api = [
-        httpx.Response(
-            200, json={"appointment_id": APPOINTMENT_ID}, headers={"Idempotent-Replayed": "true"}
-        )
-    ]
+    services.api = [Confirm(200, APPOINTMENT_ID, {"Idempotent-Replayed": "true"})]
 
     outcome = await _execute()
 

@@ -100,12 +100,24 @@ def _examples(response: dict[str, Any]) -> list[dict[str, Any]]:
     return [example["value"] for example in media["examples"].values()]
 
 
+def _request_answered_by(body: dict[str, Any]) -> AppointmentRequest:
+    """The request a success example answers; the client checks the body against it."""
+    if "appointment_id" not in body:
+        return REQUEST
+    return AppointmentRequest(
+        patient_ref=body["patient_ref"],
+        exams=tuple((e["code"], e["name"]) for e in body["exams"]),
+        source_document_sha256=body["source_document_sha256"],
+        requested_by=body["requested_by"],
+    )
+
+
 async def _send(status: int, body: dict[str, Any], headers: dict[str, str]) -> Any:
     transport = httpx.MockTransport(lambda r: httpx.Response(status, json=body, headers=headers))
     client = SchedulerClient("http://api.local", "k" * 32, 5.0, transport=transport)
     try:
         return await client.create_appointment(
-            REQUEST, idempotency_key=IDEMPOTENCY_KEY, request_id=REQUEST_ID
+            _request_answered_by(body), idempotency_key=IDEMPOTENCY_KEY, request_id=REQUEST_ID
         )
     finally:
         await client.aclose()
@@ -147,4 +159,29 @@ def test_success_examples_validate_against_the_response_schema(
     validator = _validator(spec, created["schema"])
 
     assert list(validator.iter_errors(created["example"])) == []
-    assert scheduler._APPOINTMENT_ID.match(created["example"]["appointment_id"])
+    assert scheduler.AppointmentOut.model_validate(created["example"])
+
+
+def _resolved(spec: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any]:
+    ref = schema.get("$ref")
+    if ref is None:
+        return schema
+    resolved: dict[str, Any] = spec["components"]["schemas"][ref.rsplit("/", 1)[-1]]
+    return resolved
+
+
+def test_client_checks_every_field_of_the_success_body(
+    spec: dict[str, Any], operation: dict[str, Any]
+) -> None:
+    for status in ("200", "201"):
+        media = operation["responses"][status]["content"]["application/json"]
+        schema = _resolved(spec, media["schema"])
+        client = scheduler.AppointmentOut.model_json_schema()
+
+        assert set(client["properties"]) == set(schema["properties"])
+        assert set(client["required"]) == set(schema["required"])
+        for field in ("status", "appointment_id"):
+            for keyword in ("const", "pattern"):
+                assert client["properties"][field].get(keyword) == (
+                    schema["properties"][field].get(keyword)
+                ), (field, keyword)
