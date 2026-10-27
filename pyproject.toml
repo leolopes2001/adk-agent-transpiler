@@ -34,6 +34,7 @@ rag = [
     "uvicorn",
     "rank-bm25",
     "rapidfuzz",
+    "pydantic-settings",
 ]
 api = [
     "fastapi",

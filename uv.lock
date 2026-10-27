@@ -719,6 +719,7 @@ ocr = [
 ]
 rag = [
     { name = "mcp" },
+    { name = "pydantic-settings" },
     { name = "rank-bm25" },
     { name = "rapidfuzz" },
     { name = "uvicorn" },
@@ -760,6 +761,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2" },
     { name = "pydantic-settings", marker = "extra == 'api'" },
     { name = "pydantic-settings", marker = "extra == 'ocr'" },
+    { name = "pydantic-settings", marker = "extra == 'rag'" },
     { name = "python-ulid", marker = "extra == 'api'" },
     { name = "rank-bm25", marker = "extra == 'rag'" },
     { name = "rapidfuzz", marker = "extra == 'agent'" },
