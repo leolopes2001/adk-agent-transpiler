@@ -28,6 +28,7 @@ ocr = [
     "opencv-python-headless",
     "pillow",
     "anyio",
+    "pydantic-settings",
 ]
 rag = [
     "mcp>=1.24,<2",

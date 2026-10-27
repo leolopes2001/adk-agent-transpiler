@@ -714,6 +714,7 @@ ocr = [
     { name = "mcp" },
     { name = "opencv-python-headless" },
     { name = "pillow" },
+    { name = "pydantic-settings" },
     { name = "pytesseract" },
     { name = "uvicorn" },
 ]
@@ -759,6 +760,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], marker = "extra == 'api'" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pydantic-settings", marker = "extra == 'api'" },
+    { name = "pydantic-settings", marker = "extra == 'ocr'" },
     { name = "pytesseract", marker = "extra == 'ocr'" },
     { name = "python-ulid", marker = "extra == 'api'" },
     { name = "rank-bm25", marker = "extra == 'rag'" },
