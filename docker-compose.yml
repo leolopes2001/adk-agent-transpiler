@@ -1,9 +1,10 @@
 # Full stack: Postgres, scheduler API, OCR and RAG MCP servers, plus the agent CLI.
 #
 #   docker compose up -d --build --wait
-#   docker compose run --rm --entrypoint lab-transpile agent generate \
-#       /app/specs/exam_scheduling_agent.json --out /app/generated
+#   docker compose run --rm transpile          # spec -> generated code (named volume)
+#   docker compose run --rm export-generated   # copy it to ./generated on the host
 #   docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png
+#   docker compose down -v
 #
 # Networks: `backend` is internal (no internet) and holds every service; only the
 # agent also joins `egress` to reach Gemini, and only the API joins `edge`, which
@@ -118,6 +119,7 @@ services:
   # The `cli` profile keeps it out of `docker compose up`.
   agent:
     <<: *hardening
+    image: lab-agent-agent
     build: { context: ., dockerfile: docker/agent.Dockerfile }
     profiles: [cli]
     environment:
@@ -137,8 +139,7 @@ services:
       - ./samples:/app/inputs/samples:ro
       # A named volume, not ./generated: on a Linux host a bind-mounted directory
       # belongs to the host user (or to root, when Docker creates it), and UID
-      # 10001 could not write the generated code. Read it with
-      # `docker compose run --rm --entrypoint cat agent /app/generated/<agent>/agent.py`.
+      # 10001 could not write the generated code. `export-generated` copies it out.
       - generated:/app/generated
       - ./evidence:/app/evidence
     networks: [backend, egress]
@@ -149,6 +150,60 @@ services:
     # Human review asks on the terminal.
     stdin_open: true
     tty: true
+
+  # Tools (profile `tools`), same image as the agent, no network.
+  #   docker compose run --rm transpile [/app/specs/<spec>.json]
+  transpile:
+    <<: *hardening
+    image: lab-agent-agent
+    build: { context: ., dockerfile: docker/agent.Dockerfile }
+    profiles: [tools]
+    network_mode: none
+    entrypoint: [lab-transpile, generate, --out, /app/generated]
+    command: [/app/specs/exam_scheduling_agent.json]
+    volumes:
+      - ./specs:/app/specs:ro
+      - generated:/app/generated
+
+  # Copies the generated packages from the volume to ./generated on the host:
+  #   docker compose run --rm export-generated
+  # The only container that runs as root: ./generated belongs to the host user (or
+  # to root, when Docker creates it), so the copy is written and then handed to the
+  # owner of ./specs, the user who cloned the repository. Changing file ownership
+  # and bypassing file permissions is all it can do; it has no network.
+  export-generated:
+    <<: *hardening
+    image: lab-agent-agent
+    build: { context: ., dockerfile: docker/agent.Dockerfile }
+    profiles: [tools]
+    network_mode: none
+    user: "0:0"
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    volumes:
+      - ./specs:/app/specs:ro
+      - generated:/app/generated:ro
+      - ./generated:/export
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        owner=$$(stat -c %u:%g /app/specs)
+        exported=0
+        for dir in /app/generated/*/; do
+          [ -d "$$dir" ] || continue
+          name=$$(basename "$$dir")
+          rm -rf "/export/$$name"
+          cp -R "$${dir%/}" "/export/$$name"
+          # Docker Desktop (macOS, Windows) maps ownership itself and may refuse chown.
+          chown -R "$$owner" "/export/$$name" 2>/dev/null || true
+          echo "exported generated/$$name"
+          exported=$$((exported + 1))
+        done
+        chown "$$owner" /export 2>/dev/null || true
+        if [ "$$exported" -eq 0 ]; then
+          echo "nothing to export: run 'docker compose run --rm transpile' first" >&2
+          exit 1
+        fi
 
 networks:
   backend:
