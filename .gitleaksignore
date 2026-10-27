@@ -1,0 +1,8 @@
+# Reviewed false positives (gitleaks generic-api-key): not credentials.
+# Idempotency-Key example shown in the Swagger description and request example.
+82b3a68977423b543f5dbd3c8ea5373c506ef0e3:src/scheduler_api/api/docs.py:generic-api-key:42
+82b3a68977423b543f5dbd3c8ea5373c506ef0e3:src/scheduler_api/api/docs.py:generic-api-key:111
+# API key of the throwaway Postgres-backed test app.
+edbd1abe4befe810f642e6a13771c58bb0f47ba6:tests/integration/api/conftest.py:generic-api-key:22
+# Deliberately wrong key in the 401 test.
+d9c10e8278adb0e3f46ba647ed3a650476c56cf5:tests/integration/api/test_appointments.py:generic-api-key:214
