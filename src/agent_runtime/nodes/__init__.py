@@ -7,7 +7,6 @@ own module; the rest are still stubs (ADR-0002, walking skeleton): building
 the graph works, running such a node raises NotImplementedError.
 """
 
-from collections.abc import Mapping
 from typing import Any, Literal
 
 from google.adk import Context, Event
@@ -15,7 +14,10 @@ from google.adk.workflow import FunctionNode, RetryConfig
 
 from agent_runtime.bootstrap import RuntimeDeps
 from agent_runtime.nodes._common import NodeFunction
+from agent_runtime.nodes.lexical_extract import lexical_extract
+from agent_runtime.nodes.llm_input import llm_input
 from agent_runtime.nodes.ocr_extract import ocr_extract
+from agent_runtime.nodes.reconcile import reconcile
 from agent_runtime.nodes.untrusted_text_guard import untrusted_text_guard
 
 __all__ = [
@@ -54,37 +56,6 @@ def _pending(
         timeout=timeout,
         rerun_on_resume=rerun_on_resume,
     )
-
-
-def llm_input(*, name: str) -> FunctionNode:
-    """Wraps the guarded text in the untrusted-document delimiters sent to the Agent."""
-    return _pending(name)
-
-
-def lexical_extract(  # noqa: PLR0913 - one keyword per node param
-    *,
-    name: str,
-    deps: RuntimeDeps,
-    server: str,
-    tool: str,
-    min_score: float = 0.8,
-    max_lines: int = 60,
-    retry: RetryConfig | None = None,
-    timeout: float | None = None,
-) -> FunctionNode:
-    """Finds exam names line by line through catalog search."""
-    return _pending(name, retry=retry, timeout=timeout)
-
-
-def reconcile(
-    *,
-    name: str,
-    sources: Mapping[str, str],
-    grounding_min_ratio: int = 90,
-    max_items: int = 30,
-) -> FunctionNode:
-    """Merges LLM and lexical mentions; `sources` names the join inputs by role."""
-    return _pending(name)
 
 
 def rag_resolve(  # noqa: PLR0913 - one keyword per node param

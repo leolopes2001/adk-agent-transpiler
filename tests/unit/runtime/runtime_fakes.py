@@ -102,3 +102,37 @@ async def run_node(
         state=dict(final.state),
         events=events,
     )
+
+
+CATALOG_SHA = "28" * 32
+
+
+def candidate(code: str, name: str, score: float, matched_on: str = "name") -> dict[str, Any]:
+    return {
+        "code": code,
+        "name": name,
+        "score": score,
+        "matched_on": matched_on,
+        "category": "Hematologia",
+    }
+
+
+def rag_body(*results: list[dict[str, Any]], queries: list[str] | None = None) -> dict[str, Any]:
+    """`batch_search` body with one result per candidate list."""
+    names = queries or [f"q{i}" for i in range(len(results))]
+    return {
+        "contract_version": "1",
+        "catalog_version": "2026.10.0",
+        "catalog_sha256": CATALOG_SHA,
+        "results": [
+            {
+                "contract_version": "1",
+                "catalog_version": "2026.10.0",
+                "catalog_sha256": CATALOG_SHA,
+                "query": query,
+                "normalized_query": query.lower(),
+                "candidates": found,
+            }
+            for query, found in zip(names, results, strict=True)
+        ],
+    }

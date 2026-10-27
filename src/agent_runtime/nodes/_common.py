@@ -1,5 +1,6 @@
 """Pieces every node factory shares."""
 
+import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -10,6 +11,7 @@ from google.adk.workflow import FunctionNode, NodeTimeoutError, RetryConfig
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from agent_runtime.errors import PermanentError, TransientError
+from lab_common.text import normalize_for_search
 
 type NodeFunction = Callable[[Context, Any], Awaitable[Event | RequestInput]]
 
@@ -65,3 +67,26 @@ def parse_input[M: BaseModel](model: type[M], value: object) -> M:
         return model.model_validate(value)
     except ValidationError:
         raise PermanentError("INVALID_NODE_INPUT", f"expected {model.__name__}") from None
+
+
+# Same marker rule as the RAG server's query preparation (rag_mcp.scoring), which
+# the runtime may not import: "1." "1)" "(1)" "1º", "1 - ", "a)", bullets, dashes.
+_LIST_MARKER = re.compile(
+    r"""^\s*(?:
+        \(?[0-9]{1,3}\s*[.)º°]
+      | [0-9]{1,3}\s*[-\u2013\u2014:](?=\s)
+      | \(?[a-zA-Z]\)
+      | [•·▪*\-\u2013\u2014](?=\s|[^\W\d_])
+    )\s*""",
+    re.VERBOSE,
+)
+
+
+def strip_list_marker(text: str) -> str:
+    """`text` without one leading enumeration or bullet marker."""
+    return _LIST_MARKER.sub("", text, count=1).strip()
+
+
+def search_form(text: str) -> str:
+    """Form mentions are compared in: no list marker, normalized as the RAG index does."""
+    return normalize_for_search(strip_list_marker(text))
