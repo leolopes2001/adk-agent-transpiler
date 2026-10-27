@@ -219,7 +219,7 @@ Para acessar os servidores do host durante o desenvolvimento, o [`docker-compose
 
 ```text
 lab-agent run --image <png|jpeg> [--non-interactive] [--output table|json]
-              [--agent-dir DIR] [--spec SPEC] [--run-id UUID]
+              [--agent-dir DIR] [--spec SPEC] [--run-id UUID] [--verbose]
 ```
 
 | Opção | Padrão | Efeito |
@@ -229,6 +229,7 @@ lab-agent run --image <png|jpeg> [--non-interactive] [--output table|json]
 | `--output` | o `format` da spec | `table` (rich) ou `json` (relatório completo no stdout) |
 | `--agent-dir` / `--spec` | spec principal | Pacote gerado e spec correspondente; usados para a spec alternativa |
 | `--run-id` | UUID novo | Correlaciona os logs; a API recebe o mesmo valor como `X-Request-ID` |
+| `--verbose` | desligado | Mostra no stderr os logs JSON da execução (nível INFO); `LOG_LEVEL=INFO` tem o mesmo efeito |
 
 Exit codes:
 
@@ -242,6 +243,8 @@ Exit codes:
 | 6 | Dependência falhou (MCP, API, LLM, timeout) ou execução terminou sem pedido de agendamento |
 | 7 | Código gerado desatualizado em relação à spec, ou não importável |
 | 8 | Configuração inválida (variável faltando, `--agent-dir` fora de `GENERATED_ROOT`) |
+
+**Saída no terminal.** Por padrão, a CLI mostra só as perguntas da revisão humana, a tabela final e o resumo (caminho e tempo, mais uma linha `lab-agent:` quando a execução falha). Os logs JSON vão para o stderr e, sem `--verbose`, só os de nível ERROR aparecem; injection detectada e itens rejeitados já aparecem na tabela, e os retries por nó no `--output json`. Com `--verbose` (ou `-e LOG_LEVEL=INFO` no `docker compose run`), aparece cada evento da execução, com o `run_id`. O `LOG_LEVEL` do `.env` vale para os serviços e não é repassado ao container do agente.
 
 **Revisão humana.** Quando o gate manda itens para revisão e a execução é interativa (o padrão; o serviço `agent` do compose tem TTY), a CLI mostra os candidatos do RAG e pede uma escolha. Com `pedido_ambiguo.png`, a pergunta é entre `T4 livre — LAB-10044` e `T4 total — LAB-10045`, ou nenhum. A resposta volta ao fluxo pelo resume do `RequestInput`, e só os códigos escolhidos são agendados.
 

@@ -124,7 +124,8 @@ services:
     profiles: [cli]
     environment:
       APP_ENV: ${APP_ENV:-dev}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # No LOG_LEVEL: the CLI logs only errors unless run with --verbose
+      # (or `-e LOG_LEVEL=INFO`); the LOG_LEVEL in .env is for the services.
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       AGENT_LLM_BACKEND: ${AGENT_LLM_BACKEND:-gemini}
       OCR_MCP_URL: http://ocr-mcp:8101/sse

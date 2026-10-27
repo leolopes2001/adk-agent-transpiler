@@ -25,7 +25,8 @@ class AgentSettings(BaseModel):
     """INPUT_ROOT: the run's image must be under it (default: working directory)."""
     generated_root: Path
     """GENERATED_ROOT: the generated package must be under it (default: ./generated)."""
-    log_level: LogLevel = "INFO"
+    log_level: LogLevel | None = None
+    """LOG_LEVEL: unset leaves the choice to the CLI (quiet unless --verbose)."""
 
     @classmethod
     def from_env(cls) -> "AgentSettings":
@@ -36,7 +37,7 @@ class AgentSettings(BaseModel):
                 generated_root=Path(
                     os.environ.get("GENERATED_ROOT") or cwd / "generated"
                 ).resolve(),
-                log_level=(os.environ.get("LOG_LEVEL") or "INFO").upper(),  # type: ignore[arg-type]
+                log_level=(os.environ.get("LOG_LEVEL") or "").upper() or None,  # type: ignore[arg-type]
             )
         except ValidationError:
             raise ConfigurationError("INVALID_ENV", "LOG_LEVEL") from None

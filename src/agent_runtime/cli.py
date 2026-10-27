@@ -2,14 +2,17 @@
 
     lab-agent run --image <path> [--agent-dir generated/exam_scheduling_agent]
         [--spec specs/exam_scheduling_agent.json] [--non-interactive]
-        [--output table|json] [--run-id <uuid>]
+        [--output table|json] [--run-id <uuid>] [--verbose]
 
 Before anything runs, the CLI checks the configuration (every missing
 variable is listed, exit 8), that the generated code matches the spec
 (manifest hash, exit 7), that the package is under GENERATED_ROOT and that
 the image is acceptable (exit 2). The workflow then runs with an in-memory
 session; review requests are answered at the terminal, choosing among the
-offered candidates only. The report goes to stdout, logs (JSON) to stderr.
+offered candidates only. The report goes to stdout. The JSON logs go to
+stderr and, by default, only errors, so the terminal shows the review
+questions, the report and the summary; --verbose (or LOG_LEVEL=INFO) shows
+every run event.
 
 Exit codes: 0 done, 2 invalid input, 3 blocked by the guard, 4 low OCR
 quality, 5 no exam resolved, 6 dependency failure or scheduling refused,
@@ -67,6 +70,9 @@ MANIFEST = "_manifest.json"
 LIBRARY_LOGGERS = ("google_adk", "google.adk", "google_genai", "google.genai", "mcp", "httpx")
 """Libraries whose log records may quote payloads; LibraryLogFilter cuts their messages."""
 LLM_KEY_ENV = "GOOGLE_API_KEY"
+QUIET_LOG_LEVEL = "ERROR"
+"""Warnings of a run (retries, injection, grounding) are in the report already."""
+VERBOSE_LOG_LEVEL = "INFO"
 
 type ReviewPrompt = Callable[[Mapping[str, Any]], dict[str, Any]]
 
@@ -98,6 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--non-interactive", action="store_true", help="reject review items")
     run.add_argument("--output", choices=("table", "json"), default=None)
     run.add_argument("--run-id", default=None, help="UUID used to correlate logs")
+    run.add_argument("--verbose", action="store_true", help="JSON logs of the run on stderr")
     return parser
 
 
@@ -409,6 +416,13 @@ _ERROR_MESSAGES = {
 }
 
 
+def log_level(settings: AgentSettings, *, verbose: bool) -> str:
+    """--verbose shows at least INFO; otherwise LOG_LEVEL, or ERROR when unset."""
+    if verbose:
+        return "DEBUG" if settings.log_level == "DEBUG" else VERBOSE_LOG_LEVEL
+    return settings.log_level or QUIET_LOG_LEVEL
+
+
 def _configure_logging(level: str) -> None:
     lab_logging.configure(SERVICE, level, filters=[LibraryLogFilter(LIBRARY_LOGGERS)])
     # One INFO line per HTTP request (MCP keeps SSE streams busy) says nothing about the run.
@@ -421,7 +435,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         settings = AgentSettings.from_env()
-        _configure_logging(settings.log_level)
+        _configure_logging(log_level(settings, verbose=args.verbose))
         run_id = _run_id(args.run_id)
         structlog.contextvars.bind_contextvars(run_id=run_id)
         outcome = asyncio.run(

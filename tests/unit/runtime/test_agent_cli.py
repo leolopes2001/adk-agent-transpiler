@@ -126,6 +126,7 @@ def env(monkeypatch: pytest.MonkeyPatch) -> None:
     }.items():
         monkeypatch.setenv(name, value)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
 
 
 def _forget_package() -> None:
@@ -337,6 +338,66 @@ def test_main_prints_the_table_by_default(
     assert "LAB-10037" in out
     assert APPOINTMENT_ID in out
     assert "caminho: ocr → guard" in out
+
+
+def _log_events(err: str) -> list[str]:
+    return [json.loads(line)["event"] for line in err.splitlines() if line.startswith("{")]
+
+
+def test_main_keeps_the_terminal_free_of_run_logs_by_default(
+    services: Services, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive"])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "LAB-10037" in captured.out
+    assert _log_events(captured.err) == []
+    assert "{" not in captured.out
+
+
+@pytest.mark.parametrize(
+    ("argv", "log_level"), [(["--verbose"], None), ([], "INFO"), (["--verbose"], "ERROR")]
+)
+def test_verbose_or_log_level_shows_the_run_logs_and_keeps_json_stdout_clean(
+    services: Services,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    argv: list[str],
+    log_level: str | None,
+) -> None:
+    if log_level is not None:
+        monkeypatch.setenv("LOG_LEVEL", log_level)
+
+    code = cli.main(
+        ["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive",
+         "--output", "json", *argv]
+    )  # fmt: skip
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert json.loads(captured.out)["exit_code"] == 0
+    events = _log_events(captured.err)
+    assert events[0] == "run_started"
+    assert events[-1] == "run_finished"
+    assert "node_finished" in events
+
+
+@pytest.mark.parametrize(
+    ("env_level", "verbose", "expected"),
+    [
+        (None, False, "ERROR"),
+        (None, True, "INFO"),
+        ("INFO", False, "INFO"),
+        ("WARNING", False, "WARNING"),
+        ("ERROR", True, "INFO"),
+        ("DEBUG", True, "DEBUG"),
+    ],
+)
+def test_log_level(env_level: str | None, verbose: bool, expected: str) -> None:
+    settings = AgentSettings(input_root=ROOT, generated_root=GOLDEN, log_level=env_level)
+
+    assert cli.log_level(settings, verbose=verbose) == expected
 
 
 @pytest.mark.parametrize(

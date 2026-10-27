@@ -11,6 +11,8 @@ services:
   agent:
     environment:
       APP_ENV: test
+      # Every run event in the agent logs, which the PII tests and the evidence read.
+      LOG_LEVEL: INFO
       AGENT_LLM_BACKEND: fake
       GOOGLE_API_KEY: ""
       FAKE_LLM_FIXTURE: ${FAKE_LLM_FIXTURE:-/app/tests/fixtures/fake_llm/pedido_medico_ficticio.json}
