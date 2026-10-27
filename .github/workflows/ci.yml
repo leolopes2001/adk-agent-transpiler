@@ -57,8 +57,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # Phase 04 (OCR) needs Tesseract with Portuguese data; set to "true" then.
-      INSTALL_TESSERACT: "false"
+      # The OCR integration and security tests need Tesseract with Portuguese data;
+      # they fail (not skip) when it is missing.
+      INSTALL_TESSERACT: "true"
     steps:
       - uses: actions/checkout@v7
       - name: Install Tesseract
