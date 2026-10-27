@@ -8,11 +8,17 @@ from collections.abc import Callable
 from pathlib import Path
 
 from transpiler.errors import Diagnostic
-from transpiler.semantic import graph
+from transpiler.semantic import budget, graph, refs, routes, types
 from transpiler.semantic.context import SemanticContext
 from transpiler.spec.models import AgentSpec
 
-CHECKS: tuple[Callable[[SemanticContext], list[Diagnostic]], ...] = (graph.check,)
+CHECKS: tuple[Callable[[SemanticContext], list[Diagnostic]], ...] = (
+    graph.check,
+    routes.check,
+    types.check,
+    refs.check,
+    budget.check,
+)
 
 
 def validate(spec: AgentSpec, spec_dir: Path) -> list[Diagnostic]:

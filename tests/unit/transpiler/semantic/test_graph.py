@@ -130,7 +130,8 @@ def test_unreachable_cluster(spec_dict: SpecDict, check: Check) -> None:
     _edges(spec_dict).append({"from": "later", "to": "late", "route": "clean"})
     _edges(spec_dict).append({"from": "later", "to": "abort", "route": "blocked"})
 
-    assert _found(check(spec_dict)) == {
+    unreachable = [d for d in check(spec_dict) if d.code is Code.E_UNREACHABLE]
+    assert _found(unreachable) == {
         ("E_UNREACHABLE", "/workflow/nodes/9"),
         ("E_UNREACHABLE", "/workflow/nodes/10"),
     }
