@@ -4,6 +4,11 @@ A subworkflow is typed by its contents: its input is whatever the parent
 sends into it and its output is the output of its single final node. A join
 produces a `JoinResult` whose components are the types of its inputs, which
 lets `reconcile` require exactly one LLM and one lexical source.
+
+The gate's margin rule compares each mention's two best candidates, so the
+`rag_resolve` that feeds a `confidence_gate` must ask for at least
+`GATE_MIN_CANDIDATES`: with one, a tie such as "T4" (T4 livre and T4 total)
+would look like a clear match (audit F03).
 """
 
 from collections.abc import Iterator
@@ -18,7 +23,16 @@ from transpiler.semantic.context import (
     edge_diagnostic,
     kind_of,
 )
-from transpiler.spec.models import START, JoinNodeSpec, NodeSpec, SubworkflowNode
+from transpiler.spec.models import (
+    START,
+    ConfidenceGateNode,
+    JoinNodeSpec,
+    NodeSpec,
+    RagResolveNode,
+    SubworkflowNode,
+)
+
+GATE_MIN_CANDIDATES = 2
 
 type Types = frozenset[PortType]
 
@@ -91,6 +105,27 @@ class _Typer:
                 )
                 continue
             yield from self._check_join_inputs(graph, edge, target)
+            yield from self._check_gate_candidates(graph, edge, target)
+
+    def _check_gate_candidates(
+        self, graph: GraphView, edge: IndexedEdge, target: NodeSpec
+    ) -> Iterator[Diagnostic]:
+        source = graph.nodes.get(edge.source)
+        if not isinstance(target, ConfidenceGateNode) or not isinstance(source, RagResolveNode):
+            return
+        if source.params.top_k < GATE_MIN_CANDIDATES:
+            yield Diagnostic(
+                code=Code.E_GATE_CANDIDATES,
+                message=(
+                    f'"{source.id}" alimenta o confidence_gate "{target.id}" com top_k='
+                    f"{source.params.top_k}; o gate compara os dois melhores candidatos de "
+                    "cada exame e, com um só, não detecta ambiguidade"
+                ),
+                pointer=graph.node_pointer(source.id, "params", "top_k"),
+                hint=f"use top_k >= {GATE_MIN_CANDIDATES}",
+                node_id=source.id,
+                kind=source.kind,
+            )
 
     def _check_join_inputs(
         self, graph: GraphView, edge: IndexedEdge, target: NodeSpec

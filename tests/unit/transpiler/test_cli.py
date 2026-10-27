@@ -1,6 +1,8 @@
 import json
 import shutil
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -142,3 +144,29 @@ def test_generate_out_must_stay_in_project(workdir: Path, capsys: Capture) -> No
     assert code == 1
     assert "E_OUTPUT" in capsys.readouterr().err
     assert not (workdir.parent / "elsewhere").exists()
+
+
+def _edited_main_spec(workdir: Path, edit: Callable[[dict[str, Any]], None]) -> Path:
+    path = workdir / "specs" / "exam_scheduling_agent.json"
+    spec = json.loads(path.read_text(encoding="utf-8"))
+    edit(spec)
+    path.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_gate_fed_by_a_single_candidate_is_rejected(workdir: Path, capsys: Capture) -> None:
+    # Audit F03: with top_k=1 the gate never sees the runner-up, so "T4"
+    # (T4 livre and T4 total tied) would be accepted instead of reviewed.
+    def one_candidate(spec: dict[str, Any]) -> None:
+        resolve = next(n for n in spec["workflow"]["nodes"] if n["kind"] == "rag_resolve")
+        resolve["params"]["top_k"] = 1
+
+    code = main(["validate", str(_edited_main_spec(workdir, one_candidate)), "--format", "json"])
+
+    document = json.loads(capsys.readouterr().out)
+    assert code == 3
+    [diagnostic] = document["diagnostics"]
+    assert diagnostic["code"] == "E_GATE_CANDIDATES"
+    assert diagnostic["pointer"] == "/workflow/nodes/3/params/top_k"
+    assert "confidence_gate" in diagnostic["message"]
+    assert "top_k" in diagnostic["message"]
