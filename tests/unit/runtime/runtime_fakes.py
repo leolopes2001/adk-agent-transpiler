@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from google.adk import Context, Event, Runner, Workflow
-from google.adk.apps import App
+from google.adk.apps import App, ResumabilityConfig
 from google.adk.models import BaseLlm, LlmCapabilities, LlmRequest, LlmResponse
 from google.adk.sessions import InMemorySessionService
 from google.adk.workflow import BaseNode, FunctionNode
@@ -70,10 +70,67 @@ class NodeRun:
     events: list[Event]
 
 
-async def run_node(
+@dataclass
+class NodeSession:
+    """A one-node workflow run that can be resumed after an interrupt."""
+
+    node: BaseNode
+    runner: Runner
+    service: InMemorySessionService
+    session_id: str
+    events: list[Event] = field(default_factory=list)
+
+    async def result(self) -> NodeRun:
+        final = await self.service.get_session(
+            app_name="unit_app", user_id=USER, session_id=self.session_id
+        )
+        assert final is not None
+        mine = [e for e in self.events if e.node_info.name == self.node.name]
+        outputs = [e for e in mine if e.output is not None]
+        routes = [e.actions.route for e in mine if e.actions.route is not None]
+        return NodeRun(
+            output=outputs[-1].output if outputs else None,
+            route=routes[-1] if routes else None,
+            state=dict(final.state),
+            events=list(self.events),
+        )
+
+    def interrupt(self) -> Event | None:
+        return next((e for e in reversed(self.events) if e.long_running_tool_ids), None)
+
+    async def resume(self, response: dict[str, Any]) -> NodeRun:
+        event = self.interrupt()
+        assert event is not None
+        assert event.content is not None
+        assert event.content.parts
+        call = event.content.parts[0].function_call
+        assert call is not None
+        answer = types.Content(
+            role="user",
+            parts=[
+                types.Part(
+                    function_response=types.FunctionResponse(
+                        id=call.id, name=call.name, response=response
+                    )
+                )
+            ],
+        )
+        self.events = [
+            e
+            async for e in self.runner.run_async(
+                user_id=USER,
+                session_id=self.session_id,
+                invocation_id=event.invocation_id,
+                new_message=answer,
+            )
+        ]
+        return await self.result()
+
+
+async def start_node(
     node: BaseNode, node_input: Any = None, state: dict[str, Any] | None = None
-) -> NodeRun:
-    """Run `node` with `node_input`; exceptions from the node propagate."""
+) -> NodeSession:
+    """Run `node` with `node_input` (resumable); exceptions from the node propagate."""
 
     async def feed(ctx: Context, node_input: Any) -> Event:
         return Event(output=feed_value)
@@ -84,24 +141,26 @@ async def run_node(
     service = InMemorySessionService()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        app = App(name="unit_app", root_agent=workflow)
+        app = App(
+            name="unit_app",
+            root_agent=workflow,
+            resumability_config=ResumabilityConfig(is_resumable=True),
+        )
     runner = Runner(app=app, session_service=service)
     session = await service.create_session(app_name="unit_app", user_id=USER, state=state)
     message = types.Content(role="user", parts=[types.Part(text=json.dumps({}))])
-    events = [
+    run = NodeSession(node, runner, service, session.id)
+    run.events = [
         e async for e in runner.run_async(user_id=USER, session_id=session.id, new_message=message)
     ]
-    final = await service.get_session(app_name="unit_app", user_id=USER, session_id=session.id)
-    assert final is not None
-    mine = [e for e in events if e.node_info.name == node.name]
-    outputs = [e for e in mine if e.output is not None]
-    routes = [e.actions.route for e in mine if e.actions.route is not None]
-    return NodeRun(
-        output=outputs[-1].output if outputs else None,
-        route=routes[-1] if routes else None,
-        state=dict(final.state),
-        events=events,
-    )
+    return run
+
+
+async def run_node(
+    node: BaseNode, node_input: Any = None, state: dict[str, Any] | None = None
+) -> NodeRun:
+    """Run `node` with `node_input`; exceptions from the node propagate."""
+    return await (await start_node(node, node_input, state)).result()
 
 
 CATALOG_SHA = "28" * 32

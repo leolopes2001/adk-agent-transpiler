@@ -15,6 +15,7 @@ from google.adk.workflow import FunctionNode, RetryConfig
 from agent_runtime.bootstrap import RuntimeDeps
 from agent_runtime.nodes._common import NodeFunction
 from agent_runtime.nodes.confidence_gate import confidence_gate
+from agent_runtime.nodes.human_review import human_review
 from agent_runtime.nodes.lexical_extract import lexical_extract
 from agent_runtime.nodes.llm_input import llm_input
 from agent_runtime.nodes.ocr_extract import ocr_extract
@@ -58,13 +59,6 @@ def _pending(
         timeout=timeout,
         rerun_on_resume=rerun_on_resume,
     )
-
-
-def human_review(
-    *, name: str, on_non_interactive: Literal["reject"] = "reject", max_candidates: int = 3
-) -> FunctionNode:
-    """Asks the operator to choose among candidates; routes `confirmed` or `rejected`."""
-    return _pending(name, rerun_on_resume=True)
 
 
 def schedule(
