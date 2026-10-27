@@ -83,6 +83,7 @@
 {"query": "Ecocardiograma", "expected": null, "kind": "negative"}
 {"query": "Endoscopia digestiva alta", "expected": null, "kind": "negative"}
 {"query": "Vitamina E", "expected": null, "kind": "negative"}
+{"query": "Apolipoproteina B", "expected": null, "kind": "negative"}
 {"query": "Vitamina A", "expected": null, "kind": "negative"}
 {"query": "Testosterona livre", "expected": null, "kind": "negative"}
 {"query": "Cálcio iônico", "expected": null, "kind": "negative"}

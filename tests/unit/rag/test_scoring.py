@@ -95,6 +95,13 @@ class TestParts:
     def test_fuzzy_of_unrelated_text_is_low(self) -> None:
         assert fuzzy("tsh", "ferritina") < 0.4
 
+    def test_a_shared_single_letter_is_not_a_match(self) -> None:
+        assert fuzzy("apolipoproteina b", "antigeno superficie hepatite b") < 0.6
+
+    def test_a_shared_word_still_matches_inside_a_longer_field(self) -> None:
+        assert fuzzy("hepatite b", "antigeno superficie hepatite b") > 0.85
+        assert fuzzy("vitamina d", "25 hidroxivitamina d") > 0.85
+
     def test_coverage_counts_distinct_query_tokens(self) -> None:
         assert coverage(["urina", "tipo", "1", "eas"], ["urina", "tipo", "1"]) == 0.75
         assert coverage(["t4", "t4"], ["t4", "livre"]) == 1.0
@@ -219,8 +226,9 @@ class TestSearch:
         assert top.code == code
         assert 0.8 < top.score < 1.0
 
-    def test_unknown_exam_scores_low(self, searcher: ExamSearcher) -> None:
-        result = searcher.search("Ressonância magnética de crânio", 5)
+    @pytest.mark.parametrize("query", ["Ressonância magnética de crânio", "Apolipoproteina B"])
+    def test_unknown_exam_scores_low(self, searcher: ExamSearcher, query: str) -> None:
+        result = searcher.search(query, 5)
         assert all(c.score < 0.6 for c in result.candidates)
 
     @pytest.mark.parametrize("query", ["|||| ~~ ;;", "de do da", "7. ", "  "])

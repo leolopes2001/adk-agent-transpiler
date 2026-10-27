@@ -4,7 +4,8 @@ For each candidate exam (proposed by the index), over its name and aliases:
 
 - exact: the normalized query equals a name or alias -> 1.0;
 - fuzzy: best `rapidfuzz.fuzz.WRatio` / 100, which tolerates typos, extra
-  words and reordering;
+  words and reordering (a shared single letter alone is not a match, see
+  `fuzzy`);
 - coverage: best share of the query's tokens that appear in the field, which
   keeps a long field from winning on one shared fragment;
 - score = round(0.75 * fuzzy + 0.25 * coverage, 4).
@@ -35,6 +36,13 @@ from rag_mcp.index import FieldDoc, HybridIndex
 FUZZY_WEIGHT = 0.75
 COVERAGE_WEIGHT = 0.25
 EXACT_SCORE = 1.0
+# rapidfuzz's WRatio: partial matching from a 1.5 length ratio, scaled by 0.9
+# (0.6 from 8), token-based parts scaled by 0.95.
+WRATIO_PARTIAL_FROM = 1.5
+WRATIO_LONG_FROM = 8
+WRATIO_PARTIAL_SCALE = 0.9
+WRATIO_LONG_SCALE = 0.6
+WRATIO_UNBASE = 0.95
 
 _LIST_MARKER = re.compile(
     r"""^\s*(?:
@@ -58,8 +66,35 @@ def prepare_query(query: str) -> str:
 
 
 def fuzzy(query: str, field: str) -> float:
-    """WRatio of two normalized strings, in [0, 1]."""
-    return fuzz.WRatio(query, field, processor=None) / 100
+    """WRatio of two normalized strings, in [0, 1].
+
+    When one string is much longer, WRatio takes `partial_token_set_ratio`,
+    which is 100 as soon as the strings share any token. A shared single
+    letter ("b" in "apolipoproteina b" and "hepatite b") says nothing about
+    the exam, so then the score comes from WRatio's other partial parts.
+    """
+    score = fuzz.WRatio(query, field, processor=None)
+    shared = set(query.split()) & set(field.split())
+    if shared and max(map(len, shared)) == 1:
+        score = min(score, _partial_without_shared_tokens(query, field))
+    return score / 100
+
+
+def _partial_without_shared_tokens(query: str, field: str) -> float:
+    """WRatio without `partial_token_set_ratio` (same scales as rapidfuzz).
+
+    Below the partial length ratio WRatio never takes that part: 100 leaves it as is.
+    """
+    shorter, longer = sorted((len(query), len(field)))
+    length_ratio = longer / shorter
+    if length_ratio < WRATIO_PARTIAL_FROM:
+        return 100.0
+    scale = WRATIO_PARTIAL_SCALE if length_ratio < WRATIO_LONG_FROM else WRATIO_LONG_SCALE
+    return max(
+        fuzz.ratio(query, field, processor=None),
+        fuzz.partial_ratio(query, field, processor=None) * scale,
+        fuzz.partial_token_sort_ratio(query, field, processor=None) * WRATIO_UNBASE * scale,
+    )
 
 
 def coverage(query_tokens: Sequence[str], field_tokens: Sequence[str]) -> float:

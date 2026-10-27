@@ -338,7 +338,7 @@ Ele copia o código gerado e passa a posse dos arquivos para o dono de `./specs`
 | [0008](docs/adr/0008-ocr-local-tesseract.md) | OCR local com Tesseract em vez de LLM multimodal (a imagem tem PII) |
 | [0009](docs/adr/0009-adk-api-contract.md) | Contrato com a API do `google-adk` 2.13.0, fixado em testes |
 
-Thresholds do gate (0,85 / 0,60 / margem 0,05): calibrados em 104 consultas rotuladas escritas para este projeto, com 100% de precisão nos aceitos e nenhum negativo aceito nesse conjunto ([`evidence/rag_calibration.md`](evidence/rag_calibration.md)). É um conjunto pequeno; fora dele, a proteção vem da revisão humana para casos ambíguos.
+Thresholds do gate (0,85 / 0,60 / margem 0,05): calibrados em 105 consultas rotuladas escritas para este projeto, com 100% de precisão nos aceitos e nenhum negativo aceito nesse conjunto ([`evidence/rag_calibration.md`](evidence/rag_calibration.md)). É um conjunto pequeno; fora dele, a proteção vem da revisão humana para casos ambíguos.
 
 ## Testes
 
