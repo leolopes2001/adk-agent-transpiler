@@ -341,7 +341,9 @@ class TestMain:
         monkeypatch.setattr(rag_main, "configure_logging", lambda level: None)
         return monkeypatch
 
-    def test_starts_uvicorn_with_the_loaded_catalog(self, env: pytest.MonkeyPatch) -> None:
+    def test_starts_uvicorn_with_the_loaded_catalog(
+        self, env: pytest.MonkeyPatch, log_stream: io.StringIO, catalog: Catalog
+    ) -> None:
         env.setenv("CATALOG_PATH", str(CATALOG_PATH))
         env.setenv("RAG_PORT", "18102")
         calls: list[dict[str, Any]] = []
@@ -352,6 +354,11 @@ class TestMain:
         [kwargs] = calls
         assert (kwargs["host"], kwargs["port"]) == ("0.0.0.0", 18102)  # noqa: S104
         assert kwargs["log_config"] is None
+        [record] = [json.loads(line) for line in log_stream.getvalue().splitlines()]
+        assert record["event"] == "catalog_loaded"
+        # Logged unmasked: the hash must not read as a phone number to the redaction.
+        assert record["catalog_sha256"] == catalog.sha256
+        assert (record["catalog_version"], record["exam_count"]) == ("2026.10.0", 120)
 
     @pytest.mark.parametrize(
         "content",

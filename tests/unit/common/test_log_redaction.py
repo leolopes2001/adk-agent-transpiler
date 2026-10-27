@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import logging
@@ -6,6 +7,8 @@ from typing import Any
 
 import pytest
 import structlog
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from lab_common import logging as lab_logging
 from lab_common.logging import MAX_STRING_CHARS, RedactPii
@@ -147,10 +150,29 @@ class TestProcessor:
         assert redact(event=event)["event"] == event
 
     def test_truncates_long_strings_after_redacting(self) -> None:
-        text = "a" * (MAX_STRING_CHARS - 5) + CPF
+        # "x" is not a hex digit: a CPF glued to "aaa…" would read as part of a hex id.
+        text = "x" * (MAX_STRING_CHARS - 5) + CPF
         result = redact(event=text)["event"]
 
         assert isinstance(result, str)
-        assert result.startswith("a" * (MAX_STRING_CHARS - 5) + "[REDA")
+        assert result.startswith("x" * (MAX_STRING_CHARS - 5) + "[REDA")
         assert result.endswith("[truncated]")
         assert len(result) <= MAX_STRING_CHARS + len("…[truncated]")
+
+
+class TestIdentifiers:
+    """Correlation ids and hashes must reach the log intact."""
+
+    @settings(max_examples=500)
+    @given(st.uuids())
+    def test_uuid_is_kept(self, value: object) -> None:
+        assert redact(request_id=str(value)) == {"request_id": str(value)}
+
+    @settings(max_examples=300)
+    @given(st.binary(max_size=64))
+    def test_sha256_is_kept(self, data: bytes) -> None:
+        digest = hashlib.sha256(data).hexdigest()
+        assert redact(catalog_sha256=digest, event=f"loaded {digest}") == {
+            "catalog_sha256": digest,
+            "event": f"loaded {digest}",
+        }

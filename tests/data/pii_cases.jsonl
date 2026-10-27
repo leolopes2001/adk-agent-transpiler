@@ -7,6 +7,7 @@
 {"id": "cpf-inside-longer-number", "entity": "CPF", "text": "Protocolo 1202393613690", "expected": []}
 {"id": "cpf-too-short", "entity": "CPF", "text": "Código 2023936136", "expected": []}
 {"id": "cpf-date-not-cpf", "entity": "CPF", "text": "Belo Horizonte, 20/10/2026", "expected": []}
+{"id": "cpf-inside-hex-id", "entity": "CPF", "text": "trace ab20239361369cd", "expected": []}
 {"id": "cns-definitive", "entity": "CNS", "text": "CNS: 100 0000 0000 0007", "expected": ["100 0000 0000 0007"]}
 {"id": "cns-provisional", "entity": "CNS", "text": "Cartão SUS 700000000000005", "expected": ["700000000000005"]}
 {"id": "cns-bad-check", "entity": "CNS", "text": "CNS: 100 0000 0000 0008", "expected": []}
@@ -27,6 +28,10 @@
 {"id": "phone-iso-date", "entity": "PHONE", "text": "Coleta 2026-10-20", "expected": []}
 {"id": "phone-no-hyphen-short", "entity": "PHONE", "text": "Quantidade 90000000", "expected": []}
 {"id": "phone-zero-area", "entity": "PHONE", "text": "Ramal (01) 90000-0000", "expected": ["90000-0000"]}
+{"id": "phone-inside-uuid", "entity": "PHONE", "text": "request_id=2f3b5fd6-2866-4383-bebd-02cf03c069af", "expected": []}
+{"id": "phone-inside-sha256", "entity": "PHONE", "text": "catalog_sha256=28eb7825865727be894151836eef70b1134ba85dc128c9e9016dc2b91dab45e1", "expected": []}
+{"id": "phone-hyphen-after-area", "entity": "PHONE", "text": "Tel. 31-90000-0000", "expected": ["90000-0000"]}
+{"id": "phone-glued-label", "entity": "PHONE", "text": "Telefone31900000000", "expected": ["31900000000"]}
 {"id": "email-simple", "entity": "EMAIL", "text": "E-mail: maria.ficticia@example.com", "expected": ["maria.ficticia@example.com"]}
 {"id": "email-plus-subdomain", "entity": "EMAIL", "text": "contato: maria+lab@mail.example.com.br.", "expected": ["maria+lab@mail.example.com.br"]}
 {"id": "email-no-domain-dot", "entity": "EMAIL", "text": "usuario@localhost", "expected": []}
@@ -35,6 +40,7 @@
 {"id": "cep-label-plain", "entity": "CEP", "text": "CEP: 30000000", "expected": ["30000000"], "score": 0.95}
 {"id": "cep-label-dotted", "entity": "CEP", "text": "CEP 30.000-000", "expected": ["30.000-000"]}
 {"id": "cep-plain-no-label", "entity": "CEP", "text": "Pedido 30000000", "expected": []}
+{"id": "cep-inside-uuid", "entity": "CEP", "text": "id 1f330000-000a-4b2c-8d3e-112233445566", "expected": []}
 {"id": "address-rua", "entity": "ADDRESS", "text": "Rua Imaginária, 100 — Belo Horizonte/MG", "expected": ["Rua Imaginária, 100 — Belo Horizonte/MG"]}
 {"id": "address-avenida-abbrev", "entity": "ADDRESS", "text": "Av. Exemplo, 200, apto 3", "expected": ["Av. Exemplo, 200, apto 3"]}
 {"id": "address-label", "entity": "ADDRESS", "text": "Endereço: Travessa Fictícia, 5", "expected": ["Travessa Fictícia, 5"]}

@@ -25,9 +25,12 @@ def main() -> None:
     except CatalogError as error:
         log.error("catalog_invalid", reason=str(error))
         sys.exit(1)
-    # The hash is left out: the log redaction can mistake its digit runs for a
-    # phone number; /health and catalog://info report it intact.
-    log.info("catalog_loaded", catalog_version=catalog.version, exam_count=len(catalog))
+    log.info(
+        "catalog_loaded",
+        catalog_version=catalog.version,
+        catalog_sha256=catalog.sha256,
+        exam_count=len(catalog),
+    )
     app = build_app(settings, catalog)
     # log_config=None keeps uvicorn's loggers on the root JSON handler (with PII
     # redaction); the access log is off because paths carry session ids only.

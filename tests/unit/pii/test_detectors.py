@@ -1,9 +1,10 @@
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from lab_common.pii import (
@@ -17,6 +18,8 @@ from lab_common.pii import (
     is_valid_cns,
     is_valid_cpf,
 )
+from lab_common.pii.redactor import detect_all
+from lab_common.pii.types import inside_hex_token
 
 pytestmark = pytest.mark.unit
 
@@ -115,6 +118,63 @@ class TestCns:
 def test_text_without_digits_has_no_numeric_identifiers(text: str) -> None:
     for detector in (CpfDetector(), CnsDetector(), PhoneDetector()):
         assert detector.detect(text) == []
+
+
+hex_ids = st.one_of(
+    st.uuids().map(str),
+    st.uuids().map(lambda u: str(u).upper()),
+    st.binary(min_size=1, max_size=64).map(lambda b: hashlib.sha256(b).hexdigest()),
+    st.binary(min_size=1, max_size=64).map(lambda b: hashlib.sha256(b).hexdigest().upper()),
+    st.binary(min_size=4, max_size=16).map(bytes.hex),
+)
+
+
+class TestHexTokens:
+    """UUIDs, hashes and hex ids in logs never read as personal data."""
+
+    @settings(max_examples=500)
+    @given(value=hex_ids)
+    def test_no_detector_fires_on_a_hex_id(self, value: str) -> None:
+        assert detect_all(default_detectors(), value, min_score=0.0) == []
+
+    @settings(max_examples=300)
+    @given(value=hex_ids, prefix=st.sampled_from(["", "request_id=", "sha256:", "id ", "("]))
+    def test_nor_inside_a_log_line(self, value: str, prefix: str) -> None:
+        assert detect_all(default_detectors(), f"{prefix}{value} done", min_score=0.0) == []
+
+    @pytest.mark.parametrize(
+        "value",
+        ["2f3b5fd6-2866-4383-bebd-02cf03c069af", "28eb7825865727be894151836eef70b1"],
+    )
+    def test_known_false_positives(self, value: str) -> None:
+        assert detect_all(default_detectors(), value, min_score=0.0) == []
+
+    @pytest.mark.parametrize(
+        ("text", "value"),
+        [
+            ("Telefone: (31) 90000-0000 / id 2f3b5fd6", "(31) 90000-0000"),
+            ("CPF20239361369", "20239361369"),
+            ("Tel. 31-90000-0000", "90000-0000"),
+        ],
+    )
+    def test_real_values_next_to_letters_are_still_found(self, text: str, value: str) -> None:
+        spans = detect_all(default_detectors(), text, min_score=MIN_SCORE)
+        assert value in [text[s.start : s.end] for s in spans]
+
+    @pytest.mark.parametrize(
+        ("text", "start", "end", "inside"),
+        [
+            ("ab12345678cd", 2, 10, True),
+            ("x-12345678", 2, 10, False),
+            ("af-12345678", 3, 11, True),
+            ("12-12345678", 3, 11, False),
+            ("Fone12345678", 4, 12, False),
+            ("12345678-beef", 0, 8, True),
+            ("12345678 beef", 0, 8, False),
+        ],
+    )
+    def test_inside_hex_token(self, text: str, start: int, end: int, inside: bool) -> None:
+        assert inside_hex_token(text, start, end) is inside
 
 
 def test_spans_hold_offsets_not_values() -> None:
