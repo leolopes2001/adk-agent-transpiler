@@ -1,0 +1,41 @@
+{
+  "image": "samples/pedido_medico_ficticio.png",
+  "catalog_version": "2026.10.0",
+  "exams": [
+    {
+      "mention": "Hemograma completo",
+      "code": "LAB-10001",
+      "name": "Hemograma completo"
+    },
+    {
+      "mention": "Glicemia de jejum",
+      "code": "LAB-10012",
+      "name": "Glicemia de jejum"
+    },
+    {
+      "mention": "TSH",
+      "code": "LAB-10043",
+      "name": "TSH"
+    },
+    {
+      "mention": "T4 livre",
+      "code": "LAB-10044",
+      "name": "T4 livre"
+    },
+    {
+      "mention": "Colesterol total e frações",
+      "code": "LAB-10016",
+      "name": "Colesterol total e frações"
+    },
+    {
+      "mention": "Urina tipo 1 (EAS)",
+      "code": "LAB-10079",
+      "name": "Urina tipo 1"
+    },
+    {
+      "mention": "PCR",
+      "code": "LAB-10037",
+      "name": "Proteína C reativa"
+    }
+  ]
+}
