@@ -381,3 +381,39 @@ Capturas tiradas à mão; a preparação está em [`evidence/screenshots/README.
 ![Transpile e execução do fluxo feliz](evidence/screenshots/cli-01-run.png)
 
 ![Revisão humana do pedido ambíguo](evidence/screenshots/cli-02-review.png)
+
+## Transparência no uso de IA
+
+**Como usei.** Antes de escrever código, planejei o projeto em documentos: contexto e requisitos, arquitetura, segurança, um documento por componente, estratégia de testes, um plano de 80 commits dividido em 9 fases e um checklist de revisão. Usei um assistente de IA para implementar esse plano, uma fase por vez, em commits pequenos. Cada commit só entrava com o check de desenvolvimento verde. No fim de cada fase, o assistente entregava um relatório com o que foi feito, os desvios do plano, as decisões que eu precisava revisar e as dúvidas em aberto. Eu revisava o relatório e o código, aprovava ou pedia correções, e só então criava a tag da fase (`phase-01` a `phase-08`). As correções pedidas na revisão viraram commits próprios (os sufixos `a`, `b`, `c` no histórico), sem reescrever commits já feitos.
+
+**O que a revisão pegou.** Exemplos reais, todos no histórico:
+
+- **`mcp<2`.** Na série 2.x do SDK `mcp`, a classe `FastMCP` deixou de existir, embora o `google-adk` aceite `mcp<3`. Verificamos com a 2.3.0 e fixamos `mcp>=1.24,<2` ([ADR-0007](docs/adr/0007-sse-como-transporte-mcp.md)).
+- **Base64 da imagem nos logs da biblioteca `mcp`.** Três caminhos da biblioteca logavam trechos do corpo da requisição quando o JSON-RPC era malformado. O filtro de logs passou a cortar o payload de qualquer registro dessas bibliotecas, e um teste envia requisições malformadas e procura o base64 no log (`b793d33`).
+- **Detectores de PII casando dentro de hashes.** Em 80 mil UUIDs e sha256 aleatórios, os detectores achavam 5339 "telefones", "CPFs" e "CEPs". O sha256 do catálogo saía adulterado no log. Corrigido na base dos detectores e garantido por hypothesis: zero achados (`60fdb1b`).
+- **Stopword apagando "Vitamina E".** A normalização removia o "e" final, e "Vitamina E" virava "vitamina", empatada com as vitaminas C e D. A letra final passou a ser mantida, e a recalibração não mudou os thresholds (`468074b`).
+- **"MG" lido como Magnésio.** Ao liberar segmentos de 2 caracteres na extração léxica (para pegar "T4"), o "MG" de "Belo Horizonte, MG" seria alias exato de Magnésio, com score 1,0, e seria agendado. O mínimo de 2 caracteres ficou restrito a itens de lista (`d9409b6`).
+- **`make` trocado por `docker compose`.** O primeiro caminho do avaliador usava um Makefile. Na revisão, padronizei tudo em `docker compose` (avaliador) e `uv` (desenvolvimento), para que o mesmo comando funcione em Windows, macOS e Linux sem make nem Python no host (`9ae641a`, `40b91f0`).
+- **Código gerado em volume nomeado.** Na simulação do avaliador, o bind mount de `./generated` funcionava no macOS, mas no Docker Engine do Linux o UID 10001 não conseguiria gravar nele. Isso levou ao volume nomeado e ao serviço `export-generated` (`5ebb95f`, `0afa0fd`).
+- **Achados dos próprios testes.** O teste do catálogo mostrou que "Anti-HAV IgM" era mascarado como nome de pessoa (`57094f2`). O teste de injection no fluxo mostrou que um item do LLM chamado "LAB-10099" conseguia esconder o "Hemograma completo" da extração léxica (`081a5d7`). A primeira chamada real ao Gemini mostrou que a API rejeita `additionalProperties` no schema de resposta (`829a693`).
+- **Falhas de processo, registradas como tal.** Dois commits entraram com o check vermelho: um por validar com `make check | tail && git commit` (o `&&` olhou o exit do `tail`) e outro por encadear com `;`. Nenhum foi reescrito; o segundo foi corrigido num commit que cita o original (`e5778ca`), e o fluxo de commit passou a exigir o check com `&&` e sem pipe.
+
+**Referências consultadas.**
+
+- Documentação do Google ADK em [adk.dev](https://adk.dev): Graph Workflows, Agents, MCP tools, Callbacks.
+- [Especificação do MCP](https://modelcontextprotocol.io) e o [SDK Python](https://github.com/modelcontextprotocol/python-sdk).
+- Documentação do [FastAPI](https://fastapi.tiangolo.com), do [SQLAlchemy](https://docs.sqlalchemy.org) e do [Tesseract](https://tesseract-ocr.github.io).
+- [OWASP Top 10 for LLM Applications](https://genai.owasp.org/llm-top-10/).
+- [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (Problem Details for HTTP APIs).
+
+Onde a documentação do ADK 2 não estabilizava um comportamento, a referência final foi a versão instalada: cada suposição virou um teste de contrato ([ADR-0009](docs/adr/0009-adk-api-contract.md)).
+
+**Estratégia de orquestração.**
+
+- **Workflow em grafo determinístico** do ADK 2.
+- **Roteamento condicional** por rotas emitidas por código (`ok`, `blocked`, `accepted`, `review`, ...).
+- **Fan-out/fan-in:** LLM e extração léxica rodam em paralelo e se juntam num `JoinNode`.
+- **Subworkflow** aninhado para a extração.
+- **Human-in-the-loop** com `RequestInput` para itens ambíguos.
+
+Não há delegação autônoma entre agentes. O único agente LLM não tem ferramentas, não escolhe o próximo passo e não decide o que é agendado. Foi uma decisão de segurança: o texto que ele lê vem de um documento que não controlamos.
