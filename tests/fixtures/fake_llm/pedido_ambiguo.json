@@ -1,0 +1,6 @@
+{
+  "exams": [
+    {"name": "Hemograma completo", "evidence": "1. Hemograma completo"},
+    {"name": "T4", "evidence": "2. T4"}
+  ]
+}

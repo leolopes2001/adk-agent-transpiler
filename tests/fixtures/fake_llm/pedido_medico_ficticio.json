@@ -1,0 +1,11 @@
+{
+  "exams": [
+    {"name": "Hemograma completo", "evidence": "1. Hemograma completo"},
+    {"name": "Glicemia de jejum", "evidence": "2. Glicemia de jejum"},
+    {"name": "TSH", "evidence": "3. TSH"},
+    {"name": "T4 livre", "evidence": "4. T4 livre"},
+    {"name": "Colesterol total e frações", "evidence": "5. Colesterol total e frações"},
+    {"name": "Urina tipo 1", "evidence": "6. Urina tipo 1 (EAS)"},
+    {"name": "Proteína C reativa", "evidence": "7. PCR"}
+  ]
+}
