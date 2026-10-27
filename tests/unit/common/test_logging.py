@@ -149,3 +149,16 @@ def test_logger_created_before_configure_uses_new_configuration(stream: io.Strin
     log.info("late_event")
 
     assert records(stream)[0]["service"] == "agent"
+
+
+def test_filters_run_on_every_stdlib_record_before_formatting(stream: io.StringIO) -> None:
+    class Rename(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            record.msg = f"{record.name}:{record.msg}"
+            return record.name != "dropped"
+
+    lab_logging.configure("ocr-mcp", stream=stream, filters=[Rename()])
+    logging.getLogger("lib").warning("kept")
+    logging.getLogger("dropped").warning("gone")
+
+    assert [r["event"] for r in records(stream)] == ["lib:kept"]

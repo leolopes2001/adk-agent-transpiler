@@ -96,20 +96,23 @@ class RedactPii:
         return text
 
 
-def configure(
+def configure(  # noqa: PLR0913 - all but service and level are keyword-only options
     service: str,
     level: str = "INFO",
     *,
     final_processors: Sequence[Processor] = (),
     stream: TextIO | None = None,
     redact_pii: bool = True,
+    filters: Sequence[logging.Filter] = (),
 ) -> None:
     """Configure structlog and the stdlib root logger to emit JSON lines.
 
     `final_processors` run after all standard fields are set and right before
     rendering, so they see the complete record. PII redaction (`RedactPii`)
     runs after them unless `redact_pii` is False, which is meant only for
-    tests of the logging pipeline itself. Calling `configure` again replaces
+    tests of the logging pipeline itself. `filters` are attached to the
+    handler, so they see every stdlib record (with its logger name) before it
+    is formatted. Calling `configure` again replaces
     the previous configuration.
     """
     global _handler  # noqa: PLW0603 - one handler per process, replaced on reconfigure
@@ -139,6 +142,8 @@ def configure(
     )
     handler = logging.StreamHandler(stream or sys.stderr)
     handler.setFormatter(formatter)
+    for log_filter in filters:
+        handler.addFilter(log_filter)
 
     root = logging.getLogger()
     if _handler is not None:

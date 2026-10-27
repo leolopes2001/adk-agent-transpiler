@@ -30,6 +30,7 @@ from rapidfuzz import fuzz
 from lab_common import logging as lab_logging
 from lab_common.contracts.ocr import OcrResult
 from ocr_mcp.engine import TesseractEngine
+from ocr_mcp.logs import configure_logging
 from ocr_mcp.server import build_app
 from ocr_mcp.settings import OcrSettings
 
@@ -68,7 +69,7 @@ def ocr_server() -> Iterator[RunningServer]:
     if shutil.which("tesseract") is None:
         pytest.fail("tesseract is not installed (needs tesseract-ocr and tesseract-ocr-por)")
     logs = io.StringIO()
-    lab_logging.configure("ocr-mcp", stream=logs)
+    configure_logging(stream=logs)
     settings = OcrSettings(mcp_auth_token=TOKEN, pii_hmac_secret=SECRET, host="127.0.0.1")
     app = build_app(settings, TesseractEngine())
     server = uvicorn.Server(

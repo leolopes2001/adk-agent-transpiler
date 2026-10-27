@@ -8,6 +8,7 @@ import base64
 import io
 import json
 import logging
+import secrets
 import shutil
 import threading
 import time
@@ -16,6 +17,8 @@ from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import anyio
+import httpx
 import pytest
 import structlog
 import uvicorn
@@ -26,6 +29,7 @@ from mcp.types import CallToolResult, TextContent
 from lab_common import logging as lab_logging
 from lab_common.pii import PiiRedactor, PiiSpan, default_detectors
 from ocr_mcp.engine import TesseractEngine
+from ocr_mcp.logs import configure_logging
 from ocr_mcp.server import OcrService, build_app, build_server
 from ocr_mcp.settings import OcrSettings
 
@@ -64,11 +68,12 @@ def settings() -> OcrSettings:
 @pytest.fixture(scope="module")
 def logs() -> Iterator[io.StringIO]:
     stream = io.StringIO()
-    lab_logging.configure("ocr-mcp", stream=stream)
+    configure_logging(stream=stream)
     yield stream
     if lab_logging._handler is not None:
         logging.getLogger().removeHandler(lab_logging._handler)
         lab_logging._handler = None
+    logging.getLogger().setLevel(logging.WARNING)
     structlog.reset_defaults()
 
 
@@ -202,3 +207,51 @@ async def test_pii_engine_failure_on_real_ocr_releases_nothing(logs: io.StringIO
     assert "Hemograma" not in wire(result)
     assert_no_pii(wire(result))
     assert_no_pii(logs.getvalue())
+
+
+def malformed_bodies(image_base64: str) -> list[str]:
+    arguments = f'"arguments":{{"image_base64":"{image_base64}","request_id":"x"}}'
+    return [
+        # Invalid id type: rejected by the JSON-RPC model, logged with the input.
+        f'{{"jsonrpc":"2.0","id":{{"x":1}},"method":"tools/call","params":{{{arguments}}}}}',
+        # Truncated JSON.
+        f'{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{{arguments}',
+        # Request without id: tried as a notification, logged with the message.
+        f'{{"jsonrpc":"2.0","method":"tools/call","params":{{{arguments}}}}}',
+        # params of the wrong type.
+        f'{{"jsonrpc":"2.0","id":2,"method":"tools/call","params":"{image_base64}"}}',
+    ]
+
+
+async def test_malformed_json_rpc_does_not_log_the_payload(
+    server_url: str, logs: io.StringIO
+) -> None:
+    image_base64 = base64.b64encode(secrets.token_bytes(600)).decode("ascii")
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    start = len(logs.getvalue())
+
+    statuses = []
+    async with httpx.AsyncClient(base_url=server_url, headers=headers, timeout=5) as client:
+        for body in malformed_bodies(image_base64):
+            # A fresh SSE session per body: a rejected message may end the session.
+            async with client.stream("GET", "/sse") as stream:
+                endpoint = None
+                async for line in stream.aiter_lines():
+                    if line.startswith("data:"):
+                        endpoint = line.removeprefix("data:").strip()
+                        break
+                assert endpoint is not None
+                response = await client.post(
+                    endpoint, content=body, headers={"Content-Type": "application/json"}
+                )
+                statuses.append(response.status_code)
+                # Let the session task log what it received.
+                await anyio.sleep(0.2)
+
+    assert set(statuses) <= {202, 400}
+    captured = logs.getvalue()[start:]
+    assert "Failed to parse message" in captured
+    windows = {image_base64[i : i + 8] for i in range(len(image_base64) - 7)}
+    leaked = sorted(w for w in windows if w in captured)
+    offending = [line for line in captured.splitlines() if any(w in line for w in leaked)]
+    assert leaked == [], offending

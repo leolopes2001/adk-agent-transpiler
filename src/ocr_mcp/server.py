@@ -37,11 +37,11 @@ from lab_common.text import sanitize
 from ocr_mcp.engine import OcrEngine, RecognizedLine
 from ocr_mcp.errors import ErrorCode, OcrError
 from ocr_mcp.identity import find_patient_ref
+from ocr_mcp.logs import SERVICE, configure_logging
 from ocr_mcp.preprocess import preprocess
 from ocr_mcp.settings import OcrSettings
 from ocr_mcp.validation import validate_image
 
-SERVICE = "ocr-mcp"
 TOOL_DESCRIPTION = (
     "Extract the text of a medical order image (PNG or JPEG, base64) with Tesseract. "
     "Personal data is masked with placeholders such as [PESSOA_1] before the text is "
@@ -219,7 +219,7 @@ def _ensure_json_logging(settings: OcrSettings) -> None:
     # records without the redaction processor; it is a no-op once the root
     # logger has a handler.
     if not logging.getLogger().handlers:
-        lab_logging.configure(SERVICE, settings.log_level)
+        configure_logging(settings.log_level)
 
 
 class BearerAuthMiddleware:
