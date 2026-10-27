@@ -23,15 +23,18 @@ from rich.rule import Rule
 from rich.status import Status
 from rich.table import Table
 from rich.text import Text
+from rich.theme import Theme
 
 from agent_runtime.nodes.human_review import NONE_CHOICE
 
 NONE_LABEL = "nenhum destes — não agendar"
-LABEL_WIDTH = 20
+LABEL_WIDTH = 21
 
 _READ_STYLE = "bold cyan"
-_AI_STYLE = "bold magenta"
+_AI_STYLE = _READ_STYLE
 _CATALOG_STYLE = "bold green"
+THEME = Theme({"prompt.choices": _READ_STYLE, "prompt.default": _READ_STYLE})
+"""rich draws the prompt's choices in magenta by default; here they share the labels' blue."""
 
 
 def color_enabled(stream: IO[str]) -> bool:
@@ -57,6 +60,8 @@ def stderr_console() -> Console:
         stderr=True,
         force_terminal=is_terminal(sys.stderr),
         no_color=not color_enabled(sys.stderr),
+        theme=THEME,
+        highlight=False,
     )
 
 
@@ -142,7 +147,7 @@ def _labelled(label: str, style: str, value: Text) -> Table:
 def _interpretation(item: Mapping[str, Any]) -> Text:
     if item.get("source") == "lexical":
         return Text("— (item lido sem a IA)", style="dim")
-    return Text(str(item.get("mention", "")), style="italic")
+    return Text(f"“{item.get('mention', '')}”")
 
 
 def _options(options: list[Mapping[str, Any]]) -> Table:
@@ -169,6 +174,7 @@ def review_item(item: Mapping[str, Any], position: int, total: int) -> Group:
         Rule(Text(f"Item {position} de {total}", style="bold"), align="left"),
         _labelled("Lido no pedido", _READ_STYLE, Text(f"“{item.get('evidence', '')}”")),
         _labelled("Interpretação (IA)", _AI_STYLE, _interpretation(item)),
+        Text(),
         Text("Opções do catálogo", style=_CATALOG_STYLE),
         Padding(_options(options), (0, 0, 0, 2)),
     )

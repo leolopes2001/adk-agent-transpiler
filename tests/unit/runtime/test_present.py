@@ -11,6 +11,8 @@ from agent_runtime.nodes.present import (
     ExamRow,
     RunResult,
     as_written,
+    masked_summary,
+    matches_catalog,
     present,
     reason_label,
     render,
@@ -116,10 +118,15 @@ async def test_table_summarises_and_splits_scheduled_from_not_scheduled() -> Non
 
     table = render_table(RunResult.model_validate(run.output))
 
-    assert f"✔ Solicitação registrada · id {APPOINTMENT_ID}" in table
-    assert "1 exame agendado · 1 não agendado" in table
-    assert "Dados pessoais mascarados: 3 (CPF 1, nome 2)" in table
-    assert "(risco médio)" in table
+    assert table.startswith("\n✔ Solicitação registrada\n")
+    for line in (
+        f"  ID                 {APPOINTMENT_ID}",
+        "  Agendados          1 exame",
+        "  Não agendados      1 exame",
+        "  Dados mascarados   3 (2 nomes, 1 CPF)",
+        "  Atenção            o pedido tem trechos que parecem instruções (risco médio)",
+    ):
+        assert line in table.splitlines()
     agendados, nao_agendados = table.split("Exames agendados (1)")[1].split("Não agendados (1)")
     assert "TSH" in agendados
     assert "LAB-10043" in agendados
@@ -144,20 +151,51 @@ def _row(**fields: Any) -> ExamRow:
 
 
 @pytest.mark.parametrize(
-    ("evidence", "name", "shown"),
+    ("evidence", "name", "same"),
     [
-        ("HEMOGRAMA  completo", "Hemograma completo", ""),
-        ("Proteina C reativa", "Proteína C reativa", ""),
-        ("PCR", "Proteína C reativa", "PCR"),
-        ("T4", "T4 livre", "T4"),
+        ("HEMOGRAMA  completo", "Hemograma completo", True),
+        ("Proteina C reativa", "Proteína C reativa", True),
+        ("PCR", "Proteína C reativa", False),
+        ("T4", "T4 livre", False),
     ],
 )
-def test_as_written_only_when_it_differs_from_the_catalog_name(
-    evidence: str, name: str, shown: str
+def test_as_written_is_always_shown_and_highlighted_when_it_differs(
+    evidence: str, name: str, same: bool
 ) -> None:
     row = _row(evidence=evidence, name=name, code="LAB-1", status="accepted")
 
-    assert as_written(row) == shown
+    written = as_written(row)
+
+    assert written.plain == evidence
+    assert matches_catalog(row) is same
+    assert (str(written.style) == "") is same
+
+
+def test_as_written_column_is_filled_even_when_equal() -> None:
+    row = _row(evidence="TSH", name="TSH", code="LAB-10043", status="accepted")
+
+    [line] = [
+        line for line in render_table(_result("scheduled", row)).splitlines() if "LAB-" in line
+    ]
+
+    assert line.count("TSH") == 2
+
+
+@pytest.mark.parametrize(
+    ("counts", "expected"),
+    [
+        ({}, "nenhum"),
+        ({"PERSON": 1}, "1 (1 nome)"),
+        ({"CPF": 1, "PHONE": 1}, "2 (1 CPF, 1 telefone)"),
+        (
+            {"PERSON": 2, "BIRTH_DATE": 1, "HEALTH_CARD": 1, "ADDRESS": 1},
+            "5 (2 nomes, 1 carteirinha, 1 data de nascimento, 1 endereço)",
+        ),
+        ({"BIRTH_DATE": 2, "CPF": 2}, "4 (2 CPFs, 2 datas de nascimento)"),
+    ],
+)
+def test_masked_data_is_spelled_out_in_portuguese(counts: dict[str, int], expected: str) -> None:
+    assert masked_summary(counts) == expected
 
 
 REASONS = [
@@ -224,15 +262,21 @@ def test_reviewed_rows_are_marked_with_a_legend() -> None:
 @pytest.mark.parametrize(
     ("outcome", "fields", "expected"),
     [
-        ("replayed", {}, "Solicitação já registrada antes; nada foi duplicado"),
-        ("resolved", {}, "1 exame identificado · 0 não identificados"),
-        ("rejected", {}, "rode de novo e escolha o exame na revisão"),
-        ("schedule_failed", {"reason": "Unknown exam code"}, "o agendamento recusou o pedido"),
+        ("replayed", {}, "✔ Solicitação já registrada antes (nada foi duplicado)"),
+        ("resolved", {}, "  Identificados      1 exame"),
+        ("resolved", {}, "  Observação         este agente não registra solicitação"),
+        ("rejected", {}, "  Motivo             nenhum exame foi confirmado na revisão"),
+        (
+            "schedule_failed",
+            {"reason": "Unknown exam code"},
+            "  Motivo             o sistema de agendamento recusou o pedido",
+        ),
         (
             "not_scheduled",
             {"reason": "patient_identifier_missing"},
-            "O pedido não identifica o paciente.",
+            "  O que fazer        Envie um pedido com o CPF ou a carteirinha legível.",
         ),
+        ("not_scheduled", {"reason": "patient_identifier_missing"}, "  Confirmados        1 exame"),
     ],
 )
 def test_summary_per_outcome(outcome: str, fields: dict[str, Any], expected: str) -> None:
@@ -240,28 +284,35 @@ def test_summary_per_outcome(outcome: str, fields: dict[str, Any], expected: str
 
     table = render_table(_result(outcome, row, **fields))
 
-    assert expected in table
+    assert expected in table.splitlines()
+    assert ("✘" in table) is (outcome in {"rejected", "schedule_failed", "not_scheduled"})
     assert "Unknown exam code" not in table
     assert "patient_identifier_missing" not in table
 
 
 @pytest.mark.parametrize(
-    ("code", "title"),
+    ("code", "title", "what"),
     [
-        ("OCR_LOW_QUALITY", "Não foi possível ler o pedido"),
-        ("INPUT_BLOCKED", "Pedido bloqueado por segurança"),
-        ("NO_EXAMS_RESOLVED", "Nenhum exame do pedido foi encontrado no catálogo"),
+        ("OCR_LOW_QUALITY", "Não foi possível ler o pedido", "Envie uma imagem mais nítida"),
+        ("INPUT_BLOCKED", "Pedido bloqueado por segurança", "conferência manual"),
+        (
+            "NO_EXAMS_RESOLVED",
+            "Nenhum exame do pedido foi encontrado no catálogo",
+            "procure o atendimento",
+        ),
     ],
 )
-async def test_table_for_a_failure_explains_it(code: str, title: str) -> None:
-    failure = RunFailure(code=code, user_message="Envie uma imagem mais nítida.")  # type: ignore[arg-type]
+async def test_table_for_a_failure_explains_it(code: str, title: str, what: str) -> None:
+    failure = RunFailure(code=code, user_message="Mensagem do nó.")  # type: ignore[arg-type]
     run = await run_node(abort(name="abort"), failure)
 
     table = render_table(RunResult.model_validate(run.output))
+    lines = table.splitlines()
 
-    assert title in table
-    assert "Envie uma imagem mais nítida." in table
-    assert "Dados pessoais mascarados: nenhum" in table
+    assert lines[1] == f"✘ {title}"
+    assert lines[2].startswith("  Motivo             ")
+    assert "  Dados mascarados   nenhum" in lines
+    assert any(line.startswith("  O que fazer        ") and what in line for line in lines)
     assert code not in table
 
 
@@ -296,7 +347,8 @@ def test_the_same_order_text_with_the_same_reason_is_listed_once() -> None:
 
     table = render_table(_result("scheduled", llm, lexical, other))
 
-    assert "0 exames agendados · 2 não agendados" in table
+    assert "  Agendados          0 exames" in table.splitlines()
+    assert "  Não agendados      2 exames" in table.splitlines()
     assert "Não agendados (2)" in table
     assert table.count("precisa de revisão humana") == 1
 

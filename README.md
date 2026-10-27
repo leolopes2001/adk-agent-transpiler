@@ -244,22 +244,25 @@ Exit codes:
 | 7 | Código gerado desatualizado em relação à spec, ou não importável |
 | 8 | Configuração inválida (variável faltando, `--agent-dir` fora de `GENERATED_ROOT`) |
 
-**Saída no terminal.** Em modo tabela, a CLI abre com uma linha sobre o agente e o arquivo lido (no stderr), faz as perguntas da revisão humana, se houver, e termina com o resultado: um resumo (solicitação registrada ou não, com o id; quantos exames foram agendados e quantos não; quantos dados pessoais foram mascarados), a tabela dos exames agendados e a dos não agendados, com o motivo em português. A coluna "Como estava no pedido" só aparece preenchida quando o texto do pedido difere do nome no catálogo; `✎` marca os exames escolhidos na revisão. Exemplo real com o pedido ambíguo, sem revisão (segunda execução do mesmo pedido, por isso o replay idempotente):
+**Saída no terminal.** Em modo tabela, a CLI abre com uma linha sobre o agente e o arquivo lido (no stderr), faz as perguntas da revisão humana, se houver, e termina com o resultado: um resumo em pares rótulo/valor (solicitação registrada ou não, com o id; quantos exames foram agendados e quantos não; quantos dados pessoais foram mascarados, por tipo; e, quando nada foi registrado, o motivo e o que fazer), a tabela dos exames agendados e a dos não agendados, com o motivo em português. A coluna "Como estava no pedido" traz sempre o texto do pedido, em amarelo quando difere do nome no catálogo; `✎` marca os exames escolhidos na revisão. Sem terminal (pipe, arquivo) ou com `NO_COLOR`, a saída não tem cores. Exemplo real com o pedido ambíguo, sem revisão:
 
 ```text
 $ docker compose run --rm agent run --image /app/inputs/samples/pedido_ambiguo.png --non-interactive
 exam_scheduling_agent — Agenda exames a partir da imagem de um pedido médico:
 OCR, resolução no catálogo e solicitação de agendamento.
 Lendo /app/inputs/samples/pedido_ambiguo.png...
-✔ Solicitação já registrada antes; nada foi duplicado · id apt_01M5ZSTHX8SX5R73ZGM86AD46B
-1 exame agendado · 1 não agendado
-Dados pessoais mascarados: 8 (CPF 1, CRM 1, carteirinha 1, data de nascimento 1, endereço 1, nome 2, telefone 1)
+
+✔ Solicitação registrada
+  ID                 apt_01M5ZW49FFY9F6GH09JGZADNKV
+  Agendados          1 exame
+  Não agendados      1 exame
+  Dados mascarados   8 (2 nomes, 1 carteirinha, 1 CPF, 1 CRM, 1 data de nascimento, 1 endereço, 1 telefone)
 
 Exames agendados (1)
 ┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ Exame              ┃ Código    ┃ Como estava no pedido ┃
 ┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━┩
-│ Hemograma completo │ LAB-10001 │                       │
+│ Hemograma completo │ LAB-10001 │ Hemograma completo    │
 └────────────────────┴───────────┴───────────────────────┘
 
 Não agendados (1)
@@ -269,7 +272,7 @@ Não agendados (1)
 │ T4                    │ precisa de revisão humana (rode sem --non-interactive) │
 └───────────────────────┴────────────────────────────────────────────────────────┘
 
-Execução 6ff74df6-fa9a-4871-a9fa-b94896f958a8 · 6,0 s
+Execução 2557026a-38d3-4535-a4d2-e7cef4c73064 · 5,4 s
 ```
 
 Quando a execução falha (injeção bloqueada, OCR ilegível, nenhum exame encontrado, serviço fora do ar), o lugar do resultado traz o que aconteceu e o que fazer. Score, status e motivos técnicos não aparecem nesse modo: estão completos no `--output json`, e `--verbose` mostra a tabela técnica (menção, nome no catálogo, score, status, motivo) e o caminho no grafo. Os logs JSON vão para o stderr e, sem `--verbose`, só os de nível ERROR aparecem. Com `--verbose` (ou `-e LOG_LEVEL=INFO` no `docker compose run`), aparece cada evento da execução, com o `run_id`. O `LOG_LEVEL` do `.env` vale para os serviços e não é repassado ao container do agente.

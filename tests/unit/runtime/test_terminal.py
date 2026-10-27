@@ -85,7 +85,7 @@ def test_review_explains_itself_without_color(
         "Lido no pedido",
         "“2. T4”",
         "Interpretação (IA)",
-        "Tiroxina livre",
+        "Interpretação (IA)    “Tiroxina livre”",
         "Opções do catálogo",
         "Similaridade",
         "T4 livre",
@@ -115,3 +115,47 @@ def test_intro_for_a_single_item() -> None:
 
     assert isinstance(out.file, StringIO)
     assert "1 item do pedido precisa da sua revisão" in out.file.getvalue()
+
+
+def test_interpretation_and_options_are_separated_by_a_blank_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _answer(monkeypatch, "1", "0")
+    out = _console(color_system=None)
+
+    terminal.ask_review(PAYLOAD, out)
+
+    assert isinstance(out.file, StringIO)
+    lines = [line.rstrip() for line in out.file.getvalue().splitlines()]
+    at = lines.index("Interpretação (IA)    “Tiroxina livre”")
+    assert lines[at + 1 : at + 3] == ["", "Opções do catálogo"]
+
+
+MAGENTA = re.compile(
+    r"\x1b\[(?:[0-9;]*;)?(35|95|38;5;(5|13|90|91|12[5-9]|13[0-5]|16[2-9]|17[01]|20[01]))(?:;[0-9;]*)?m"
+)
+
+
+def test_no_magenta_anywhere_in_the_review(monkeypatch: pytest.MonkeyPatch) -> None:
+    out = _console(force_terminal=True, color_system="truecolor", theme=terminal.THEME)
+    answers = iter(["1", "0"])
+
+    def ask(prompt: str, *, choices: list[str], console: Console, **_: Any) -> str:
+        console.print(terminal.Prompt(prompt, console=console, choices=choices).make_prompt(""))
+        return next(answers)
+
+    monkeypatch.setattr(terminal.Prompt, "ask", ask)
+
+    terminal.ask_review(PAYLOAD, out)
+
+    assert isinstance(out.file, StringIO)
+    text = out.file.getvalue()
+    assert "[0/1/2]" in ANSI.sub("", text)
+    assert not MAGENTA.search(text)
+    assert "\x1b[" in text
+
+
+def test_the_review_console_uses_the_blue_choices_theme() -> None:
+    console = terminal.stderr_console()
+
+    assert str(console.get_style("prompt.choices")) == "bold cyan"

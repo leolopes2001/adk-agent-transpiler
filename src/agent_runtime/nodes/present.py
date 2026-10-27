@@ -15,6 +15,7 @@ from google.adk import Context, Event
 from google.adk.workflow import FunctionNode
 from pydantic import BaseModel, ConfigDict
 from rich.console import Console, Group, RenderableType
+from rich.padding import Padding
 from rich.table import Table
 from rich.text import Text
 
@@ -56,50 +57,79 @@ _REASON_LABELS = {
     "evidence_mismatch": "precisa de revisão: a interpretação da IA não confere com o pedido",
     "evidence_ambiguous": "precisa de revisão: o texto do pedido serve para mais de um exame",
 }
-_SUMMARIES: dict[str, tuple[str, str]] = {
-    "scheduled": ("✔ Solicitação registrada", "bold green"),
-    "replayed": ("✔ Solicitação já registrada antes; nada foi duplicado", "bold green"),
-    "resolved": ("Exames identificados no catálogo; este agente não registra solicitação", "bold"),
-    "not_scheduled": ("✘ Solicitação não registrada", "bold red"),
-    "schedule_failed": ("✘ Solicitação não registrada: o agendamento recusou o pedido", "bold red"),
-    "rejected": ("✘ Solicitação não registrada: nenhum exame foi confirmado", "bold red"),
+OK_STYLE = "bold green"
+FAIL_STYLE = "bold red"
+SUMMARY_LABEL_WIDTH = 18
+_SUMMARIES: dict[str, tuple[str, bool]] = {
+    # outcome: (title, registered)
+    "scheduled": ("✔ Solicitação registrada", True),
+    "replayed": ("✔ Solicitação já registrada antes (nada foi duplicado)", True),
+    "resolved": ("✔ Exames identificados no catálogo", True),
+    "not_scheduled": ("✘ Solicitação não registrada", False),
+    "schedule_failed": ("✘ Solicitação não registrada", False),
+    "rejected": ("✘ Solicitação não registrada", False),
 }
-_NOT_SCHEDULED_ACTIONS = {
+_NOT_SCHEDULED = {
+    # reason or outcome: (why, what to do)
     "patient_identifier_missing": (
-        "O pedido não identifica o paciente. Envie um pedido com o CPF ou a carteirinha legível."
+        "o pedido não identifica o paciente",
+        "Envie um pedido com o CPF ou a carteirinha legível.",
     ),
-    "no_accepted_exams": "Nenhum exame foi confirmado. Confira o pedido e rode de novo.",
+    "no_accepted_exams": (
+        "nenhum exame foi confirmado",
+        "Confira o pedido e rode de novo.",
+    ),
+    "schedule_failed": (
+        "o sistema de agendamento recusou o pedido",
+        "Tente de novo; se continuar, rode com --verbose e procure o suporte.",
+    ),
+    "rejected": (
+        "nenhum exame foi confirmado na revisão",
+        "Se algum item deveria ser agendado, rode de novo e escolha o exame na revisão.",
+    ),
 }
-_OUTCOME_ACTIONS = {
-    "schedule_failed": "Tente de novo; se continuar, rode com --verbose e procure o suporte.",
-    "rejected": "Se algum item deveria ser agendado, rode de novo e escolha o exame na revisão.",
+_COUNT_LABELS = {
+    "scheduled": ("Agendados", "Não agendados"),
+    "replayed": ("Agendados", "Não agendados"),
+    "resolved": ("Identificados", "Não identificados"),
 }
-_COUNT_WORDS = {
-    "scheduled": ("agendado", "não agendado"),
-    "replayed": ("agendado", "não agendado"),
-    "resolved": ("identificado", "não identificado"),
-    "not_scheduled": ("confirmado", "não agendado"),
-}
+_CONFIRMED_LABELS = ("Confirmados", "Não agendados")
 _ACCEPTED_TITLES = {
     "scheduled": "Exames agendados",
     "replayed": "Exames agendados",
     "resolved": "Exames identificados",
 }
-_FAILURES: dict[str, tuple[str, str | None]] = {
-    "OCR_LOW_QUALITY": ("✘ Não foi possível ler o pedido", None),
+_FAILURES: dict[str, tuple[str, str, str]] = {
+    # outcome: (title, why, what to do); the run's own message stays in the JSON report
+    "OCR_LOW_QUALITY": (
+        "✘ Não foi possível ler o pedido",
+        "a imagem não tem qualidade suficiente para a leitura",
+        "Envie uma imagem mais nítida, sem cortes e bem iluminada.",
+    ),
     "INPUT_BLOCKED": (
         "✘ Pedido bloqueado por segurança",
+        "o documento tem trechos que parecem instruções para a IA",
         "Nada foi agendado. Encaminhe o documento original para conferência manual.",
     ),
-    "NO_EXAMS_RESOLVED": ("✘ Nenhum exame do pedido foi encontrado no catálogo", None),
+    "NO_EXAMS_RESOLVED": (
+        "✘ Nenhum exame do pedido foi encontrado no catálogo",
+        "nenhum item do pedido corresponde, com confiança, a um exame do catálogo",
+        "Confira o pedido ou procure o atendimento.",
+    ),
 }
-_PII_LABELS = {
-    "PERSON": "nome",
-    "ADDRESS": "endereço",
-    "BIRTH_DATE": "data de nascimento",
-    "PHONE": "telefone",
-    "EMAIL": "e-mail",
-    "HEALTH_CARD": "carteirinha",
+_PII_NAMES = {
+    # entity: (singular, plural)
+    "PERSON": ("nome", "nomes"),
+    "ADDRESS": ("endereço", "endereços"),
+    "BIRTH_DATE": ("data de nascimento", "datas de nascimento"),
+    "PHONE": ("telefone", "telefones"),
+    "EMAIL": ("e-mail", "e-mails"),
+    "HEALTH_CARD": ("carteirinha", "carteirinhas"),
+    "CPF": ("CPF", "CPFs"),
+    "RG": ("RG", "RGs"),
+    "CRM": ("CRM", "CRMs"),
+    "CEP": ("CEP", "CEPs"),
+    "CNS": ("CNS", "CNS"),
 }
 _SEVERITY_LABELS = {"low": "baixo", "medium": "médio", "high": "alto"}
 _STATUS_LABELS = {"accepted": "aceito", "review": "revisão", "rejected": "rejeitado"}
@@ -235,11 +265,14 @@ def _comparable(text: str) -> str:
     return "".join(c for c in decomposed if not unicodedata.combining(c) and not c.isspace())
 
 
-def as_written(row: ExamRow) -> str:
-    """The order's text for an accepted row, only when it differs from the catalog name."""
-    if row.name is not None and _comparable(row.evidence) == _comparable(row.name):
-        return ""
-    return row.evidence
+def matches_catalog(row: ExamRow) -> bool:
+    """The order's text is the catalog name, ignoring case, accents and spaces."""
+    return row.name is not None and _comparable(row.evidence) == _comparable(row.name)
+
+
+def as_written(row: ExamRow) -> Text:
+    """The order's text for an accepted row; highlighted when it is not the catalog name."""
+    return Text(row.evidence, style="" if matches_catalog(row) else "bold yellow")
 
 
 def reason_label(row: ExamRow) -> str:
@@ -250,32 +283,56 @@ def reason_label(row: ExamRow) -> str:
     return label
 
 
-def _pii_line(counts: Mapping[str, int]) -> Text:
+def masked_summary(counts: Mapping[str, int]) -> str:
+    """'3 (2 nomes, 1 CPF)': the total, then each type spelled out, most frequent first."""
     total = sum(counts.values())
     if not total:
-        return Text("Dados pessoais mascarados: nenhum")
-    labels = sorted((_PII_LABELS.get(kind, kind), count) for kind, count in counts.items())
-    detail = ", ".join(f"{label} {count}" for label, count in labels)
-    return Text(f"Dados pessoais mascarados: {total} ({detail})")
+        return "nenhum"
+    named = [(count, _PII_NAMES.get(kind, (kind, kind))) for kind, count in counts.items() if count]
+    named.sort(key=lambda pair: (-pair[0], pair[1][0].casefold()))
+    detail = ", ".join(_plural(count, *names) for count, names in named)
+    return f"{total} ({detail})"
 
 
-def _summary(result: RunResult) -> Text:
-    label, style = _SUMMARIES[result.outcome]
-    line = Text(label, style=style)
+def summary(title: str, style: str, pairs: list[tuple[str, Text | str]]) -> Group:
+    """A title line and aligned label/value pairs under it, after a blank line."""
+    grid = Table.grid(padding=(0, 1))
+    grid.add_column(width=SUMMARY_LABEL_WIDTH, no_wrap=True)
+    grid.add_column()
+    for label, value in pairs:
+        grid.add_row(label, value if isinstance(value, Text) else Text(value))
+    return Group(Text(), Text(title, style=style), Padding(grid, (0, 0, 0, 2)))
+
+
+def _exams(count: int) -> str:
+    return _plural(count, "exame", "exames")
+
+
+def _attention(severity: str) -> list[tuple[str, Text | str]]:
+    if severity == "none":
+        return []
+    label = _SEVERITY_LABELS.get(severity, severity)
+    text = f"o pedido tem trechos que parecem instruções (risco {label})"
+    return [("Atenção", Text(text, style=FAIL_STYLE))]
+
+
+def _summary(result: RunResult, accepted: int, other: int) -> Group:
+    title, registered = _SUMMARIES[result.outcome]
+    pairs: list[tuple[str, Text | str]] = []
     if result.appointment and result.appointment.id:
-        line.append(f" · id {result.appointment.id}")
-    action = _NOT_SCHEDULED_ACTIONS.get(result.reason or "") or _OUTCOME_ACTIONS.get(result.outcome)
-    if action:
-        line.append(f"\n{action}")
-    return line
-
-
-def _counts(result: RunResult, accepted: int, other: int) -> Text:
-    done, missing = _COUNT_WORDS.get(result.outcome, _COUNT_WORDS["not_scheduled"])
-    return Text(
-        f"{_plural(accepted, 'exame ' + done, 'exames ' + done + 's')} · "
-        f"{_plural(other, missing, missing + 's')}"
-    )
+        pairs.append(("ID", result.appointment.id))
+    done, missing = _COUNT_LABELS.get(result.outcome, _CONFIRMED_LABELS)
+    pairs += [(done, _exams(accepted)), (missing, _exams(other))]
+    pairs.append(("Dados mascarados", masked_summary(result.pii_masked)))
+    if result.outcome == "resolved":
+        pairs.append(("Observação", "este agente não registra solicitação"))
+    pairs += _attention(result.injection_severity)
+    why_and_what = _NOT_SCHEDULED.get(result.reason or "") or _NOT_SCHEDULED.get(result.outcome)
+    if not registered and why_and_what:
+        why, what = why_and_what
+        pairs.insert(0, ("Motivo", why))
+        pairs.append(("O que fazer", what))
+    return summary(title, OK_STYLE if registered else FAIL_STYLE, pairs)
 
 
 def _accepted_table(result: RunResult, rows: list[ExamRow]) -> Table:
@@ -293,7 +350,7 @@ def _accepted_table(result: RunResult, rows: list[ExamRow]) -> Table:
         name = Text(row.name or "")
         if row.reason == REVIEWED:
             name.append(f" {REVIEWED_MARK}", style="bold")
-        table.add_row(name, Text(row.code or ""), Text(as_written(row), style="dim"))
+        table.add_row(name, Text(row.code or ""), as_written(row))
     if any(row.reason == REVIEWED for row in rows):
         table.caption = f"{REVIEWED_MARK} escolhido por você na revisão"
         table.caption_justify = "left"
@@ -301,9 +358,9 @@ def _accepted_table(result: RunResult, rows: list[ExamRow]) -> Table:
 
 
 def _other_table(result: RunResult, rows: list[ExamRow]) -> Table:
-    missing = _COUNT_WORDS.get(result.outcome, _COUNT_WORDS["not_scheduled"])[1]
+    missing = _COUNT_LABELS.get(result.outcome, _CONFIRMED_LABELS)[1]
     table = Table(
-        title=f"{missing.capitalize()}s ({len(rows)})",
+        title=f"{missing} ({len(rows)})",
         title_style="bold yellow",
         title_justify="left",
         border_style="yellow",
@@ -317,11 +374,16 @@ def _other_table(result: RunResult, rows: list[ExamRow]) -> Table:
 
 
 def _failure(result: RunResult) -> Group:
-    title, action = _FAILURES.get(result.outcome, ("Não foi possível concluir o pedido", None))
-    parts = [Text(title, style="bold red"), Text(result.user_message or "")]
-    if action:
-        parts.append(Text(action))
-    return Group(*parts)
+    message = result.user_message or ""
+    title, why, what = _FAILURES.get(
+        result.outcome, ("✘ Não foi possível concluir o pedido", message, "")
+    )
+    pairs: list[tuple[str, Text | str]] = [("Motivo", why)]
+    pairs.append(("Dados mascarados", masked_summary(result.pii_masked)))
+    pairs += _attention(result.injection_severity)
+    if what:
+        pairs.append(("O que fazer", what))
+    return summary(title, FAIL_STYLE, pairs)
 
 
 def _distinct(rows: list[ExamRow]) -> list[ExamRow]:
@@ -336,28 +398,13 @@ def _distinct(rows: list[ExamRow]) -> list[ExamRow]:
     return kept
 
 
-def _injection_warning(severity: str) -> Text:
-    label = _SEVERITY_LABELS.get(severity, severity)
-    return Text(
-        f"Atenção: o pedido tem trechos que parecem instruções (risco {label}).", style="bold red"
-    )
-
-
 def result_view(result: RunResult) -> Group:
     """What the operator reads: a summary, the scheduled exams and the ones left out."""
-    warning = [_injection_warning(result.injection_severity)] * (
-        result.injection_severity != "none"
-    )
     if result.user_message:
-        return Group(_failure(result), _pii_line(result.pii_masked), *warning)
+        return _failure(result)
     accepted = [row for row in result.exams if row.status == "accepted"]
     other = _distinct([row for row in result.exams if row.status != "accepted"])
-    parts: list[RenderableType] = [
-        _summary(result),
-        _counts(result, len(accepted), len(other)),
-        _pii_line(result.pii_masked),
-        *warning,
-    ]
+    parts: list[RenderableType] = [_summary(result, len(accepted), len(other))]
     if accepted:
         parts += [Text(), _accepted_table(result, accepted)]
     if other:

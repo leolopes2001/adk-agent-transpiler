@@ -338,8 +338,10 @@ def test_main_prints_the_table_by_default(
     out = capsys.readouterr().out
     assert code == 0
     assert "LAB-10037" in out
-    assert f"✔ Solicitação registrada · id {APPOINTMENT_ID}" in out
-    assert "7 exames agendados · 0 não agendados" in out
+    lines = out.splitlines()
+    assert lines[:3] == ["", "✔ Solicitação registrada", f"  ID                 {APPOINTMENT_ID}"]
+    assert "  Agendados          7 exames" in lines
+    assert "  Não agendados      0 exames" in lines
     assert "Execução " in out
     assert "\x1b[" not in out
     assert "caminho:" not in out
@@ -370,7 +372,7 @@ def test_dependency_failure_is_explained_on_stdout_in_table_mode(
     assert code == 6
     assert "Não foi possível concluir o pedido" in captured.out
     assert "docker compose ps" in captured.out
-    assert "(código: MCP_UNAUTHORIZED)" in captured.out
+    assert "  Código             MCP_UNAUTHORIZED" in captured.out.splitlines()
     assert "lab-agent:" not in captured.err
 
 

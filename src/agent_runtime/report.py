@@ -14,7 +14,14 @@ from google.adk import Event
 from rich.console import Group, RenderableType
 from rich.text import Text
 
-from agent_runtime.nodes.present import RunResult, details_view, result_view, to_text
+from agent_runtime.nodes.present import (
+    FAIL_STYLE,
+    RunResult,
+    details_view,
+    result_view,
+    summary,
+    to_text,
+)
 
 EXIT_OK = 0
 EXIT_INVALID_INPUT = 2
@@ -175,11 +182,14 @@ def error_message(error_code: str) -> tuple[str, str]:
 
 def _error_view(error_code: str) -> Group:
     message, action = error_message(error_code)
-    return Group(
-        Text("✘ Não foi possível concluir o pedido", style="bold red"),
-        Text(message),
-        Text(action),
-        Text(f"(código: {error_code})", style="dim"),
+    return summary(
+        "✘ Não foi possível concluir o pedido",
+        FAIL_STYLE,
+        [
+            ("Motivo", message),
+            ("O que fazer", action),
+            ("Código", Text(error_code, style="dim")),
+        ],
     )
 
 
