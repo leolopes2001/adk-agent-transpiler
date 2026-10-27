@@ -1,8 +1,8 @@
 {
-  "run_id": "9c2be3f2-fadc-4637-bd95-d49ba7f42fba",
+  "run_id": "b3a1cbb1-3ea0-45c5-8633-9e1e486ff15b",
   "agent": "exam_scheduling_agent",
   "spec_sha256": "54dcc984c29c9de186c13927fbda49acabde99dabd28452fd0a0ce6637164d02",
-  "outcome": "scheduled",
+  "outcome": "replayed",
   "exit_code": 0,
   "path": [
     "ocr",
@@ -10,18 +10,20 @@
     "extraction",
     "resolve",
     "gate",
+    "review",
     "schedule",
     "present"
   ],
   "timings_ms": {
-    "ocr": 1003,
+    "ocr": 890,
     "guard": 2,
-    "extraction": 4202,
-    "resolve": 29,
+    "extraction": 4653,
+    "resolve": 32,
     "gate": 2,
-    "schedule": 46,
+    "review": 2,
+    "schedule": 11,
     "present": 1,
-    "total": 5287
+    "total": 5595
   },
   "retries": {},
   "pii_masked": {
@@ -44,11 +46,19 @@
       "reason": null
     },
     {
+      "mention": "Glicose em jejum",
+      "code": null,
+      "score": 0.8,
+      "status": "rejected",
+      "source": "both",
+      "reason": "needs_human_review"
+    },
+    {
       "mention": "Glicemia de jejum",
       "code": "LAB-10012",
       "score": 1.0,
       "status": "accepted",
-      "source": "both",
+      "source": "lexical",
       "reason": null
     },
     {
@@ -60,11 +70,19 @@
       "reason": null
     },
     {
+      "mention": "Tiroxina livre (T4 livre)",
+      "code": null,
+      "score": 0.8417,
+      "status": "rejected",
+      "source": "both",
+      "reason": "needs_human_review"
+    },
+    {
       "mention": "T4 livre",
       "code": "LAB-10044",
       "score": 1.0,
       "status": "accepted",
-      "source": "both",
+      "source": "lexical",
       "reason": null
     },
     {
@@ -76,7 +94,7 @@
       "reason": null
     },
     {
-      "mention": "Urina tipo 1 (EAS)",
+      "mention": "Exame de urina tipo 1 (EAS)",
       "code": "LAB-10079",
       "score": 0.9,
       "status": "accepted",
@@ -93,7 +111,7 @@
     }
   ],
   "appointment": {
-    "id": "apt_01M5ZCEM44HX5JPKZFWV6TVMPG",
-    "status": "scheduled"
+    "id": "apt_01M5ZM29C8EJSVMNKBF475NSMX",
+    "status": "replayed"
   }
 }

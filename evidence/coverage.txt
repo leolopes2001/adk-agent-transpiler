@@ -8,11 +8,11 @@ src/agent_runtime/gateways/mcp.py                   130      3     44      3    
 src/agent_runtime/guardrails/tripwire.py             60      4     30      2    93%   68, 70, 82-83
 src/agent_runtime/models.py                          44      1      8      0    98%   50
 src/agent_runtime/nodes/_common.py                   37      3      6      1    91%   65, 68-69
-src/agent_runtime/nodes/confidence_gate.py           60      1     16      1    97%   79
+src/agent_runtime/nodes/confidence_gate.py           74      1     24      1    98%   103
 src/agent_runtime/nodes/human_review.py              68      2     18      0    98%   47-48
 src/agent_runtime/nodes/ocr_extract.py               99      1     26      1    98%   74
 src/agent_runtime/nodes/present.py                  100      1     14      2    97%   188->190, 191
-src/agent_runtime/nodes/reconcile.py                 98      1     26      1    98%   124
+src/agent_runtime/nodes/reconcile.py                 99      1     26      1    98%   127
 src/agent_runtime/nodes/schedule.py                  52      2      6      0    97%   47-48
 src/agent_runtime/nodes/untrusted_text_guard.py      82      4     20      4    92%   58->60, 72, 80-81, 133
 src/lab_common/pii/cns.py                            16      1      2      1    89%   19
@@ -26,18 +26,18 @@ src/scheduler_api/infra/repositories.py              53      1      6      1    
 src/scheduler_api/migrations/env.py                  34      8      8      4    71%   23, 29, 40-42, 48-49, 57
 src/transpiler/cli.py                                67      2     12      0    97%   43-44
 src/transpiler/emit.py                               56      4     12      0    91%   81-84
-src/transpiler/errors.py                            181      2     34      1    99%   208-209
+src/transpiler/errors.py                            183      2     34      1    99%   210-211
 src/transpiler/lowering.py                          151      3     48      1    98%   137-139
 src/transpiler/pipeline.py                           46      2      0      0    96%   58-59
-src/transpiler/semantic/types.py                     84      2     40      2    97%   66, 69
-src/transpiler/spec/loader.py                        92      3     20      1    96%   54, 119, 147
+src/transpiler/semantic/types.py                     96      2     46      2    97%   83, 86
+src/transpiler/spec/loader.py                       109      3     28      1    97%   59, 143, 171
 src/transpiler/spec/schema_export.py                 13      2      0      0    85%   32-33
 src/transpiler/validation/ast_rules.py               73      1     38      1    98%   103
 src/transpiler/validation/probe.py                   45      5      2      1    87%   87-91
 src/transpiler/validation/runner.py                  75      2     16      1    97%   61->60, 105-106
 ---------------------------------------------------------------------------------------------
-TOTAL                                              5740     92   1234     46    98%
+TOTAL                                              5825     92   1262     46    98%
 
 91 files skipped due to complete coverage.
-2107 passed, 18 deselected, 2 warnings in 74.16s (0:01:14)
+2185 passed, 18 deselected, 2 warnings in 75.13s (0:01:15)
 (exit 0)

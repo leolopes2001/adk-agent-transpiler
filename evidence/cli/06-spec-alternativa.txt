@@ -15,5 +15,5 @@ $ lab-agent run --image /app/inputs/samples/pedido_medico_ficticio.png --agent-d
 └──────────────────────────┴──────────────────────────┴───────────┴─────────────────────────┴────────┴────────┴────────┘
 Agendamento: exames identificados (sem agendamento)
 Dados pessoais mascarados: ADDRESS 1, BIRTH_DATE 1, CPF 1, CRM 1, HEALTH_CARD 1, PERSON 2, PHONE 1
-Execução 25b96c19-d96c-4f50-a706-2ee77cd4f286: resolved (exit 0) em 991 ms; caminho: ocr → guard → lexical_extract → resolve → gate → present
+Execução e00ce4bb-5fa9-405c-bdf5-6923d2d33452: resolved (exit 0) em 920 ms; caminho: ocr → guard → lexical_extract → resolve → gate → present
 (exit 0)

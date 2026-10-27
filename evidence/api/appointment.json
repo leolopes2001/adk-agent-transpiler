@@ -1,9 +1,9 @@
 {
   "status": 200,
   "body": {
-    "appointment_id": "apt_01M5ZCFF69RY67SNJ0TQVAE3CE",
+    "appointment_id": "apt_01M5ZM29C8EJSVMNKBF475NSMX",
     "status": "requested",
-    "patient_ref": "pt_KBJZI5U5L46YXGC5EVCOSG7PGL",
+    "patient_ref": "pt_XATXFGTRSNYLFC6HSPN3ENWUAC",
     "exams": [
       {
         "code": "LAB-10001",
@@ -36,6 +36,6 @@
     ],
     "source_document_sha256": "77767581de31154c66267960126e7dc263745c47136271288e14886250069ff1",
     "requested_by": "exam_scheduling_agent",
-    "created_at": "2026-10-27T19:13:01.635137Z"
+    "created_at": "2026-10-27T21:25:38.306943Z"
   }
 }

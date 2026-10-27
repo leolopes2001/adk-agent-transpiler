@@ -1,5 +1,5 @@
 {
-  "run_id": "463df54a-e242-4ca2-b22c-73219742153a",
+  "run_id": "54cd7cd7-b3c3-4286-87b2-dab51b527e7b",
   "agent": "exam_scheduling_agent",
   "spec_sha256": "54dcc984c29c9de186c13927fbda49acabde99dabd28452fd0a0ce6637164d02",
   "outcome": "scheduled",
@@ -15,15 +15,15 @@
     "present"
   ],
   "timings_ms": {
-    "ocr": 958,
+    "ocr": 839,
     "guard": 2,
-    "extraction": 3735,
-    "resolve": 27,
+    "extraction": 5183,
+    "resolve": 22,
     "gate": 2,
-    "review": 1,
-    "schedule": 30,
-    "present": 1,
-    "total": 4757
+    "review": 2,
+    "schedule": 27,
+    "present": 2,
+    "total": 6080
   },
   "retries": {},
   "pii_masked": {
@@ -46,9 +46,9 @@
       "reason": null
     },
     {
-      "mention": "Tiroxina (T4)",
+      "mention": "T4 total",
       "code": null,
-      "score": 0.725,
+      "score": 1.0,
       "status": "rejected",
       "source": "both",
       "reason": "needs_human_review"
@@ -63,7 +63,7 @@
     }
   ],
   "appointment": {
-    "id": "apt_01M5ZCF6DFV0NM41BKM4X0X64X",
+    "id": "apt_01M5ZM2X2S2Q8BP1C7G22DPS72",
     "status": "scheduled"
   }
 }

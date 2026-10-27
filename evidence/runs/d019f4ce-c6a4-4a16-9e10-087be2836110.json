@@ -1,8 +1,8 @@
 {
-  "run_id": "620d772a-52e4-4f64-b0e8-64685eb93657",
+  "run_id": "d019f4ce-c6a4-4a16-9e10-087be2836110",
   "agent": "exam_scheduling_agent",
   "spec_sha256": "54dcc984c29c9de186c13927fbda49acabde99dabd28452fd0a0ce6637164d02",
-  "outcome": "replayed",
+  "outcome": "scheduled",
   "exit_code": 0,
   "path": [
     "ocr",
@@ -10,20 +10,18 @@
     "extraction",
     "resolve",
     "gate",
-    "review",
     "schedule",
     "present"
   ],
   "timings_ms": {
-    "ocr": 1061,
-    "guard": 3,
-    "extraction": 3675,
+    "ocr": 978,
+    "guard": 2,
+    "extraction": 4393,
     "resolve": 28,
-    "gate": 3,
-    "review": 3,
-    "schedule": 41,
-    "present": 3,
-    "total": 4817
+    "gate": 2,
+    "schedule": 30,
+    "present": 2,
+    "total": 5436
   },
   "retries": {},
   "pii_masked": {
@@ -54,9 +52,9 @@
       "reason": null
     },
     {
-      "mention": "TSH",
+      "mention": "Hormônio tireoestimulante (TSH)",
       "code": "LAB-10043",
-      "score": 1.0,
+      "score": 0.8792,
       "status": "accepted",
       "source": "both",
       "reason": null
@@ -78,23 +76,15 @@
       "reason": null
     },
     {
-      "mention": "Urina tipo 1 (Elementos Anormais e Sedimento)",
-      "code": null,
-      "score": 0.8,
-      "status": "rejected",
-      "source": "both",
-      "reason": "needs_human_review"
-    },
-    {
       "mention": "Urina tipo 1 (EAS)",
       "code": "LAB-10079",
       "score": 0.9,
       "status": "accepted",
-      "source": "lexical",
+      "source": "both",
       "reason": null
     },
     {
-      "mention": "Proteína C-reativa",
+      "mention": "Proteína C reativa",
       "code": "LAB-10037",
       "score": 1.0,
       "status": "accepted",
@@ -103,7 +93,7 @@
     }
   ],
   "appointment": {
-    "id": "apt_01M5ZCEM44HX5JPKZFWV6TVMPG",
-    "status": "replayed"
+    "id": "apt_01M5ZM29C8EJSVMNKBF475NSMX",
+    "status": "scheduled"
   }
 }

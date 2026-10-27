@@ -5,10 +5,10 @@ $ lab-agent run --image /app/inputs/samples/pedido_ambiguo.png --non-interactive
 ┃ No pedido          ┃ Exame              ┃ Código    ┃ Nome no catálogo   ┃ Score  ┃ Status    ┃ Motivo             ┃
 ┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
 │ Hemograma completo │ Hemograma completo │ LAB-10001 │ Hemograma completo │ 1.0000 │ aceito    │                    │
-│ T4                 │ T4 total           │ LAB-10045 │ T4 total           │ 1.0000 │ aceito    │                    │
+│ T4                 │ T4 total           │ —         │ —                  │ 1.0000 │ rejeitado │ needs_human_review │
 │ T4                 │ T4                 │ —         │ —                  │ 0.9250 │ rejeitado │ needs_human_review │
 └────────────────────┴────────────────────┴───────────┴────────────────────┴────────┴───────────┴────────────────────┘
-Agendamento: solicitação registrada — id apt_01M5ZCG4FT7AT0AWRANW18KC7F
+Agendamento: solicitação registrada — id apt_01M5ZM2X2S2Q8BP1C7G22DPS72
 Dados pessoais mascarados: ADDRESS 1, BIRTH_DATE 1, CPF 1, CRM 1, HEALTH_CARD 1, PERSON 2, PHONE 1
-Execução ae5b5b4a-c7d9-443c-9d39-ccc1d982a94f: scheduled (exit 0) em 6196 ms; caminho: ocr → guard → extraction → resolve → gate → review → schedule → present
+Execução 54cd7cd7-b3c3-4286-87b2-dab51b527e7b: scheduled (exit 0) em 6080 ms; caminho: ocr → guard → extraction → resolve → gate → review → schedule → present
 (exit 0)
