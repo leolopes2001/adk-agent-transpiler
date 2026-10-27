@@ -4,6 +4,7 @@
 #   - only the API port is published, and only on the loopback interface;
 #   - project containers run as UID 10001, without capabilities, with
 #     no-new-privileges and a read-only root filesystem.
+# A development and CI tool (bash + docker), not part of the evaluator's path.
 # Usage: bash scripts/check_isolation.sh   (COMPOSE overrides the compose command)
 set -uo pipefail
 

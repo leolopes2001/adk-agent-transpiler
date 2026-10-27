@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from runtime_stack import Stack
 
 # Every test must declare its category so `pytest -m ...` selections in the
-# Makefile and CI never silently skip an unmarked test.
+# development check and CI never silently skip an unmarked test.
 CATEGORY_MARKERS = frozenset({"unit", "contract", "integration", "security", "e2e", "llm"})
 
 

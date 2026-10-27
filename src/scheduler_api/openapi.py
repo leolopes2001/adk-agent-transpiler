@@ -1,4 +1,6 @@
-"""Exports the OpenAPI document: `python -m scheduler_api.openapi <path>` (`make openapi`).
+"""Exports the OpenAPI document: `python -m scheduler_api.openapi <path>`.
+
+The versioned copy is `evidence/openapi.json`; a unit test fails when it is stale.
 
 The document only depends on the code, never on configuration, so it is built
 from placeholder settings without starting the app.

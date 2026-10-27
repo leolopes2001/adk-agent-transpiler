@@ -32,7 +32,7 @@ Para RAG e OCR, a referência é ultrapassada em 12 e 16 MB. A diferença fica n
 | Cenário | Comando | Tempo |
 |---|---|---|
 | Frio | `docker compose --profile cli build --no-cache` e depois `docker compose up -d --wait` | build 120 s + up 12 s = **132 s** |
-| Quente | `make up` depois de `make down` (imagens prontas, banco recriado) | **15 s** |
+| Quente | `docker compose up -d --build --wait` depois de `docker compose down -v` (imagens prontas, banco recriado) | **14 s** |
 
 - **Frio:**
   - Começa sem imagens do projeto, sem containers e sem volumes.

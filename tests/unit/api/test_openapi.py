@@ -39,7 +39,8 @@ def _validator(schema: dict[str, Any], component: str) -> Draft202012Validator:
 
 def test_committed_document_matches_the_code() -> None:
     assert EVIDENCE.read_text(encoding="utf-8") == openapi.render(), (
-        "evidence/openapi.json is stale: run `make openapi` and commit the result"
+        "evidence/openapi.json is stale: run "
+        "`uv run python -m scheduler_api.openapi evidence/openapi.json` and commit the result"
     )
 
 

@@ -1,7 +1,10 @@
 """Generated packages for the versioned specs must match tests/golden byte for byte.
 
-When a change to the transpiler is intended, regenerate with `make golden` and
-review the diff of the golden files as part of the change.
+When a change to the transpiler is intended, regenerate them and review the diff
+of the golden files as part of the change:
+
+    uv run lab-transpile generate specs/exam_scheduling_agent.json --out tests/golden/
+    uv run lab-transpile generate specs/examples/exam_lookup_only.json --out tests/golden/
 """
 
 import json
@@ -25,7 +28,7 @@ SPECS = {
     "exam_lookup_only": Path("specs/examples/exam_lookup_only.json"),
 }
 FILES = ("agent.py", "__init__.py", MANIFEST_NAME)
-REGENERATE = "run `make golden` and review the diff"
+REGENERATE = "regenerate tests/golden (see this module's docstring) and review the diff"
 
 
 @pytest.fixture

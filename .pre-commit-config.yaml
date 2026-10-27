@@ -15,3 +15,20 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
         args: [feat, fix, test, refactor, docs, build, ci, chore, perf]
+
+  # Whole-project checks: they ignore the staged file list and run when something
+  # they cover changes. Incremental mypy takes well under a second after the first run.
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy src
+        language: system
+        pass_filenames: false
+        files: ^(src/.*\.py|pyproject\.toml)$
+      - id: lint-imports
+        name: import-linter
+        entry: uv run lint-imports
+        language: system
+        pass_filenames: false
+        files: ^(src/.*\.py|\.importlinter|pyproject\.toml)$
