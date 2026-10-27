@@ -12,6 +12,7 @@ from fastapi import FastAPI
 
 from scheduler_api.api import routes_health
 from scheduler_api.api.middleware import RequestContextMiddleware
+from scheduler_api.infra.db import make_engine, make_session_factory, ping
 from scheduler_api.log import configure_logging, get_logger
 from scheduler_api.settings import Settings
 
@@ -22,11 +23,18 @@ _log = get_logger(__name__)
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-    # The database check is a stub until the persistence layer exists.
-    app.state.readiness_checks = {"database": lambda: True}
+    settings: Settings = app.state.settings
+    # The engine connects lazily: the app starts even if Postgres is not up yet,
+    # and /health/ready reports it until it is.
+    engine = make_engine(settings.database_url.get_secret_value())
+    app.state.session_factory = make_session_factory(engine)
+    app.state.readiness_checks = {"database": lambda: ping(engine)}
     _log.info("startup")
-    yield
-    _log.info("shutdown")
+    try:
+        yield
+    finally:
+        engine.dispose()
+        _log.info("shutdown")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
