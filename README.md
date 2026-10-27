@@ -272,7 +272,7 @@ Como é provado: [`tests/security/test_e2e_pii.py`](tests/security/test_e2e_pii.
 - o `guard` pontua padrões de injection (pt/en, caracteres invisíveis) e bloqueia em severidade alta antes do LLM;
 - o documento chega ao modelo entre `<documento_nao_confiavel>`;
 - o `Agent` não tem tools e só devolve um schema;
-- cada exame do LLM precisa citar um trecho que exista no texto (grounding). Isso prova que o trecho existe, não que o nome devolvido corresponde a ele; por isso o RAG resolve também o trecho, e o nome só é aceito quando os dois apontam para o mesmo código e ambos passam pelo gate. Se divergirem ou se o trecho for ambíguo ("T4"), o item vai para revisão;
+- cada exame do LLM precisa citar um trecho que exista no texto (grounding). Isso prova que o trecho existe, não que o nome devolvido corresponde a ele; por isso o RAG resolve também o trecho, e o nome aceito pelo gate só continua aceito quando o trecho aponta para o mesmo código, com score de pelo menos o limiar de revisão e sem empate pela margem (o trecho não precisa chegar ao limiar de aceite, para que um erro de OCR não trave o fluxo). Se divergirem ou se o trecho for ambíguo ("T4"), o item vai para revisão;
 - os códigos vêm só do catálogo, pelo RAG.
 
 Essas camadas reduzem o efeito de uma injeção que passe pelo `guard`, mas não o anulam. O modelo ainda pode omitir exames: a extração léxica em paralelo recupera os que estão escritos como no catálogo, não todos. Pode também dar a um trecho o nome de outro exame: a conferência pelo trecho manda esse item para revisão em vez de aceitá-lo. O que ele não consegue é criar um código fora do catálogo, chamar tools ou chegar ao agendamento sem passar pelo gate. Com `pedido_injecao.png`, o fluxo para em `ocr → guard → abort`, sem chamar o LLM nem a API ([`evidence/cli/03-injection.txt`](evidence/cli/03-injection.txt)).
@@ -296,7 +296,7 @@ Ele copia o código gerado e passa a posse dos arquivos para o dono de `./specs`
 
 ## Decisões de arquitetura
 
-**O LLM varia, a decisão é determinística.** O Gemini só normaliza menções a partir de texto mascarado. Código do exame, aceitação, roteamento, retries e agendamento são decididos por código. Nas execuções reais, o nome que o modelo devolve muda: para a linha "TSH" do pedido, ele já devolveu "Hormônio tireoestimulante (TSH)" e "TSH (Hormônio tireoestimulante)"; para "Urina tipo 1 (EAS)", "Urina tipo 1", "Exame de urina tipo 1 (EAS)" e "EAS (Elementos Anormais e Sedimento)". Em todas as execuções registradas, o resultado final foi o mesmo: os 7 códigos de [`samples/expected/`](samples/expected/pedido_medico_ficticio.json) e o mesmo agendamento. Uma variante que pontua abaixo do limiar, ou cujo trecho aponta para outro exame, vai para revisão ou é rejeitada, e o item léxico do mesmo trecho garante o código ([`evidence/cli/01-feliz.txt`](evidence/cli/01-feliz.txt) mostra os dois casos).
+**O LLM varia, a decisão é determinística.** O Gemini só normaliza menções a partir de texto mascarado. Código do exame, aceitação, roteamento, retries e agendamento são decididos por código. Cada exame devolvido pelo modelo é conferido contra o trecho original do pedido que ele cita: se os dois não apontarem para o mesmo código, ou se o trecho for ambíguo (como "T4", entre T4 livre e T4 total), o item vai para revisão humana; um erro pequeno de OCR no trecho ("Trigliceríideos") não trava o fluxo quando os dois concordam. Nas execuções reais, o nome que o modelo devolve muda: para a linha "TSH" do pedido, ele já devolveu "Hormônio tireoestimulante (TSH)" e "TSH (Hormônio tireoestimulante)"; para "Urina tipo 1 (EAS)", "Urina tipo 1", "Exame de urina tipo 1 (EAS)" e "EAS (Elementos Anormais e Sedimento)". Em todas as execuções registradas, o resultado final foi o mesmo: os 7 códigos de [`samples/expected/`](samples/expected/pedido_medico_ficticio.json) e o mesmo agendamento. Uma variante que pontua abaixo do limiar, ou cujo trecho aponta para outro exame, vai para revisão ou é rejeitada, e o item léxico do mesmo trecho garante o código ([`test_confidence_gate.py`](tests/unit/runtime/test_confidence_gate.py) e [`test_evidence_grounding.py`](tests/integration/runtime/test_evidence_grounding.py) cobrem esses casos).
 
 | ADR | Decisão |
 |---|---|
@@ -310,7 +310,7 @@ Ele copia o código gerado e passa a posse dos arquivos para o dono de `./specs`
 | [0008](docs/adr/0008-ocr-local-tesseract.md) | OCR local com Tesseract em vez de LLM multimodal (a imagem tem PII) |
 | [0009](docs/adr/0009-adk-api-contract.md) | Contrato com a API do `google-adk` 2.13.0, fixado em testes |
 
-Thresholds do gate (0,85 / 0,60 / margem 0,05): calibrados em 104 consultas rotuladas, com 100% de precisão nos aceitos e nenhum negativo aceito ([`evidence/rag_calibration.md`](evidence/rag_calibration.md)).
+Thresholds do gate (0,85 / 0,60 / margem 0,05): calibrados em 104 consultas rotuladas escritas para este projeto, com 100% de precisão nos aceitos e nenhum negativo aceito nesse conjunto ([`evidence/rag_calibration.md`](evidence/rag_calibration.md)). É um conjunto pequeno; fora dele, a proteção vem da revisão humana para casos ambíguos.
 
 ## Testes
 
@@ -336,7 +336,7 @@ bash scripts/check_isolation.sh                                            # com
 
 O pre-commit roda ruff, ruff format, mypy (strict em `transpiler`, `lab_common` e `agent_runtime`) e import-linter.
 
-**Cobertura atual: 98%** em todos os testes menos os E2E (2185 testes, [`evidence/coverage.txt`](evidence/coverage.txt)). O check de desenvolvimento roda 1840 testes, e a suíte E2E, 18. O CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) roda qualidade, unit/contract, integração/segurança e E2E; o job com Gemini real é manual.
+**Cobertura atual: 98%** em todos os testes menos os E2E (2185 testes, [`evidence/coverage.txt`](evidence/coverage.txt)). O check de desenvolvimento roda 1857 testes, e a suíte E2E, 18. O CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) roda qualidade, unit/contract, integração/segurança e E2E; o job com Gemini real é manual.
 
 ## Limitações e próximos passos
 
@@ -352,7 +352,7 @@ Limitações conhecidas:
 
 Próximos passos para produção:
 
-- MCP via Streamable HTTP e `mcp` 2.x, mudança restrita aos servidores e ao gateway ([ADR-0007](docs/adr/0007-sse-como-transporte-mcp.md));
+- O desafio exige SSE, que foi implementado. Em produção, a evolução natural seria migrar para Streamable HTTP com `mcp` 2.x; a mudança fica restrita aos servidores e ao gateway ([ADR-0007](docs/adr/0007-sse-como-transporte-mcp.md));
 - mTLS entre serviços e segredos num cofre, com rotação;
 - NER como detector de PII adicional;
 - fila para o OCR, com limite de concorrência por worker;
