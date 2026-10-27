@@ -472,27 +472,6 @@ def test_invalid_log_level_is_a_configuration_error(
     assert cli.main(["run", "--image", SAMPLE]) == 8
 
 
-def test_ask_review_maps_numbers_to_offered_codes(monkeypatch: pytest.MonkeyPatch) -> None:
-    answers = iter(["2", "0"])
-    monkeypatch.setattr(cli.Prompt, "ask", lambda *a, **k: next(answers))
-    payload = {
-        "items": [
-            {
-                "index": 1,
-                "mention": "T4",
-                "evidence": "2. T4",
-                "options": [
-                    {"code": "LAB-10044", "name": "T4 livre", "score": 0.8},
-                    {"code": "LAB-10045", "name": "T4 total", "score": 0.8},
-                ],
-            },
-            {"index": 3, "mention": "X", "evidence": "X", "options": []},
-        ]
-    }
-
-    assert cli.ask_review(payload) == {"choices": {"1": "LAB-10045", "3": "none"}}
-
-
 @pytest.mark.parametrize(
     ("exc", "expected"),
     [

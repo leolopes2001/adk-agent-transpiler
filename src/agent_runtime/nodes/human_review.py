@@ -51,13 +51,14 @@ def interrupt_id(ctx: Context) -> str:
 
 
 def review_payload(decision: GateDecision, max_candidates: int) -> dict[str, Any]:
-    """What the operator sees: mention text (masked) and the candidate options."""
+    """What the operator sees: mention, evidence and source (masked) and the candidate options."""
     return {
         "items": [
             {
                 "index": index,
                 "mention": item.mention.text,
                 "evidence": item.mention.evidence,
+                "source": item.mention.source,
                 "options": [
                     {"code": c.code, "name": c.name, "score": c.score}
                     for c in item.candidates[:max_candidates]

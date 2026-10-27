@@ -57,6 +57,7 @@ def test_payload_offers_at_most_max_candidates() -> None:
     assert item["index"] == 1
     assert item["mention"] == "T4"
     assert [o["code"] for o in item["options"]] == ["LAB-10044", "LAB-10045", "LAB-10046"]
+    assert item["source"] == "both"
     assert set(item["options"][0]) == {"code", "name", "score"}
 
 

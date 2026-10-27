@@ -42,8 +42,6 @@ from google.adk.workflow import BaseNode, NodeTimeoutError
 from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel
-from rich.console import Console
-from rich.prompt import Prompt
 
 from agent_runtime.bootstrap import RuntimeDeps
 from agent_runtime.errors import AgentRuntimeError, ConfigurationError, InvalidInputError
@@ -61,6 +59,7 @@ from agent_runtime.report import (
 )
 from agent_runtime.schemas import RunInput
 from agent_runtime.settings import AgentSettings, missing
+from agent_runtime.terminal import ask_review
 from lab_common import logging as lab_logging
 from lab_common.mcp_server import LibraryLogFilter
 
@@ -187,30 +186,6 @@ def required_env(agent: LoadedAgent) -> list[str]:
         isinstance(node, Agent) and isinstance(node.model, str) for node in _nodes(root)
     )
     return sorted({*names, *([LLM_KEY_ENV] if uses_gemini else [])})
-
-
-def ask_review(payload: Mapping[str, Any]) -> dict[str, Any]:
-    """Terminal prompt: one numbered choice per item, among the offered options only."""
-    console = Console(stderr=True)
-    choices: dict[str, str] = {}
-    console.print("[bold]Revisão humana[/bold]: escolha o exame de cada item (0 = nenhum).")
-    for item in payload.get("items", []):
-        options = list(item.get("options", []))
-        console.print(
-            f"\nNo pedido: {item.get('evidence')!s}  →  {item.get('mention')!s}", markup=False
-        )
-        for number, option in enumerate(options, start=1):
-            console.print(
-                f"  {number}) {option['name']} — {option['code']} (score {option['score']:.4f})",
-                markup=False,
-            )
-        console.print("  0) nenhum destes", markup=False)
-        answer = Prompt.ask(
-            "Opção", choices=[str(n) for n in range(len(options) + 1)], console=console
-        )
-        number = int(answer)
-        choices[str(item["index"])] = options[number - 1]["code"] if number else "none"
-    return {"choices": choices}
 
 
 def _event_key(event: Event) -> str:
