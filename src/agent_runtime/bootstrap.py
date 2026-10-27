@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType
 
 from agent_runtime.errors import ConfigurationError
@@ -19,10 +20,17 @@ from agent_runtime.gateways.mcp import AdkMcpGateway, McpEndpoint, McpGateway, S
 
 MCP_GATEWAY_ENV = "AGENT_MCP_GATEWAY"
 """`session` (default) or `adk`; see ADR-0009."""
+INPUT_ROOT_ENV = "INPUT_ROOT"
+"""Directory the run's image must be under; the working directory when unset."""
 
 _MCP_GATEWAYS: Mapping[str, type[SessionMcpGateway | AdkMcpGateway]] = MappingProxyType(
     {"session": SessionMcpGateway, "adk": AdkMcpGateway}
 )
+
+
+def input_root() -> Path:
+    """Resolved INPUT_ROOT (symlinks included), read at each call."""
+    return Path(os.environ.get(INPUT_ROOT_ENV) or Path.cwd()).resolve()
 
 
 @dataclass(frozen=True, slots=True)

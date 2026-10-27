@@ -4,12 +4,16 @@ Node outputs become ADK session events, so none of these types may carry raw
 PII or image bytes: OCR text arrives already masked and the image never
 leaves the node that reads it.
 
-Every port type name in the transpiler registry has a counterpart here.
+Every port type name in the transpiler registry has a counterpart here. Data
+that comes from an MCP server keeps the server's contract
+(`lab_common.contracts`) instead of a copy of it.
 """
 
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from lab_common.contracts.ocr import OcrLine, OcrResult
 
 Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 Score = Annotated[float, Field(ge=0, le=1)]
@@ -23,19 +27,8 @@ class RunInput(_Schema):
     image_path: str
 
 
-class OcrLine(_Schema):
-    text: str
-    confidence: Score
-
-
-class OcrDocument(_Schema):
-    document_sha256: Sha256
-    text: str
-    """Masked by the OCR server."""
-    lines: list[OcrLine]
-    mean_confidence: Score
-    pii_counts: dict[str, int]
-    patient_ref: str | None
+OcrDocument = OcrResult
+"""Port name for the OCR result: text masked by the server, `patient_ref` already computed."""
 
 
 class InjectionReport(_Schema):

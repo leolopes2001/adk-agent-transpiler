@@ -2,18 +2,21 @@
 
 Each factory has its final signature: keyword-only arguments named after the
 node kind's params, plus `deps` for nodes that call a server or service and
-`retry`/`timeout` for nodes that do I/O. The returned nodes are stubs until
-phase 06 (ADR-0002, walking skeleton): building the graph works, running a
-node raises NotImplementedError.
+`retry`/`timeout` for nodes that do I/O. Each implemented kind lives in its
+own module; the rest are still stubs (ADR-0002, walking skeleton): building
+the graph works, running such a node raises NotImplementedError.
 """
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Mapping
 from typing import Any, Literal
 
 from google.adk import Context, Event
 from google.adk.workflow import FunctionNode, RetryConfig
 
 from agent_runtime.bootstrap import RuntimeDeps
+from agent_runtime.nodes._common import NodeFunction
+from agent_runtime.nodes.ocr_extract import ocr_extract
+from agent_runtime.nodes.untrusted_text_guard import untrusted_text_guard
 
 __all__ = [
     "abort",
@@ -28,9 +31,6 @@ __all__ = [
     "schedule",
     "untrusted_text_guard",
 ]
-
-
-type NodeFunction = Callable[[Context, Any], Awaitable[Event]]
 
 
 def _not_implemented(name: str) -> NodeFunction:
@@ -54,28 +54,6 @@ def _pending(
         timeout=timeout,
         rerun_on_resume=rerun_on_resume,
     )
-
-
-def ocr_extract(  # noqa: PLR0913 - one keyword per node param
-    *,
-    name: str,
-    deps: RuntimeDeps,
-    server: str,
-    tool: str,
-    min_mean_confidence: float = 0.55,
-    max_image_bytes: int = 8 * 1024 * 1024,
-    retry: RetryConfig | None = None,
-    timeout: float | None = None,
-) -> FunctionNode:
-    """Reads the image and calls the OCR tool; routes `ok` or `low_quality`."""
-    return _pending(name, retry=retry, timeout=timeout)
-
-
-def untrusted_text_guard(
-    *, name: str, max_chars: int = 8000, block_at: Literal["high", "medium"] = "high"
-) -> FunctionNode:
-    """Sanitizes OCR text, rescans PII and scores injection; routes `clean` or `blocked`."""
-    return _pending(name)
 
 
 def llm_input(*, name: str) -> FunctionNode:
