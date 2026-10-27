@@ -1,0 +1,59 @@
+{"id": "cpf-formatted", "entity": "CPF", "text": "CPF: 202.393.613-69", "expected": ["202.393.613-69"], "score": 1.0}
+{"id": "cpf-unformatted", "entity": "CPF", "text": "CPF 20239361369", "expected": ["20239361369"], "score": 1.0}
+{"id": "cpf-no-label", "entity": "CPF", "text": "Documento 202.393.613-69 apresentado", "expected": ["202.393.613-69"], "score": 1.0}
+{"id": "cpf-spaces", "entity": "CPF", "text": "CPF: 202 393 613 69", "expected": ["202 393 613 69"], "score": 1.0}
+{"id": "cpf-invalid-dv", "entity": "CPF", "text": "CPF: 202.393.613-60", "expected": ["202.393.613-60"], "score": 0.6}
+{"id": "cpf-all-equal", "entity": "CPF", "text": "CPF: 000.000.000-00", "expected": ["000.000.000-00"], "score": 0.6}
+{"id": "cpf-inside-longer-number", "entity": "CPF", "text": "Protocolo 1202393613690", "expected": []}
+{"id": "cpf-too-short", "entity": "CPF", "text": "Código 2023936136", "expected": []}
+{"id": "cpf-date-not-cpf", "entity": "CPF", "text": "Belo Horizonte, 20/10/2026", "expected": []}
+{"id": "cns-definitive", "entity": "CNS", "text": "CNS: 100 0000 0000 0007", "expected": ["100 0000 0000 0007"]}
+{"id": "cns-provisional", "entity": "CNS", "text": "Cartão SUS 700000000000005", "expected": ["700000000000005"]}
+{"id": "cns-bad-check", "entity": "CNS", "text": "CNS: 100 0000 0000 0008", "expected": []}
+{"id": "cns-bad-prefix", "entity": "CNS", "text": "CNS: 300 0000 0000 0007", "expected": []}
+{"id": "cns-sixteen-digits", "entity": "CNS", "text": "Carteirinha: 0000 1111 2222 3333", "expected": []}
+{"id": "rg-label", "entity": "RG", "text": "RG: 00.000.000-0", "expected": ["00.000.000-0"]}
+{"id": "rg-state-prefix", "entity": "RG", "text": "RG MG-00.000.000", "expected": ["MG-00.000.000"]}
+{"id": "rg-identidade", "entity": "RG", "text": "Identidade nº 0000000", "expected": ["0000000"]}
+{"id": "rg-check-x", "entity": "RG", "text": "R.G. 00.000.000-X", "expected": ["00.000.000-X"]}
+{"id": "rg-no-label", "entity": "RG", "text": "Lote 00.000.000-0", "expected": []}
+{"id": "phone-sample", "entity": "PHONE", "text": "Telefone: (31) 90000-0000", "expected": ["(31) 90000-0000"], "score": 0.9}
+{"id": "phone-country-code", "entity": "PHONE", "text": "Tel.: +55 31 90000-0000", "expected": ["+55 31 90000-0000"]}
+{"id": "phone-plain-digits", "entity": "PHONE", "text": "Contato 31900000000", "expected": ["31900000000"]}
+{"id": "phone-no-area-code", "entity": "PHONE", "text": "Recado: 90000-0000", "expected": ["90000-0000"], "score": 0.7}
+{"id": "phone-landline", "entity": "PHONE", "text": "Fixo (31) 3000-0000", "expected": ["(31) 3000-0000"]}
+{"id": "phone-landline-no-area", "entity": "PHONE", "text": "Fixo 3000-0000", "expected": ["3000-0000"]}
+{"id": "phone-date", "entity": "PHONE", "text": "Data 20/10/2026", "expected": []}
+{"id": "phone-iso-date", "entity": "PHONE", "text": "Coleta 2026-10-20", "expected": []}
+{"id": "phone-no-hyphen-short", "entity": "PHONE", "text": "Quantidade 90000000", "expected": []}
+{"id": "phone-zero-area", "entity": "PHONE", "text": "Ramal (01) 90000-0000", "expected": ["90000-0000"]}
+{"id": "email-simple", "entity": "EMAIL", "text": "E-mail: maria.ficticia@example.com", "expected": ["maria.ficticia@example.com"]}
+{"id": "email-plus-subdomain", "entity": "EMAIL", "text": "contato: maria+lab@mail.example.com.br.", "expected": ["maria+lab@mail.example.com.br"]}
+{"id": "email-no-domain-dot", "entity": "EMAIL", "text": "usuario@localhost", "expected": []}
+{"id": "email-at-sign-alone", "entity": "EMAIL", "text": "Glicemia @ jejum", "expected": []}
+{"id": "cep-hyphen", "entity": "CEP", "text": "Belo Horizonte/MG 30000-000", "expected": ["30000-000"], "score": 0.8}
+{"id": "cep-label-plain", "entity": "CEP", "text": "CEP: 30000000", "expected": ["30000000"], "score": 0.95}
+{"id": "cep-label-dotted", "entity": "CEP", "text": "CEP 30.000-000", "expected": ["30.000-000"]}
+{"id": "cep-plain-no-label", "entity": "CEP", "text": "Pedido 30000000", "expected": []}
+{"id": "address-rua", "entity": "ADDRESS", "text": "Rua Imaginária, 100 — Belo Horizonte/MG", "expected": ["Rua Imaginária, 100 — Belo Horizonte/MG"]}
+{"id": "address-avenida-abbrev", "entity": "ADDRESS", "text": "Av. Exemplo, 200, apto 3", "expected": ["Av. Exemplo, 200, apto 3"]}
+{"id": "address-label", "entity": "ADDRESS", "text": "Endereço: Travessa Fictícia, 5", "expected": ["Travessa Fictícia, 5"]}
+{"id": "address-multiline", "entity": "ADDRESS", "text": "Paciente\nAlameda dos Exemplos, 10\nTSH", "expected": ["Alameda dos Exemplos, 10"]}
+{"id": "address-mid-line", "entity": "ADDRESS", "text": "Coletar na Rua Imaginária", "expected": []}
+{"id": "address-exam-line", "entity": "ADDRESS", "text": "Urina tipo 1 (EAS)", "expected": []}
+{"id": "birth-sample", "entity": "BIRTH_DATE", "text": "Nascimento: 14/03/1985", "expected": ["14/03/1985"]}
+{"id": "birth-full-label", "entity": "BIRTH_DATE", "text": "Data de nascimento 14.03.1985", "expected": ["14.03.1985"]}
+{"id": "birth-dn", "entity": "BIRTH_DATE", "text": "DN: 14-03-85", "expected": ["14-03-85"]}
+{"id": "birth-nasc-abbrev", "entity": "BIRTH_DATE", "text": "Nasc. 14/03/1985", "expected": ["14/03/1985"]}
+{"id": "birth-written", "entity": "BIRTH_DATE", "text": "Nascida em 14 de março de 1985", "expected": ["14 de março de 1985"]}
+{"id": "birth-order-date", "entity": "BIRTH_DATE", "text": "Belo Horizonte, 20/10/2026", "expected": []}
+{"id": "birth-collection-date", "entity": "BIRTH_DATE", "text": "Data da coleta: 20/10/2026", "expected": []}
+{"id": "crm-sample", "entity": "CRM", "text": "Dr. João Exemplo — CRM-MG 000000", "expected": ["CRM-MG 000000"]}
+{"id": "crm-slash", "entity": "CRM", "text": "CRM/MG 0000", "expected": ["CRM/MG 0000"]}
+{"id": "crm-no-state", "entity": "CRM", "text": "crm: 000000", "expected": ["crm: 000000"]}
+{"id": "crm-word-only", "entity": "CRM", "text": "Assinatura e CRM do médico", "expected": []}
+{"id": "card-sample", "entity": "HEALTH_CARD", "text": "Carteirinha: 0000 1111 2222 3333", "expected": ["0000 1111 2222 3333"]}
+{"id": "card-matricula", "entity": "HEALTH_CARD", "text": "Matrícula 000.111.222-3", "expected": ["000.111.222-3"]}
+{"id": "card-plan-name-only", "entity": "HEALTH_CARD", "text": "Convênio: Plano Exemplo Saúde (fictício)", "expected": []}
+{"id": "card-short-number", "entity": "HEALTH_CARD", "text": "Convênio: Plano 2026", "expected": []}
+{"id": "card-after-plan-name", "entity": "HEALTH_CARD", "text": "Convênio: Plano Exemplo nº 00001111", "expected": ["00001111"]}

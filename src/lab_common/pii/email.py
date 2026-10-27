@@ -1,0 +1,17 @@
+"""E-mail addresses (simplified RFC 5322: dot-atom local part and domain)."""
+
+import re
+
+from lab_common.pii.types import PiiEntity, RegexDetector
+
+_PATTERN = re.compile(
+    r"(?<![\w.+-])[\w.%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+"
+)
+
+
+class EmailDetector(RegexDetector):
+    entity = PiiEntity.EMAIL
+    name = "email"
+    pattern = _PATTERN
+    base_score = 0.95
