@@ -26,6 +26,11 @@ from lab_common import logging as lab_logging
 
 NONE_CHOICE = "none"
 REVIEW_MESSAGE = "Escolha o exame correto para cada item, ou 'none' se nenhum corresponder."
+RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"choices": {"type": "object", "additionalProperties": {"type": "string"}}},
+    "required": ["choices"],
+}
 
 log = lab_logging.get_logger(__name__)
 
@@ -125,6 +130,7 @@ def human_review(
                     interrupt_id=key,
                     message=REVIEW_MESSAGE,
                     payload=review_payload(decision, params.max_candidates),
+                    response_schema=RESPONSE_SCHEMA,
                 )
             decision = apply_choices(decision, ctx.resume_inputs[key], params.max_candidates)
         elif pending:
