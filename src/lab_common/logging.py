@@ -9,18 +9,31 @@ Records emitted through the standard `logging` module (uvicorn, mcp, httpx)
 go through the same pipeline, so they are rendered as JSON too and pass
 through the same final processors, including their `extra=` fields.
 
+PII redaction is on by default and runs last, after any `final_processors`:
+forbidden keys (`raw_text`, `image_base64`, ...) are dropped at any depth,
+values matching a high-precision detector (valid CPF, CNS, e-mail, phone) are
+replaced with `[REDACTED:<TYPE>]` and long strings are truncated. It is a
+safety net; code must still log counts, hashes and codes, never document text.
+
 stderr is used so a CLI can keep stdout for its own output.
 """
 
 import logging
 import sys
-from collections.abc import Sequence
-from typing import TextIO
+from collections.abc import Mapping, Sequence
+from typing import Any, TextIO
 
 import structlog
 from structlog.typing import EventDict, Processor, WrappedLogger
 
+from lab_common.pii import PiiDetector, high_precision_detectors
+from lab_common.pii.redactor import detect_all
+
 _LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
+
+FORBIDDEN_KEYS = frozenset({"raw_text", "text_raw", "image_base64", "image_bytes", "body"})
+MAX_STRING_CHARS = 500
+_TRUNCATED = "…[truncated]"
 
 _handler: logging.Handler | None = None
 
@@ -34,18 +47,70 @@ class _AddService:
         return event_dict
 
 
+class RedactPii:
+    """Final processor that keeps PII out of log records (see module docstring)."""
+
+    def __init__(self, detectors: Sequence[PiiDetector] | None = None) -> None:
+        self._detectors = tuple(detectors or high_precision_detectors())
+
+    def __call__(self, logger: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
+        return self._mapping(event_dict)
+
+    def _mapping(self, mapping: Mapping[Any, Any]) -> dict[str, object]:
+        return {
+            self._string(str(key)): self._value(value)
+            for key, value in mapping.items()
+            if key not in FORBIDDEN_KEYS
+        }
+
+    def _value(self, value: object) -> object:
+        if value is None or isinstance(value, bool | float):
+            return value
+        if isinstance(value, int):
+            text = str(value)
+            redacted = self._string(text)
+            return value if redacted == text else redacted
+        if isinstance(value, Mapping):
+            return self._mapping(value)
+        if isinstance(value, list | tuple | set | frozenset):
+            return [self._value(item) for item in value]
+        if isinstance(value, bytes | bytearray | memoryview):
+            return "[REDACTED:BYTES]"
+        # Anything else would be rendered through repr() by the JSON renderer,
+        # so it is converted here, where it can still be checked.
+        return self._string(value if isinstance(value, str) else str(value))
+
+    def _string(self, text: str) -> str:
+        spans = detect_all(self._detectors, text, min_score=0.0)
+        if spans:
+            pieces = []
+            cursor = 0
+            for span in spans:
+                pieces.append(text[cursor : span.start])
+                pieces.append(f"[REDACTED:{span.entity}]")
+                cursor = span.end
+            pieces.append(text[cursor:])
+            text = "".join(pieces)
+        if len(text) > MAX_STRING_CHARS:
+            text = text[:MAX_STRING_CHARS] + _TRUNCATED
+        return text
+
+
 def configure(
     service: str,
     level: str = "INFO",
     *,
     final_processors: Sequence[Processor] = (),
     stream: TextIO | None = None,
+    redact_pii: bool = True,
 ) -> None:
     """Configure structlog and the stdlib root logger to emit JSON lines.
 
     `final_processors` run after all standard fields are set and right before
-    rendering, so they see the complete record; this is where log redaction
-    plugs in. Calling `configure` again replaces the previous configuration.
+    rendering, so they see the complete record. PII redaction (`RedactPii`)
+    runs after them unless `redact_pii` is False, which is meant only for
+    tests of the logging pipeline itself. Calling `configure` again replaces
+    the previous configuration.
     """
     global _handler  # noqa: PLW0603 - one handler per process, replaced on reconfigure
 
@@ -68,6 +133,7 @@ def configure(
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             *final_processors,
+            *([RedactPii()] if redact_pii else []),
             structlog.processors.JSONRenderer(ensure_ascii=False),
         ],
     )
