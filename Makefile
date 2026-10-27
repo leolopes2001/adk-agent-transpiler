@@ -1,6 +1,6 @@
 .PHONY: setup lint typecheck lint-imports test-unit check golden openapi \
 	test test-integration test-security \
-	env up down transpile run run-review logs isolation
+	up down transpile run run-review logs isolation
 
 setup:
 	uv sync --all-extras --group dev
@@ -44,18 +44,6 @@ openapi:
 
 COMPOSE ?= docker compose
 IMAGE ?= pedido_medico_ficticio.png
-PYTHON_IMAGE = python:3.12.16-slim-trixie@sha256:12316debbfb86890f6b2d825820612741ba527ad5a44e3902759141d572bfe8f
-
-# Creates .env with random secrets, or appends only the variables it lacks.
-# Without a local python3 the script runs in a throwaway container (no network).
-env:
-	@if command -v python3 >/dev/null 2>&1; then \
-		python3 scripts/make_env.py; \
-	else \
-		docker run --rm --network none --user "$$(id -u):$$(id -g)" \
-			-v "$(CURDIR):/work" -w /work $(PYTHON_IMAGE) python scripts/make_env.py; \
-	fi
-
 # Builds the agent image too: `up` skips it because it is a CLI (profile cli).
 up:
 	$(COMPOSE) --profile cli build
