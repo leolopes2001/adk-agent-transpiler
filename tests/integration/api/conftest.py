@@ -5,14 +5,18 @@ needs a schema gets its own empty database, so tests never see each other's rows
 """
 
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from pathlib import Path
 
+import httpx
 import pytest
+from alembic import command
 from alembic.config import Config
+from fastapi import FastAPI
 from sqlalchemy import URL, Engine, create_engine, make_url, text
 from testcontainers.community.postgres import PostgresContainer
 
+from scheduler_api.main import create_app
 from scheduler_api.settings import Settings
 
 ROOT = Path(__file__).parents[3]
@@ -69,3 +73,35 @@ def settings_for() -> Callable[[str], Settings]:
         )
 
     return build
+
+
+@pytest.fixture
+def migrated_database(empty_database: str, alembic_config: Callable[[str], Config]) -> str:
+    command.upgrade(alembic_config(empty_database), "head")
+    return empty_database
+
+
+@pytest.fixture
+def app(migrated_database: str, settings_for: Callable[[str], Settings]) -> FastAPI:
+    return create_app(settings_for(migrated_database))
+
+
+@pytest.fixture
+async def client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
+    """Authenticated client; ASGITransport does not run the lifespan, so it is entered here."""
+    transport = httpx.ASGITransport(app=app)
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=transport, base_url="http://testserver", headers={"X-API-Key": API_KEY}
+        ) as client,
+    ):
+        yield client
+
+
+@pytest.fixture
+def db(migrated_database: str) -> Iterator[Engine]:
+    """Direct access to the test database, to check what the API wrote."""
+    engine = create_engine(migrated_database)
+    yield engine
+    engine.dispose()

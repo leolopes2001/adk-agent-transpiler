@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import Scope
 
+from scheduler_api.domain.models import AppointmentNotFoundError, CatalogValidationError
+
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 TYPE_BASE = "https://errors.lab-agent.example/"
 
@@ -175,8 +177,41 @@ async def _validation_error(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
+async def _catalog_validation(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, CatalogValidationError)  # noqa: S101 - registered for it only
+    unknown = exc.count("unknown_exam_code")
+    if unknown:
+        code, title = "unknown_exam_code", "Unknown exam code"
+        detail = f"{unknown} exam code(s) do not exist in the catalog."
+    else:
+        code, title = "exam_name_mismatch", "Exam name mismatch"
+        detail = f"{exc.count('exam_name_mismatch')} exam name(s) do not match the catalog."
+    errors = [
+        FieldError(
+            loc=["body", "exams", issue.index, issue.field], code=issue.kind, msg=issue.message
+        )
+        for issue in exc.issues
+    ]
+    return problem_response(
+        request.scope, status=422, code=code, title=title, detail=detail, errors=errors
+    )
+
+
+async def _appointment_not_found(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, AppointmentNotFoundError)  # noqa: S101 - registered for it only
+    return problem_response(
+        request.scope,
+        status=404,
+        code="appointment_not_found",
+        title="Appointment not found",
+        detail=f"{exc.appointment_id} does not exist.",
+    )
+
+
 def install_error_handlers(app: FastAPI) -> None:
     """Unexpected exceptions are handled by `RequestContextMiddleware` (it owns the request id)."""
     app.add_exception_handler(ApiError, _api_error)
+    app.add_exception_handler(CatalogValidationError, _catalog_validation)
+    app.add_exception_handler(AppointmentNotFoundError, _appointment_not_found)
     app.add_exception_handler(StarletteHTTPException, _http_exception)
     app.add_exception_handler(RequestValidationError, _validation_error)

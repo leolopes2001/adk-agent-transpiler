@@ -6,6 +6,8 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 
+from scheduler_api.domain.catalog import Catalog
+from scheduler_api.domain.services import AppointmentService
 from scheduler_api.log import get_logger
 from scheduler_api.settings import Settings
 
@@ -35,3 +37,17 @@ def require_api_key(
     if api_key is None or not hmac.compare_digest(api_key.encode(), expected):
         _log.warning("auth_failed", reason="missing" if api_key is None else "invalid")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing or invalid API key.")
+
+
+def get_catalog(request: Request) -> Catalog:
+    catalog: Catalog = request.app.state.catalog
+    return catalog
+
+
+def get_appointment_service(request: Request) -> AppointmentService:
+    service: AppointmentService = request.app.state.appointment_service
+    return service
+
+
+CatalogDep = Annotated[Catalog, Depends(get_catalog)]
+AppointmentServiceDep = Annotated[AppointmentService, Depends(get_appointment_service)]

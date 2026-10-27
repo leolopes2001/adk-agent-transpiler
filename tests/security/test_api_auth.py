@@ -139,3 +139,76 @@ def test_keys_are_never_logged(app: FastAPI, client: TestClient) -> None:
     assert '"auth_failed"' in output
     assert wrong not in output
     assert API_KEY not in output
+
+
+VALID_BODY = {
+    "patient_ref": "pt_K7Q2M4XZB3C6D7E5F6G7H2J4KA",
+    "exams": [{"code": "LAB-10001", "name": "Hemograma completo"}],
+    "source_document_sha256": "9b1e" + "0" * 60,
+    "requested_by": "exam_scheduling_agent",
+}
+PII_SENTINEL = "Maria Sentinela Albuquerque"
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("POST", "/v1/appointments"),
+        ("GET", "/v1/appointments/apt_01JB0000000000000000000000"),
+        ("GET", "/v1/exams/LAB-10001"),
+    ],
+)
+@pytest.mark.parametrize(
+    "key", [None, "wrong-key-0123456789abcdefghijklmnopq"], ids=["none", "wrong"]
+)
+def test_v1_routes_reject_bad_keys(
+    client: TestClient, method: str, path: str, key: str | None
+) -> None:
+    headers = {"Idempotency-Key": "key-0001"} | ({"X-API-Key": key} if key else {})
+    response = client.request(
+        method, path, json=VALID_BODY if method == "POST" else None, headers=headers
+    )
+
+    assert response.status_code == 401
+    assert response.headers["content-type"] == "application/problem+json"
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"patient_name": PII_SENTINEL},
+        {"cpf": "12345678909"},
+        {"patient": {"name": PII_SENTINEL}},
+    ],
+    ids=["patient_name", "cpf", "nested"],
+)
+def test_contract_rejects_personal_data_fields(
+    client: TestClient, extra: dict[str, object]
+) -> None:
+    response = client.post(
+        "/v1/appointments",
+        json=VALID_BODY | extra,
+        headers={"X-API-Key": API_KEY, "Idempotency-Key": "key-0001"},
+    )
+
+    assert response.status_code == 422
+    [error] = response.json()["errors"]
+    assert error["code"] == "extra_forbidden"
+    assert PII_SENTINEL not in response.text
+    assert "12345678909" not in response.text
+
+
+def test_rejected_request_body_is_not_logged(client: TestClient) -> None:
+    stream = io.StringIO()
+    log.configure_logging(stream=stream)
+
+    client.post(
+        "/v1/appointments",
+        json=VALID_BODY | {"patient_name": PII_SENTINEL},
+        headers={"X-API-Key": API_KEY, "Idempotency-Key": "key-0001"},
+    )
+
+    output = stream.getvalue()
+    assert '"request"' in output
+    for value in (PII_SENTINEL, VALID_BODY["patient_ref"], "Hemograma completo"):
+        assert value not in output
