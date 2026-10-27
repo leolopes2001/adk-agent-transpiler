@@ -218,6 +218,13 @@ def test_real_gemini_schedules_the_expected_exams(e2e_stack: ComposeStack, llm_k
     if run.report.get("error_code") in LLM_QUOTA_ERRORS:
         pytest.skip(f"Gemini quota: {run.report['error_code']}")
     assert run.exit_code == 0, run.report.get("error_code")
-    # The model may name the exams differently; the scheduled codes may not differ.
-    assert _accepted_codes(run) == EXPECTED_CODES
+    # The model may name the exams differently, and an extra mention may go to review
+    # (rejected when non-interactive); the accepted and scheduled codes may not differ:
+    # no code missing, none extra, none twice.
+    assert sorted(_accepted_codes(run)) == sorted(EXPECTED_CODES)
     assert run.report["appointment"]["status"] in {"scheduled", "replayed"}
+
+    status, appointment = e2e_stack.api_get(f"/v1/appointments/{run.report['appointment']['id']}")
+
+    assert status == 200
+    assert sorted(e["code"] for e in appointment["exams"]) == sorted(EXPECTED_CODES)

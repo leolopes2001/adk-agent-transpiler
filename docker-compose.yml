@@ -141,7 +141,6 @@ services:
       # belongs to the host user (or to root, when Docker creates it), and UID
       # 10001 could not write the generated code. `export-generated` copies it out.
       - generated:/app/generated
-      - ./evidence:/app/evidence
     networks: [backend, egress]
     depends_on:
       scheduler-api: { condition: service_healthy }
