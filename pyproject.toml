@@ -1,0 +1,77 @@
+[project]
+name = "lab-exam-agent"
+version = "0.1.0"
+description = "Transpiler from JSON agent specs to Google ADK workflows, plus the MCP servers and API they use."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2",
+    "structlog",
+]
+
+[project.optional-dependencies]
+transpiler = [
+    "jinja2",
+]
+agent = [
+    "lab-exam-agent[transpiler]",
+    "google-adk>=2,<3",
+    "httpx",
+    "rich",
+    "rapidfuzz",
+    "mcp>=1.24,<2",
+]
+ocr = [
+    "mcp>=1.24,<2",
+    "uvicorn",
+    "pytesseract",
+    "opencv-python-headless",
+    "pillow",
+    "anyio",
+]
+rag = [
+    "mcp>=1.24,<2",
+    "uvicorn",
+    "rank-bm25",
+    "rapidfuzz",
+]
+api = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy>=2",
+    "psycopg[binary]",
+    "alembic",
+    "pydantic-settings",
+    "python-ulid",
+]
+
+[project.scripts]
+lab-transpile = "transpiler.cli:main"
+lab-agent = "agent_runtime.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "hypothesis",
+    "testcontainers[postgres]",
+    "jsonschema",
+    "ruff",
+    "mypy",
+    "import-linter",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/lab_common",
+    "src/transpiler",
+    "src/agent_runtime",
+    "src/ocr_mcp",
+    "src/rag_mcp",
+    "src/scheduler_api",
+]
