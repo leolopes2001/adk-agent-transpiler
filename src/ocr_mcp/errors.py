@@ -5,23 +5,10 @@ lower-level exception, so an error can be logged and returned without risk of
 carrying document content.
 """
 
-from enum import StrEnum
+from lab_common.contracts.ocr import RETRYABLE_ERRORS, OcrToolError
+from lab_common.contracts.ocr import OcrErrorCode as ErrorCode
 
-
-class ErrorCode(StrEnum):
-    INVALID_REQUEST = "INVALID_REQUEST"
-    INVALID_BASE64 = "INVALID_BASE64"
-    IMAGE_TOO_LARGE = "IMAGE_TOO_LARGE"
-    UNSUPPORTED_FORMAT = "UNSUPPORTED_FORMAT"
-    IMAGE_TOO_MANY_PIXELS = "IMAGE_TOO_MANY_PIXELS"
-    CORRUPTED_IMAGE = "CORRUPTED_IMAGE"
-    PII_ENGINE_FAILURE = "PII_ENGINE_FAILURE"
-    OCR_TIMEOUT = "OCR_TIMEOUT"
-    BUSY = "BUSY"
-    INTERNAL_ERROR = "INTERNAL_ERROR"
-
-
-RETRYABLE = frozenset({ErrorCode.OCR_TIMEOUT, ErrorCode.BUSY})
+__all__ = ["ErrorCode", "OcrError"]
 
 
 class OcrError(Exception):
@@ -32,7 +19,9 @@ class OcrError(Exception):
 
     @property
     def retryable(self) -> bool:
-        return self.code in RETRYABLE
+        return self.code in RETRYABLE_ERRORS
 
     def as_dict(self) -> dict[str, str | bool]:
-        return {"code": self.code.value, "message": self.message, "retryable": self.retryable}
+        return OcrToolError(
+            code=self.code, message=self.message, retryable=self.retryable
+        ).model_dump(mode="json")
