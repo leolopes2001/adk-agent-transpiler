@@ -85,18 +85,40 @@ def test_replaces_invalid_request_id(app: FastAPI, value: str) -> None:
     assert uuid.UUID(echoed).version == 4
 
 
-def test_logs_one_request_event_with_route_template(app: FastAPI, log_records: LogRecords) -> None:
+def test_logs_one_request_event_with_route_template(
+    app: FastAPI, settings: Settings, log_records: LogRecords
+) -> None:
+    headers = {
+        "X-Request-ID": "req-1234",
+        "X-API-Key": settings.scheduler_api_key.get_secret_value(),
+    }
     with TestClient(app) as client:
-        client.get("/health/live", headers={"X-Request-ID": "req-1234"})
+        client.get("/v1/exams/LAB-10001", headers=headers)
 
     [event] = [r for r in log_records() if r["event"] == "request"]
     assert event["service"] == "scheduler-api"
     assert event["request_id"] == "req-1234"
     assert event["method"] == "GET"
-    assert event["route"] == "/health/live"
+    assert event["route"] == "/v1/exams/{code}"
     assert event["status"] == 200
     assert isinstance(event["duration_ms"], float)
     assert {"ts", "level"} <= event.keys()
+
+
+@pytest.mark.parametrize("path", ["/health/live", "/health/ready"])
+def test_health_checks_are_not_logged(app: FastAPI, log_records: LogRecords, path: str) -> None:
+    with TestClient(app) as client:
+        client.get(path)
+
+    assert [r for r in log_records() if r["event"] == "request"] == []
+
+
+def test_unmatched_path_under_health_is_logged(app: FastAPI, log_records: LogRecords) -> None:
+    with TestClient(app) as client:
+        client.get("/health/unknown")
+
+    [event] = [r for r in log_records() if r["event"] == "request"]
+    assert event["route"] == "<unmatched>"
 
 
 def test_unmatched_path_is_not_logged(app: FastAPI, log_records: LogRecords) -> None:

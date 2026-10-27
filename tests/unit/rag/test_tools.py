@@ -289,6 +289,13 @@ class TestHttp:
             "exam_count": 120,
         }
 
+    def test_health_is_not_logged(self, client: TestClient, log_stream: io.StringIO) -> None:
+        client.get("/health")
+
+        # The test client's own httpx logger records the URL; only server records matter.
+        lines = log_stream.getvalue().splitlines()
+        assert [line for line in lines if "HTTP Request:" not in line] == []
+
     @pytest.mark.parametrize(
         "headers",
         [

@@ -21,6 +21,8 @@ REQUEST_ID_HEADER = "X-Request-ID"
 # written to every log line, so it must not carry arbitrary client text.
 _VALID_REQUEST_ID = re.compile(r"[A-Za-z0-9_\-:.]{1,128}")
 
+_HEALTH_PREFIX = "/health/"
+
 _log = get_logger(__name__)
 
 
@@ -44,7 +46,8 @@ def _route_template(scope: Scope) -> str:
 
 
 class RequestContextMiddleware:
-    """Assigns a request id, echoes it in the response and logs one `request` event.
+    """Assigns a request id, echoes it in the response and logs one `request` event
+    (except for the health check routes).
 
     It also turns unexpected exceptions into a generic 500 problem, so that
     response carries the request id like any other and the stack trace is
@@ -81,10 +84,14 @@ class RequestContextMiddleware:
                     raise
                 await internal_error_response(scope)(scope, receive, send_with_request_id)
             finally:
-                _log.info(
-                    "request",
-                    method=scope["method"],
-                    route=_route_template(scope),
-                    status=status,
-                    duration_ms=round((time.perf_counter() - started) * 1000, 1),
-                )
+                route = _route_template(scope)
+                # Health checks run every few seconds and would drown the log;
+                # unmatched paths under /health are still logged.
+                if not route.startswith(_HEALTH_PREFIX):
+                    _log.info(
+                        "request",
+                        method=scope["method"],
+                        route=route,
+                        status=status,
+                        duration_ms=round((time.perf_counter() - started) * 1000, 1),
+                    )

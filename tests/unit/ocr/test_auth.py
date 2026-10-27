@@ -125,6 +125,13 @@ class TestHealth:
     def test_only_get(self, client: TestClient) -> None:
         assert client.post("/health").status_code == 405
 
+    def test_is_not_logged(self, client: TestClient, log_stream: io.StringIO) -> None:
+        client.get("/health")
+
+        # The test client's own httpx logger records the URL; only server records matter.
+        lines = log_stream.getvalue().splitlines()
+        assert [line for line in lines if "HTTP Request:" not in line] == []
+
     def test_engine_failure_is_unavailable(self, log_stream: io.StringIO) -> None:
         with TestClient(build_app(make_settings(), BrokenVersion())) as client:
             response = client.get("/health")
