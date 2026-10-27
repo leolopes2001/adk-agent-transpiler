@@ -1,0 +1,19 @@
+# End-to-end tests: the agent uses the fake LLM and no real API key, and the API
+# is published on a random loopback port, so a test stack can run next to the
+# default one. Run it under its own project name and remove it afterwards:
+#   docker compose -p lab-agent-e2e -f docker-compose.yml -f docker-compose.e2e.yml up -d --build --wait
+#   docker compose -p lab-agent-e2e -f docker-compose.yml -f docker-compose.e2e.yml down -v
+
+services:
+  scheduler-api:
+    ports: !override ["127.0.0.1::8000"]
+
+  agent:
+    environment:
+      APP_ENV: test
+      AGENT_LLM_BACKEND: fake
+      GOOGLE_API_KEY: ""
+      FAKE_LLM_FIXTURE: ${FAKE_LLM_FIXTURE:-/app/tests/fixtures/fake_llm/pedido_medico_ficticio.json}
+    volumes:
+      - ./tests/fixtures/fake_llm:/app/tests/fixtures/fake_llm:ro
+      - ./tests/data/images:/app/inputs/test-images:ro

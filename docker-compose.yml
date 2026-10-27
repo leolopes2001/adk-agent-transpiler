@@ -1,0 +1,136 @@
+# Full stack: Postgres, scheduler API, OCR and RAG MCP servers, plus the agent CLI.
+#
+#   docker compose up -d --build --wait
+#   docker compose run --rm --entrypoint lab-transpile agent generate \
+#       /app/specs/exam_scheduling_agent.json --out /app/generated
+#   docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png
+#
+# Networks: `backend` is internal (no internet) and holds every service; only the
+# agent also joins `egress` to reach Gemini, and only the API joins `edge`, which
+# exists to publish its port (a port cannot be published from an internal network).
+# Each service gets only the secrets it uses.
+
+name: lab-agent
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+    environment:
+      POSTGRES_DB: scheduler
+      POSTGRES_USER: scheduler
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  scheduler-api:
+    build: { context: ., dockerfile: docker/scheduler-api.Dockerfile }
+    environment:
+      DATABASE_URL: postgresql+psycopg://scheduler:${POSTGRES_PASSWORD}@postgres:5432/scheduler
+      SCHEDULER_API_KEY: ${SCHEDULER_API_KEY:?set SCHEDULER_API_KEY in .env}
+      CATALOG_PATH: /app/data/exams_catalog.json
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data:/app/data:ro
+    # Loopback only: Swagger at http://localhost:8000/docs, not reachable from the network.
+    ports: ["127.0.0.1:8000:8000"]
+    networks: [backend, edge]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ocr-mcp:
+    build: { context: ., dockerfile: docker/ocr-mcp.Dockerfile }
+    environment:
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?set MCP_AUTH_TOKEN in .env}
+      PII_HMAC_SECRET: ${PII_HMAC_SECRET:?set PII_HMAC_SECRET in .env}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks: [backend]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8101/health', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rag-mcp:
+    build: { context: ., dockerfile: docker/rag-mcp.Dockerfile }
+    environment:
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?set MCP_AUTH_TOKEN in .env}
+      CATALOG_PATH: /app/data/exams_catalog.json
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data:/app/data:ro
+    networks: [backend]
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8102/health', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # A CLI, not a long-running service: `docker compose run --rm agent ...`.
+  # The `cli` profile keeps it out of `docker compose up`.
+  agent:
+    build: { context: ., dockerfile: docker/agent.Dockerfile }
+    profiles: [cli]
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      AGENT_LLM_BACKEND: ${AGENT_LLM_BACKEND:-gemini}
+      OCR_MCP_URL: http://ocr-mcp:8101/sse
+      RAG_MCP_URL: http://rag-mcp:8102/sse
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?set MCP_AUTH_TOKEN in .env}
+      SCHEDULER_API_URL: http://scheduler-api:8000
+      SCHEDULER_API_KEY: ${SCHEDULER_API_KEY:?set SCHEDULER_API_KEY in .env}
+      INPUT_ROOT: /app/inputs
+      GENERATED_ROOT: /app/generated
+    volumes:
+      - ./specs:/app/specs:ro
+      - ./samples:/app/inputs/samples:ro
+      - ./generated:/app/generated
+      - ./evidence:/app/evidence
+    networks: [backend, egress]
+    depends_on:
+      scheduler-api: { condition: service_healthy }
+      ocr-mcp: { condition: service_healthy }
+      rag-mcp: { condition: service_healthy }
+    # Human review asks on the terminal.
+    stdin_open: true
+    tty: true
+
+networks:
+  backend:
+    internal: true
+  egress: {}
+  edge: {}
+
+volumes:
+  pgdata: {}
