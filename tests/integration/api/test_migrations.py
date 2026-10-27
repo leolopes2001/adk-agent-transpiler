@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -101,6 +102,10 @@ def test_alembic_cli_reads_database_url_from_environment(
 
     assert result.returncode == 0, result.stderr
     assert _tables(engine) == TABLES
+    # Same JSON lines as the API, so the container log has a single format.
+    records = [json.loads(line) for line in result.stderr.splitlines()]
+    assert records
+    assert {record["service"] for record in records} == {"scheduler-api"}
 
 
 def test_ready_checks_the_real_database(

@@ -4,7 +4,9 @@ The API is deployed as an external service and imports no other project
 package, so it carries its own small version of the shared logging setup: one
 JSON object per line on stderr with `ts`, `level`, `service` and `event`, plus
 whatever is bound to the context (`request_id`). Records from the standard
-`logging` module (uvicorn, sqlalchemy) go through the same pipeline.
+`logging` module (uvicorn, sqlalchemy, alembic) go through the same pipeline;
+uvicorn's own text handlers, installed before the app factory runs, are
+removed so its records reach the JSON handler too.
 
 Request and response bodies are never logged; `_drop_forbidden_keys` removes
 them if a call ever passes one by mistake.
@@ -20,6 +22,9 @@ from structlog.typing import EventDict, Processor, WrappedLogger
 SERVICE = "scheduler-api"
 
 _FORBIDDEN_KEYS = frozenset({"body", "request_body", "response_body"})
+# uvicorn repeats each message with ANSI colors in `color_message` for its own formatter.
+_DROPPED_KEYS = _FORBIDDEN_KEYS | {"color_message"}
+_UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
 
 _handler: logging.Handler | None = None
 
@@ -32,7 +37,7 @@ def _add_service(logger: WrappedLogger, method_name: str, event_dict: EventDict)
 def _drop_forbidden_keys(
     logger: WrappedLogger, method_name: str, event_dict: EventDict
 ) -> EventDict:
-    for key in _FORBIDDEN_KEYS.intersection(event_dict):
+    for key in _DROPPED_KEYS.intersection(event_dict):
         del event_dict[key]
     return event_dict
 
@@ -65,6 +70,10 @@ def configure_logging(level: str = "INFO", *, stream: TextIO | None = None) -> N
     root.addHandler(handler)
     root.setLevel(level.upper())
     _handler = handler
+    for name in _UVICORN_LOGGERS:
+        uvicorn_logger = logging.getLogger(name)
+        uvicorn_logger.handlers.clear()
+        uvicorn_logger.propagate = True
 
     structlog.configure(
         processors=[

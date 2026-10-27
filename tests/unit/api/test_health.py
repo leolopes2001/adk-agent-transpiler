@@ -1,4 +1,6 @@
+import io
 import json
+import logging
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -9,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from scheduler_api.log import get_logger
+from scheduler_api.log import configure_logging, get_logger
 from scheduler_api.main import create_app
 from scheduler_api.settings import Settings
 
@@ -115,6 +117,29 @@ def test_forbidden_keys_are_dropped_from_logs(log_records: LogRecords) -> None:
     [event] = log_records()
     assert "body" not in event
     assert event["kept"] == "yes"
+
+
+def test_uvicorn_records_are_rendered_as_json(log_records: LogRecords) -> None:
+    logging.getLogger("uvicorn.error").info(
+        "Started server process [%d]", 42, extra={"color_message": "\x1b[36m%d\x1b[0m"}
+    )
+
+    [event] = log_records()
+    assert event["event"] == "Started server process [42]"
+    assert event["service"] == "scheduler-api"
+    assert "color_message" not in event
+
+
+def test_uvicorn_text_handlers_are_removed() -> None:
+    # The uvicorn CLI configures its loggers before calling the app factory.
+    uvicorn_logger = logging.getLogger("uvicorn")
+    uvicorn_logger.addHandler(logging.StreamHandler(io.StringIO()))
+    uvicorn_logger.propagate = False
+
+    configure_logging()
+
+    assert uvicorn_logger.handlers == []
+    assert uvicorn_logger.propagate
 
 
 def test_settings_require_a_long_api_key(settings: Settings) -> None:

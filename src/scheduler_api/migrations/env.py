@@ -3,21 +3,24 @@
 The URL comes from, in order: a connection passed in `config.attributes`
 (tests), the `sqlalchemy.url` option, or the `DATABASE_URL` environment
 variable (container entrypoint and local use).
+
+Logging uses the API's JSON setup, so the container log has a single format
+from the migrations on; tests turn it off with `configure_logger = False`.
 """
 
 import os
-from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import Connection, create_engine, pool
 
 from scheduler_api.infra.orm import Base
+from scheduler_api.log import configure_logging
 
 config = context.config
 target_metadata = Base.metadata
 
-if config.config_file_name is not None and config.attributes.get("configure_logger", True):
-    fileConfig(config.config_file_name, disable_existing_loggers=False)
+if config.attributes.get("configure_logger", True):
+    configure_logging(os.environ.get("LOG_LEVEL", "INFO"))
 
 
 def _url() -> str:
