@@ -2,8 +2,13 @@
 
 Names have no fixed format, so this detector only looks right after a label
 and takes the whole run of capitalized words that follows (no word limit: a
-cut-off would leak the rest of a long name). Two safeguards keep exam
-names and form fields out of the span:
+cut-off would leak the rest of a long name). A label that is clearly a form
+field (followed by ":" or "-", or a title ending in a dot: "Dr.", "Sra.")
+introduces a value in any case ("Paciente: maria silva", "dra. ana
+SOUZA"), on the same line or, when nothing follows the label, on the next
+one ("Responsável:\nana souza"). That value is every word up to the next
+field: a field label, a word followed by ":", a digit or punctuation (audit
+F01). Two safeguards keep exam names and form fields out of the span:
 
 - the run stops at a field label ("CPF", "Telefone", ...), so "Dr. João CRM 1"
   masks the name and leaves the CRM to its own detector;
@@ -53,6 +58,15 @@ _PATTERN = re.compile(
 )
 _WORD_RE = re.compile(rf"{_WORD}|{_CONNECTOR}")
 
+# Any case; only after a label with an explicit separator.
+_FIELD_WORD = r"[^\W\d_]+(?:['\u2019\-][^\W\d_]+)*(?!\w)\.?"
+_FIELD_PATTERN = re.compile(
+    rf"(?<![\w.])(?i:{_LABEL})(?:(?<=\.)[^\S\n]*:?|(?!\w)[^\S\n]*[:\-\u2013])"
+    rf"[^\S\n]*(?:\n[^\S\n]*)?"
+    rf"(?P<value>{_FIELD_WORD}(?:[^\S\n]+{_FIELD_WORD})*)"
+)
+_FIELD_WORD_RE = re.compile(_FIELD_WORD)
+
 # Form labels (normalized) that end a name when they follow it on the same line.
 _FIELD_LABELS = frozenset(
     {
@@ -97,18 +111,26 @@ class PersonDetector:
         self._excluded = medical_terms() | {t for term in extra_terms for t in tokens(term)}
 
     def detect(self, text: str) -> list[PiiSpan]:
-        spans = []
-        for match in _PATTERN.finditer(text):
-            role = next(r for r in _ROLE_LABELS if match[r] is not None)
-            span = self._name_span(match, role)
-            if span is not None:
+        found = []
+        for pattern, words in ((_PATTERN, _WORD_RE), (_FIELD_PATTERN, _FIELD_WORD_RE)):
+            for match in pattern.finditer(text):
+                role = next(r for r in _ROLE_LABELS if match[r] is not None)
+                span = self._name_span(match, role, words)
+                if span is not None:
+                    found.append(span)
+        # Both patterns usually find the same name: keep the longest span.
+        spans: list[PiiSpan] = []
+        for span in sorted(found, key=lambda s: (s.start, -len(s))):
+            if not spans or span.start >= spans[-1].end:
                 spans.append(span)
         return spans
 
-    def _name_span(self, match: re.Match[str], role: str) -> PiiSpan | None:
+    def _name_span(self, match: re.Match[str], role: str, words: re.Pattern[str]) -> PiiSpan | None:
+        offset = match.start("value")
         kept: list[re.Match[str]] = []
-        for word in _WORD_RE.finditer(match["value"]):
-            if _FIELD_LABELS.intersection(tokens(word[0])):
+        for word in words.finditer(match["value"]):
+            next_label = match.string.startswith(":", offset + word.end())
+            if next_label or _FIELD_LABELS.intersection(tokens(word[0])):
                 break
             kept.append(word)
         while kept and _is_connector(kept[-1][0]):
@@ -118,7 +140,6 @@ class PersonDetector:
         if not name_tokens or all(t in self._excluded for t in name_tokens):
             return None
         names = sum(not _is_connector(w[0]) for w in kept)
-        offset = match.start("value")
         return PiiSpan(
             PiiEntity.PERSON,
             offset + kept[0].start(),
@@ -129,4 +150,4 @@ class PersonDetector:
 
 
 def _is_connector(word: str) -> bool:
-    return re.fullmatch(_CONNECTOR, word) is not None
+    return re.fullmatch(_CONNECTOR, word, re.IGNORECASE) is not None

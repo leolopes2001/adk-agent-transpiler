@@ -40,6 +40,7 @@ SAMPLES = [
     REPO_ROOT / "samples" / "pedido_medico_ficticio.png",
     REPO_ROOT / "samples" / "pedido_injecao.png",
     REPO_ROOT / "samples" / "pedido_ambiguo.png",
+    REPO_ROOT / "tests" / "data" / "images" / "nomes_sem_capitalizacao.png",
 ]
 BOMB = REPO_ROOT / "tests" / "data" / "images" / "decompression_bomb.png"
 TOKEN = "security-token-" + "x" * 32
@@ -58,6 +59,14 @@ PII_VALUES = [
     "0000 1111 2222 3333",
     "João Exemplo",
     "CRM-MG 000000",
+    # nomes_sem_capitalizacao.png: labeled names in lower and mixed case (audit F01).
+    "maria",
+    "fictícia da silva",
+    "joana",
+    "FICCIONAL",
+    "teixeira",
+    "beatriz",
+    "Inventada",
 ]
 
 
@@ -142,6 +151,22 @@ async def test_results_and_logs_have_no_personal_data(
     captured = capfd.readouterr()
     for output in (logs.getvalue(), captured.out, captured.err):
         assert_no_pii(output)
+
+
+async def test_labeled_names_are_masked_whatever_their_case(server_url: str) -> None:
+    async with session(server_url) as client:
+        result = await extract(client, SAMPLES[3].read_bytes())
+
+    assert not result.isError
+    body = result.structuredContent
+    assert body is not None
+    lines = [line["text"] for line in body["lines"]]
+    assert "Paciente: [PESSOA_1]" in lines
+    assert lines[lines.index("Responsável:") + 1] == "[PESSOA_2]"
+    assert any(line.startswith("dra. [PESSOA_3]") for line in lines)
+    # Exam names stay readable.
+    assert {"1. Hemograma completo", "4. T4 livre", "7. PCR"} <= set(lines)
+    assert body["pii_counts"]["PERSON"] == 3
 
 
 async def test_logs_hold_no_document_text_or_image(server_url: str, logs: io.StringIO) -> None:

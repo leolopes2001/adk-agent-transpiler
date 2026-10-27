@@ -108,3 +108,65 @@ def test_exclusion_list_contains_every_catalog_token() -> None:
 
 def test_exclusion_list_has_no_common_given_names() -> None:
     assert not {"maria", "joao", "silva", "souza", "exemplo"} & medical_terms()
+
+
+# Audit F01: a labeled field is personal data whatever the case of its value,
+# and the value may come on the line after the label.
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Paciente: maria fictícia da silva", ["maria fictícia da silva"]),
+        ("Paciente: Maria FICTÍCIA da silva", ["Maria FICTÍCIA da silva"]),
+        ("paciente: maria ficticia", ["maria ficticia"]),
+        ("PACIENTE: Maria fictícia", ["Maria fictícia"]),
+        ("Nome: joana ficcional teixeira", ["joana ficcional teixeira"]),
+        ("Responsável: joana FICCIONAL teixeira", ["joana FICCIONAL teixeira"]),
+        ("Médico solicitante: joão exemplo", ["joão exemplo"]),
+        ("dra. beatriz Inventada — CRM-MG 000000", ["beatriz Inventada"]),
+        ("Dr. joão exemplo", ["joão exemplo"]),
+        ("Sra. maria fictícia", ["maria fictícia"]),
+    ],
+)
+def test_labeled_value_is_masked_whatever_its_case(text: str, expected: list[str]) -> None:
+    assert names(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Paciente:\nmaria fictícia da silva\nCPF: 000", ["maria fictícia da silva"]),
+        ("Responsável:\n  joana FICCIONAL teixeira", ["joana FICCIONAL teixeira"]),
+        ("Paciente:\nMaria Fictícia CPF 000", ["Maria Fictícia"]),
+        ("Paciente:\r\nmaria fictícia", ["maria fictícia"]),
+    ],
+)
+def test_value_on_the_line_after_the_label(text: str, expected: list[str]) -> None:
+    assert names(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Paciente: maria silva cpf 000", ["maria silva"]),
+        ("Paciente: maria silva Sexo: F", ["maria silva"]),
+        ("Paciente: maria silva, 42 anos", ["maria silva"]),
+        ("Paciente: maria silva — Data: 01/01/2026", ["maria silva"]),
+    ],
+)
+def test_lowercase_value_ends_at_the_next_field(text: str, expected: list[str]) -> None:
+    assert names(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Paciente: hemograma completo",
+        "paciente: em jejum",
+        "Paciente:\n1. Hemograma completo",
+        "Médico solicitante:\nExames solicitados:",
+        "Paciente:\n[PESSOA_1]",
+        "Nome do exame: hemograma completo",
+    ],
+)
+def test_lowercase_exams_and_labels_after_a_label_are_not_names(text: str) -> None:
+    assert names(text) == []
