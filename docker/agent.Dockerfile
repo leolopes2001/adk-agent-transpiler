@@ -25,5 +25,8 @@ COPY --from=builder /opt/venv /opt/venv
 # The root filesystem is read-only at run time; HOME points at the /tmp tmpfs.
 ENV PATH=/opt/venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/tmp
 WORKDIR /app
+# Mount point of the `generated` named volume: a new volume copies this
+# directory's ownership, so the transpiler can write to it on any host.
+RUN mkdir generated && chown 10001:10001 generated
 USER 10001:10001
 ENTRYPOINT ["lab-agent"]

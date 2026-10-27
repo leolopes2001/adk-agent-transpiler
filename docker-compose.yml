@@ -135,7 +135,11 @@ services:
     volumes:
       - ./specs:/app/specs:ro
       - ./samples:/app/inputs/samples:ro
-      - ./generated:/app/generated
+      # A named volume, not ./generated: on a Linux host a bind-mounted directory
+      # belongs to the host user (or to root, when Docker creates it), and UID
+      # 10001 could not write the generated code. Read it with
+      # `docker compose run --rm --entrypoint cat agent /app/generated/<agent>/agent.py`.
+      - generated:/app/generated
       - ./evidence:/app/evidence
     networks: [backend, egress]
     depends_on:
@@ -158,3 +162,4 @@ networks:
 
 volumes:
   pgdata: {}
+  generated: {}
