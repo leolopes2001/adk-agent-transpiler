@@ -66,6 +66,31 @@ def test_segments_respect_max_lines_length_and_duplicates() -> None:
     assert segments(text, max_lines=1) == ["TSH"]
 
 
+def test_two_character_segments_count_only_on_list_items() -> None:
+    text = "\n".join(
+        [
+            "2. T4",
+            "- Na",
+            "3) T3; K",
+            "4. [CPF_1]",
+            "5. RG: [RG_1]",
+            "Belo Horizonte, MG",
+            "Dr",
+            "SP",
+            "T4",
+        ]
+    )
+
+    assert segments(text, max_lines=60) == ["T4", "Na", "T3", "Belo Horizonte"]
+
+
+@pytest.mark.parametrize(
+    "noise", ["1. [PESSOA_1] x", "2. a", "- [CRM_1]", "3. Dr: [PESSOA_2]", "4. ;;", "5. ~~"]
+)
+def test_short_noise_on_list_items_is_not_a_segment(noise: str) -> None:
+    assert segments(noise, max_lines=60) == []
+
+
 def _scored(scores: Mapping[str, float]) -> Any:
     def respond(args: Mapping[str, Any]) -> dict[str, Any]:
         found = [
@@ -95,6 +120,20 @@ async def test_keeps_segments_whose_best_match_reaches_min_score() -> None:
     ]
     [(_, _, args)] = fake.calls
     assert args == {"queries": ["Hemograma completo", "TSH", "PCR"], "top_k": 1}
+
+
+async def test_unlisted_state_abbreviation_never_reaches_the_catalog() -> None:
+    fake = FakeMcp()
+    fake.script("rag", "batch_search", _scored({"MG": 1.0, "T4": 0.925}))
+    deps = RuntimeDeps.lazy()
+    deps.use(mcp=fake)
+    node = lexical_extract(name="lexical_extract", deps=deps, server="rag", tool="batch_search")
+
+    run = await run_node(node, _guarded("2. T4\nBelo Horizonte, MG"))
+
+    assert [m.text for m in ExamMentions.model_validate(run.output).items] == ["T4"]
+    [(_, _, args)] = fake.calls
+    assert "MG" not in args["queries"]
 
 
 async def test_document_without_segments_makes_no_call() -> None:

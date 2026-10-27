@@ -279,6 +279,8 @@ async def test_non_interactive_review_rejects_the_ambiguous_item(
 
     statuses = {e["mention"]: (e["status"], e["reason"]) for e in run.report["exams"]}
     assert statuses["T4"] == ("rejected", "needs_human_review")
+    sources = {e["mention"]: e["source"] for e in run.report["exams"]}
+    assert sources["T4"] == "both"
     assert run.report["outcome"] == "scheduled"
 
 

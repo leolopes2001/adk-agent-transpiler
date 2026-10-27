@@ -7,6 +7,11 @@ such as "Colesterol total e frações"). Segments that are headers, mostly
 placeholders or of implausible length are dropped; the rest go to the
 catalog search in one batch, and segments whose best match scores at least
 `min_score` become mentions.
+
+Two-character segments ("T4", "T3", "Na") count only on list items (a line
+that starts with an enumeration or bullet): elsewhere they are mostly state
+abbreviations and initials, and "MG" in "Belo Horizonte, MG" would be an
+exact catalog alias of Magnésio.
 """
 
 import re
@@ -30,7 +35,8 @@ from agent_runtime.schemas import ExamMention, ExamMentions, GuardedDocument
 from lab_common import logging as lab_logging
 from lab_common.contracts.rag import MAX_BATCH_QUERIES, BatchSearchResult
 
-MIN_SEGMENT_CHARS = 3
+MIN_SEGMENT_CHARS = 2
+MIN_UNLISTED_SEGMENT_CHARS = 3
 MAX_SEGMENT_CHARS = 80
 HEADER_LABELS = frozenset(
     {
@@ -82,9 +88,11 @@ def segments(text: str, max_lines: int) -> list[str]:
     found: list[str] = []
     seen: set[str] = set()
     for line in text.split("\n")[:max_lines]:
+        listed = strip_list_marker(line) != line.strip()
+        shortest = MIN_SEGMENT_CHARS if listed else MIN_UNLISTED_SEGMENT_CHARS
         for piece in _SEPARATORS.split(line):
             segment = strip_list_marker(piece.strip())
-            if not MIN_SEGMENT_CHARS <= len(segment) <= MAX_SEGMENT_CHARS:
+            if not shortest <= len(segment) <= MAX_SEGMENT_CHARS:
                 continue
             if _is_header(segment) or _mostly_placeholders(segment):
                 continue

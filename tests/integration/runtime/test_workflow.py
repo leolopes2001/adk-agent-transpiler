@@ -118,6 +118,8 @@ async def test_ambiguous_item_is_rejected_when_non_interactive(
     exams = {e["mention"]: e for e in run.report["exams"]}
     assert exams["T4"]["status"] == "rejected"
     assert exams["T4"]["reason"] == "needs_human_review"
+    # Found by the model and by the lexical extraction (two-character list item).
+    assert exams["T4"]["source"] == "both"
     assert exams["Hemograma completo"]["code"] == "LAB-10001"
     assert "review" in run.report["path"]
     assert run.report["appointment"]["status"] in {"scheduled", "replayed"}
