@@ -125,7 +125,8 @@ hex_ids = st.one_of(
     st.uuids().map(lambda u: str(u).upper()),
     st.binary(min_size=1, max_size=64).map(lambda b: hashlib.sha256(b).hexdigest()),
     st.binary(min_size=1, max_size=64).map(lambda b: hashlib.sha256(b).hexdigest().upper()),
-    st.binary(min_size=4, max_size=16).map(bytes.hex),
+    # A short id made only of digits ("1120000000") is a valid phone number, not a hex id.
+    st.binary(min_size=4, max_size=16).map(bytes.hex).filter(lambda h: not h.isdigit()),
 )
 
 
