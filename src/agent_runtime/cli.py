@@ -10,7 +10,9 @@ variable is listed, exit 8), that the generated code matches the spec
 the image is acceptable (exit 2). The workflow then runs with an in-memory
 session; review requests are answered at the terminal, choosing among the
 offered candidates only. In table mode a short header (agent and image)
-opens the run on stderr. The report goes to stdout. The JSON logs go to
+opens the run on stderr, with a transient progress indicator when both
+streams are terminals. Colour is off with NO_COLOR or off a terminal. The
+report goes to stdout. The JSON logs go to
 stderr and, by default, only errors, so the terminal shows the review
 questions, the report and the summary; --verbose (or LOG_LEVEL=INFO) shows
 every run event.
@@ -61,7 +63,14 @@ from agent_runtime.report import (
 )
 from agent_runtime.schemas import RunInput
 from agent_runtime.settings import AgentSettings, missing
-from agent_runtime.terminal import ask_review, welcome
+from agent_runtime.terminal import (
+    Progress,
+    ask_review,
+    color_enabled,
+    is_terminal,
+    stderr_console,
+    welcome,
+)
 from lab_common import logging as lab_logging
 from lab_common.mcp_server import LibraryLogFilter
 
@@ -78,7 +87,8 @@ REPORT_WIDTH = 120
 """Width of the table report when stdout is not a terminal (a file, a pipe, a capture)."""
 
 type ReviewPrompt = Callable[[Mapping[str, Any]], dict[str, Any]]
-type Announce = Callable[["LoadedAgent", str], None]
+type Announce = Callable[["LoadedAgent", str], Progress | None]
+"""Opens the run on the terminal; returns the progress indicator to drive, if any."""
 
 log = lab_logging.get_logger(__name__)
 
@@ -99,6 +109,8 @@ class LoadedAgent:
     spec_sha256: str
     output_format: str = "table"
     """Format of the spec's `present` node, used when --output is not given."""
+    stages: tuple[tuple[str, str], ...] = ()
+    """Long steps of the root workflow, in spec order, for the progress indicator."""
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -160,6 +172,50 @@ def _present_format(node: object) -> str | None:
     return None
 
 
+STAGE_LABELS = (
+    ("ocr_extract", "Lendo o pedido (OCR)"),
+    ("llm_extract", "Interpretando o pedido com a IA"),
+    ("rag_resolve", "Buscando os exames no catálogo"),
+    ("lexical_extract", "Buscando os exames no catálogo"),
+    ("schedule", "Registrando a solicitação"),
+)
+
+
+def _stage(nodes: list[Any]) -> tuple[str, str] | None:
+    """(name of the node whose output ends the step, label) for the longest step in `nodes`.
+
+    A model step ends with the output of its Agent, which is named after the agent.
+    """
+    by_kind = {n.get("kind"): n for n in nodes if isinstance(n, Mapping)}
+    for kind, label in STAGE_LABELS:
+        node = by_kind.get(kind)
+        if node is not None:
+            name = node.get("agent") if kind == "llm_extract" else node.get("id")
+            return str(name), label
+    return None
+
+
+def progress_stages(spec: object) -> tuple[tuple[str, str], ...]:
+    """Long steps of the root workflow in spec order; a subworkflow counts as
+    its longest step (the model before the catalog)."""
+    if not isinstance(spec, Mapping):
+        return ()
+    workflow = spec.get("workflow")
+    nodes = workflow.get("nodes") if isinstance(workflow, Mapping) else None
+    subworkflows = spec.get("subworkflows")
+    stages: list[tuple[str, str]] = []
+    for node in nodes if isinstance(nodes, list) else []:
+        inner = [node]
+        if isinstance(node, Mapping) and node.get("kind") == "subworkflow":
+            sub = subworkflows.get(node.get("ref")) if isinstance(subworkflows, Mapping) else None
+            sub_nodes = sub.get("nodes") if isinstance(sub, Mapping) else None
+            inner = sub_nodes if isinstance(sub_nodes, list) else []
+        stage = _stage(inner)
+        if stage is not None:
+            stages.append(stage)
+    return tuple(stages)
+
+
 def load_agent(agent_dir: Path, spec: Path, settings: AgentSettings) -> LoadedAgent:
     """Generated app after the manifest and location checks (exit 7 or 8 on failure)."""
     resolved = agent_dir.resolve()
@@ -173,7 +229,8 @@ def load_agent(agent_dir: Path, spec: Path, settings: AgentSettings) -> LoadedAg
         raise CliError(EXIT_STALE_CODE, "generated code has no readable manifest") from None
     spec_sha256 = _sha256(spec)
     try:
-        output_format = _present_format(json.loads(spec.read_text("utf-8"))) or "table"
+        spec_data = json.loads(spec.read_text("utf-8"))
+        output_format = _present_format(spec_data) or "table"
     except (OSError, ValueError):
         raise CliError(EXIT_CONFIG, "--spec file is not valid JSON") from None
     if manifest.get("spec_sha256") != spec_sha256:
@@ -193,6 +250,7 @@ def load_agent(agent_dir: Path, spec: Path, settings: AgentSettings) -> LoadedAg
         deps=deps if isinstance(deps, RuntimeDeps) else None,
         spec_sha256=spec_sha256,
         output_format=output_format,
+        stages=progress_stages(spec_data),
     )
 
 
@@ -273,12 +331,13 @@ def _failure(exc: BaseException) -> tuple[int, str]:
     return EXIT_DEPENDENCY, "INTERNAL_ERROR"
 
 
-async def _drive(
+async def _drive(  # noqa: PLR0913, PLR0917 - the run, plus what the operator sees
     runner: Runner,
     session_id: str,
     message: types.Content,
     trace: RunTrace,
     review: ReviewPrompt | None,
+    progress: Progress | None = None,
 ) -> None:
     """Runs to the end, answering review interrupts with `review`.
 
@@ -306,6 +365,8 @@ async def _drive(
                 log.warning("node_retry", node=name, error_code=event.error_code)
             elif event.output is not None:
                 log.info("node_finished", node=name, route=event.actions.route)
+                if progress is not None:
+                    progress.finished(name)
         earlier |= this_round
         pending = _interrupt(events)
         if pending is None:
@@ -314,7 +375,11 @@ async def _drive(
         if review is None:
             raise CliError(EXIT_DEPENDENCY, "the run asked for input in non-interactive mode")
         args = call.args or {}
+        if progress is not None:
+            progress.stop()
         answer = review(args.get("payload") or {})
+        if progress is not None:
+            progress.start()
         invocation_id = event.invocation_id
         message = types.Content(
             role="user",
@@ -361,8 +426,7 @@ async def execute(  # noqa: PLR0913 - the CLI options
     del path
     resolved = (settings.input_root / image).resolve()
     relative = resolved.relative_to(settings.input_root)
-    if announce is not None:
-        announce(agent, image)
+    progress = announce(agent, image) if announce is not None else None
 
     trace = RunTrace()
     service = InMemorySessionService()
@@ -379,7 +443,9 @@ async def execute(  # noqa: PLR0913 - the CLI options
     result: RunResult | None = None
     error_code: str | None = None
     try:
-        await _drive(runner, session.id, message, trace, review if interactive else None)
+        if progress is not None:
+            progress.start()
+        await _drive(runner, session.id, message, trace, review if interactive else None, progress)
         final = await service.get_session(
             app_name=agent.app.name, user_id=USER_ID, session_id=session.id
         )
@@ -395,6 +461,8 @@ async def execute(  # noqa: PLR0913 - the CLI options
         exit_code, error_code = _failure(exc)
         log.error("run_failed", error_code=error_code, error_type=type(_root_cause(exc)).__name__)
     finally:
+        if progress is not None:
+            progress.stop()
         trace.finish()
         if agent.deps is not None:
             await agent.deps.aclose()
@@ -437,12 +505,21 @@ def _configure_logging(level: str) -> None:
     warnings.filterwarnings("ignore", message=r"\[EXPERIMENTAL\]")
 
 
-def announcer(output: str | None) -> Announce:
-    """Welcome header on stderr, only when the report will be a table."""
+def announcer(output: str | None, *, verbose: bool = False) -> Announce:
+    """Welcome header and progress on stderr, only when the report will be a table.
 
-    def announce(agent: LoadedAgent, image: str) -> None:
-        if (output or agent.output_format) == "table":
-            welcome(Console(stderr=True), agent.name, agent.description, image)
+    The progress indicator also needs both streams on a terminal, and no
+    --verbose (its log lines would be drawn over).
+    """
+
+    def announce(agent: LoadedAgent, image: str) -> Progress | None:
+        if (output or agent.output_format) != "table":
+            return None
+        console = stderr_console()
+        welcome(console, agent.name, agent.description, image)
+        if verbose or not (is_terminal(sys.stdout) and is_terminal(sys.stderr)):
+            return None
+        return Progress(console, agent.stages)
 
     return announce
 
@@ -462,7 +539,7 @@ def main(argv: list[str] | None = None) -> int:
                 interactive=not args.non_interactive,
                 run_id=run_id,
                 settings=settings,
-                announce=announcer(args.output),
+                announce=announcer(args.output, verbose=args.verbose),
             )
         )
     except ConfigurationError as error:
@@ -477,14 +554,14 @@ def main(argv: list[str] | None = None) -> int:
     if output == "json":
         print(json.dumps(outcome.report, ensure_ascii=False, indent=2))
     else:
-        stdout = Console()
+        on_terminal = is_terminal(sys.stdout)
         sys.stdout.write(
             render_text(
                 outcome.report,
                 outcome.result,
                 verbose=args.verbose,
-                width=stdout.width if stdout.is_terminal else REPORT_WIDTH,
-                color=stdout.is_terminal and not stdout.no_color,
+                width=Console().width if on_terminal else REPORT_WIDTH,
+                color=color_enabled(sys.stdout),
             )
         )
     error_code = outcome.report.get("error_code")

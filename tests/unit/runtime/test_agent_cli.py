@@ -12,6 +12,7 @@ import logging
 import sys
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -19,10 +20,11 @@ import httpx
 import pytest
 import structlog
 from google.genai import errors as genai_errors
+from rich.console import Console
 from runtime_fakes import ApiAnswer, Confirm, FakeMcp, answer
 from structlog.testing import capture_logs
 
-from agent_runtime import cli
+from agent_runtime import cli, terminal
 from agent_runtime.errors import ConfigurationError, PermanentError, TransientError
 from agent_runtime.gateways.scheduler import SchedulerClient
 from agent_runtime.nodes.present import RunResult
@@ -562,3 +564,143 @@ def test_every_outcome_has_an_exit_code() -> None:
     outcomes = RunResult.model_fields["outcome"].annotation.__args__  # type: ignore[union-attr]
 
     assert set(EXIT_BY_OUTCOME) == set(outcomes)
+
+
+LOOKUP_SPEC = ROOT / "specs" / "examples" / "exam_lookup_only.json"
+OCR, IA, CATALOG, SCHEDULE = (
+    "Lendo o pedido (OCR)",
+    "Interpretando o pedido com a IA",
+    "Buscando os exames no catálogo",
+    "Registrando a solicitação",
+)
+
+
+def test_progress_stages_come_from_the_spec() -> None:
+    main_spec = json.loads(SPEC.read_text("utf-8"))
+    lookup = json.loads(LOOKUP_SPEC.read_text("utf-8"))
+
+    assert cli.progress_stages(main_spec) == (
+        ("ocr", OCR),
+        ("exam_extractor", IA),
+        ("resolve", CATALOG),
+        ("schedule", SCHEDULE),
+    )
+    assert [label for _, label in cli.progress_stages(lookup)] == [OCR, CATALOG, CATALOG]
+    assert cli.progress_stages({"workflow": "x"}) == ()
+
+
+def _progress() -> tuple[terminal.Progress, StringIO]:
+    out = StringIO()
+    console = Console(file=out, force_terminal=True, width=80)
+    agent = cli.load_agent(AGENT_DIR, SPEC, AgentSettings.from_env())
+    return terminal.Progress(console, agent.stages), out
+
+
+async def test_progress_follows_the_long_steps_and_disappears(services: Services) -> None:
+    progress, out = _progress()
+
+    outcome = await cli.execute(
+        image=SAMPLE,
+        agent_dir=AGENT_DIR,
+        spec=SPEC,
+        interactive=False,
+        run_id=RUN_ID,
+        settings=AgentSettings.from_env(),
+        announce=lambda agent, image: progress,
+    )
+
+    assert outcome.exit_code == 0
+    assert progress.shown == [f"{label}..." for label in (OCR, IA, CATALOG, SCHEDULE)]
+    assert progress._status is None
+    assert "Lendo o pedido (OCR)" in out.getvalue()
+
+
+async def test_progress_is_hidden_while_the_operator_reviews(
+    services: Services, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    services.lines = ["Exames:", "1. Hemograma completo", "2. T4"]
+    monkeypatch.setenv("FAKE_LLM_FIXTURE", str(FIXTURES / "pedido_ambiguo.json"))
+    progress, _ = _progress()
+    during_review: list[bool] = []
+
+    def none(payload: Mapping[str, Any]) -> dict[str, Any]:
+        during_review.append(progress._status is None)
+        return {"choices": {str(item["index"]): "none" for item in payload["items"]}}
+
+    await cli.execute(
+        image=SAMPLE,
+        agent_dir=AGENT_DIR,
+        spec=SPEC,
+        interactive=True,
+        run_id=RUN_ID,
+        settings=AgentSettings.from_env(),
+        review=none,
+        announce=lambda agent, image: progress,
+    )
+
+    assert during_review == [True]
+    assert progress.shown[-1] == f"{SCHEDULE}..."
+    assert progress._status is None
+
+
+class _Stream(StringIO):
+    def __init__(self, tty: bool) -> None:
+        super().__init__()
+        self._tty = tty
+
+    def isatty(self) -> bool:
+        return self._tty
+
+
+@pytest.mark.parametrize(
+    ("tty", "no_color", "expected"),
+    [(True, None, True), (True, "1", False), (True, "", True), (False, None, False)],
+)
+def test_color_follows_no_color_and_the_terminal(
+    monkeypatch: pytest.MonkeyPatch, tty: bool, no_color: str | None, expected: bool
+) -> None:
+    if no_color is None:
+        monkeypatch.delenv("NO_COLOR", raising=False)
+    else:
+        monkeypatch.setenv("NO_COLOR", no_color)
+
+    assert terminal.color_enabled(_Stream(tty)) is expected
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        # (--output, --verbose, stdout and stderr are terminals, progress shown)
+        (None, False, True, True),
+        ("table", False, True, True),
+        ("json", False, True, False),
+        (None, True, True, False),
+        (None, False, False, False),
+    ],
+)
+def test_progress_only_for_a_table_on_a_terminal(
+    services: Services,
+    monkeypatch: pytest.MonkeyPatch,
+    case: tuple[str | None, bool, bool, bool],
+) -> None:
+    output, verbose, ttys, shown = case
+    monkeypatch.setattr(cli, "is_terminal", lambda stream: ttys)
+    agent = cli.load_agent(AGENT_DIR, SPEC, AgentSettings.from_env())
+
+    progress = cli.announcer(output, verbose=verbose)(agent, SAMPLE)
+
+    assert isinstance(progress, terminal.Progress) is shown
+
+
+def test_off_a_terminal_the_cli_writes_no_escape_codes(
+    services: Services, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("FORCE_COLOR", "1")
+
+    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive"])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "\x1b[" not in captured.out
+    assert "\x1b[" not in captured.err
+    assert "Lendo o pedido (OCR)" not in captured.err
