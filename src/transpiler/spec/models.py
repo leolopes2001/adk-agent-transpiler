@@ -347,17 +347,18 @@ def find_inline_secrets(raw: object) -> list[JsonPath]:
     problem.
     """
     found: list[JsonPath] = []
-
-    def walk(value: object, path: JsonPath, keys_are_names: bool) -> None:
+    # Depth-first in document order, without recursion (the loader also caps depth).
+    # Each entry: value, its path, and whether its key is a name (not a field).
+    pending: list[tuple[object, JsonPath, bool]] = [(raw, (), True)]
+    while pending:
+        value, path, is_name = pending.pop()
+        if path and not is_name and isinstance(path[-1], str) and is_secret_key(path[-1]):
+            found.append(path)
+        children: list[tuple[object, JsonPath, bool]] = []
         if isinstance(value, dict):
-            for key, child in value.items():
-                child_path = (*path, key)
-                if not keys_are_names and is_secret_key(key):
-                    found.append(child_path)
-                walk(child, child_path, keys_are_names=not path and key in _NAMED_MAPS)
+            keys_are_names = len(path) == 1 and path[0] in _NAMED_MAPS
+            children = [(child, (*path, key), keys_are_names) for key, child in value.items()]
         elif isinstance(value, list):
-            for index, child in enumerate(value):
-                walk(child, (*path, index), keys_are_names=False)
-
-    walk(raw, (), keys_are_names=False)
+            children = [(child, (*path, index), True) for index, child in enumerate(value)]
+        pending.extend(reversed(children))
     return found

@@ -2,6 +2,9 @@
 
 `json.load` alone is too lenient for an input that drives code generation: it
 keeps the last of duplicated keys, accepts NaN and reads files of any size.
+Nesting is limited too (`MAX_SPEC_DEPTH`; the specs use 6 levels): a small
+file of deeply nested lists would otherwise exhaust the recursion limit of
+the parser or of a later pass and crash with a traceback (audit F06).
 """
 
 import hashlib
@@ -24,6 +27,8 @@ from transpiler.spec.models import AgentSpec, find_inline_secrets
 
 MAX_SPEC_BYTES = 1024 * 1024
 MAX_INSTRUCTION_BYTES = 32 * 1024
+MAX_SPEC_DEPTH = 32
+_TOO_DEEP = f"a spec excede {MAX_SPEC_DEPTH} níveis de aninhamento"
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,13 +94,32 @@ def parse_json(data: bytes) -> dict[str, Any]:
             Code.E_SPEC_JSON,
             f"JSON inválido na linha {exc.lineno}, coluna {exc.colno}: {exc.msg}",
         ) from exc
+    except RecursionError:
+        raise _fail(Stage.SCHEMA, Code.E_SCHEMA, _TOO_DEEP) from None
     if not isinstance(raw, dict):
         raise _fail(Stage.SCHEMA, Code.E_SPEC_JSON, "a spec deve ser um objeto JSON")
     return raw
 
 
+def _check_depth(raw: object) -> None:
+    """Fails on the first container nested deeper than MAX_SPEC_DEPTH (no recursion)."""
+    pending: list[tuple[object, tuple[str | int, ...]]] = [(raw, ())]
+    while pending:
+        value, path = pending.pop()
+        if isinstance(value, dict):
+            children: list[tuple[str | int, object]] = list(value.items())
+        elif isinstance(value, list):
+            children = list(enumerate(value))
+        else:
+            continue
+        if len(path) >= MAX_SPEC_DEPTH:
+            raise _fail(Stage.SCHEMA, Code.E_SCHEMA, _TOO_DEEP, json_pointer(path))
+        pending.extend((child, (*path, key)) for key, child in children)
+
+
 def parse_spec(raw: dict[str, Any]) -> AgentSpec:
     """Schema pass: inline-secret scan plus model validation, reporting every error found."""
+    _check_depth(raw)
     diagnostics = [
         Diagnostic(
             code=Code.E_INLINE_SECRET,

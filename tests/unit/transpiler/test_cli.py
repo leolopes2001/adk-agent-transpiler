@@ -210,3 +210,20 @@ def test_reconcile_without_a_direct_join_is_a_semantic_error(
     assert diagnostic["pointer"] == "/subworkflows/extraction/edges/1"
     assert '"fanout"' in diagnostic["message"]
     assert not (workdir / "out").exists()
+
+
+@pytest.mark.parametrize("depth", [1_100, 200_000])
+def test_deeply_nested_spec_is_a_schema_error(tmp_path: Path, capsys: Capture, depth: int) -> None:
+    # Audit F06: 1,100 nested lists (about 2 KB) ended in RecursionError and
+    # exit 1; 200,000 (about 400 KB, under the size limit) break the parser.
+    path = tmp_path / "deep.json"
+    path.write_text('{"x": ' + "[" * depth + "]" * depth + "}", encoding="utf-8")
+
+    code = main(["validate", str(path), "--format", "json"])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "Traceback" not in captured.err
+    [diagnostic] = json.loads(captured.out)["diagnostics"]
+    assert diagnostic["code"] == "E_SCHEMA"
+    assert "aninhamento" in diagnostic["message"]
