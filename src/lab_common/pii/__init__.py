@@ -12,6 +12,7 @@ from lab_common.pii.cpf import CpfDetector, is_valid_cpf
 from lab_common.pii.crm import CrmDetector
 from lab_common.pii.email import EmailDetector
 from lab_common.pii.health_card import HealthCardDetector
+from lab_common.pii.person import PersonDetector
 from lab_common.pii.phone import PhoneDetector
 from lab_common.pii.rg import RgDetector
 from lab_common.pii.types import PiiDetector, PiiEntity, PiiSpan
@@ -25,6 +26,7 @@ __all__ = [
     "CrmDetector",
     "EmailDetector",
     "HealthCardDetector",
+    "PersonDetector",
     "PhoneDetector",
     "PiiDetector",
     "PiiEntity",
@@ -46,6 +48,7 @@ def default_detectors() -> list[PiiDetector]:
         CepDetector(),
         AddressDetector(),
         BirthDateDetector(),
+        PersonDetector(),
         CrmDetector(),
         HealthCardDetector(),
     ]

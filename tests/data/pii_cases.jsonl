@@ -57,3 +57,21 @@
 {"id": "card-plan-name-only", "entity": "HEALTH_CARD", "text": "Convênio: Plano Exemplo Saúde (fictício)", "expected": []}
 {"id": "card-short-number", "entity": "HEALTH_CARD", "text": "Convênio: Plano 2026", "expected": []}
 {"id": "card-after-plan-name", "entity": "HEALTH_CARD", "text": "Convênio: Plano Exemplo nº 00001111", "expected": ["00001111"]}
+{"id": "person-patient-sample", "entity": "PERSON", "text": "Paciente: Maria Fictícia da Silva", "expected": ["Maria Fictícia da Silva"], "score": 0.85}
+{"id": "person-doctor-sample", "entity": "PERSON", "text": "Dr. João Exemplo — CRM-MG 000000", "expected": ["João Exemplo"]}
+{"id": "person-uppercase", "entity": "PERSON", "text": "PACIENTE: MARIA FICTÍCIA DA SILVA", "expected": ["MARIA FICTÍCIA DA SILVA"]}
+{"id": "person-nome-label", "entity": "PERSON", "text": "Nome: Maria Fictícia da Silva  CPF: 202.393.613-69", "expected": ["Maria Fictícia da Silva"]}
+{"id": "person-sra", "entity": "PERSON", "text": "Sra. Maria Fictícia", "expected": ["Maria Fictícia"]}
+{"id": "person-dra-initial", "entity": "PERSON", "text": "Dra. M. Exemplo", "expected": ["M. Exemplo"]}
+{"id": "person-medico-label", "entity": "PERSON", "text": "Médico solicitante: João Exemplo", "expected": ["João Exemplo"]}
+{"id": "person-responsavel", "entity": "PERSON", "text": "Responsável: João Exemplo", "expected": ["João Exemplo"]}
+{"id": "person-single-word", "entity": "PERSON", "text": "Paciente: Maria", "expected": ["Maria"], "score": 0.6}
+{"id": "person-stops-at-field", "entity": "PERSON", "text": "Dr. João Exemplo CRM 000000", "expected": ["João Exemplo"]}
+{"id": "person-no-label", "entity": "PERSON", "text": "Maria Fictícia da Silva", "expected": []}
+{"id": "person-lowercase-after-label", "entity": "PERSON", "text": "Paciente em jejum de 8 horas", "expected": []}
+{"id": "person-exam-after-label", "entity": "PERSON", "text": "Paciente: Hemograma Completo", "expected": []}
+{"id": "person-clinical-after-label", "entity": "PERSON", "text": "Paciente Diabético", "expected": []}
+{"id": "person-exam-line", "entity": "PERSON", "text": "4. T4 livre", "expected": []}
+{"id": "person-exam-pcr", "entity": "PERSON", "text": "7. PCR", "expected": []}
+{"id": "person-protein-c", "entity": "PERSON", "text": "Proteína C reativa", "expected": []}
+{"id": "person-label-inside-word", "entity": "PERSON", "text": "Pacientes atendidos", "expected": []}
