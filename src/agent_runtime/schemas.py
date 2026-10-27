@@ -13,10 +13,10 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from lab_common.contracts import rag
 from lab_common.contracts.ocr import OcrLine, OcrResult
 
 Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-Score = Annotated[float, Field(ge=0, le=1)]
 
 
 class _Schema(BaseModel):
@@ -71,11 +71,8 @@ type JoinResult = dict[str, Any]
 """What a JoinNode emits: each predecessor's output keyed by node name."""
 
 
-class Candidate(_Schema):
-    code: Annotated[str, Field(pattern=r"^LAB-\d{5}$")]
-    name: str
-    score: Score
-    matched_on: str
+Candidate = rag.Candidate
+"""A catalog exam as the RAG server returned it; codes only ever come from here."""
 
 
 class ResolvedExam(_Schema):

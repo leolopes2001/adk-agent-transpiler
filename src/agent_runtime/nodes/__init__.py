@@ -14,9 +14,11 @@ from google.adk.workflow import FunctionNode, RetryConfig
 
 from agent_runtime.bootstrap import RuntimeDeps
 from agent_runtime.nodes._common import NodeFunction
+from agent_runtime.nodes.confidence_gate import confidence_gate
 from agent_runtime.nodes.lexical_extract import lexical_extract
 from agent_runtime.nodes.llm_input import llm_input
 from agent_runtime.nodes.ocr_extract import ocr_extract
+from agent_runtime.nodes.rag_resolve import rag_resolve
 from agent_runtime.nodes.reconcile import reconcile
 from agent_runtime.nodes.untrusted_text_guard import untrusted_text_guard
 
@@ -56,27 +58,6 @@ def _pending(
         timeout=timeout,
         rerun_on_resume=rerun_on_resume,
     )
-
-
-def rag_resolve(  # noqa: PLR0913 - one keyword per node param
-    *,
-    name: str,
-    deps: RuntimeDeps,
-    server: str,
-    tool: str,
-    top_k: int = 5,
-    retry: RetryConfig | None = None,
-    timeout: float | None = None,
-) -> FunctionNode:
-    """Looks up catalog candidates for every mention."""
-    return _pending(name, retry=retry, timeout=timeout)
-
-
-def confidence_gate(
-    *, name: str, accept_threshold: float, review_threshold: float, min_margin: float
-) -> FunctionNode:
-    """Classifies candidates; routes `accepted`, `review` or `empty`."""
-    return _pending(name)
 
 
 def human_review(
