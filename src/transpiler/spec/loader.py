@@ -12,17 +12,18 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from transpiler.errors import (
+    Code,
+    Diagnostic,
+    Stage,
+    TranspileError,
+    diagnostics_from_validation_error,
+    json_pointer,
+)
 from transpiler.spec.models import AgentSpec, find_inline_secrets
 
 MAX_SPEC_BYTES = 1024 * 1024
 MAX_INSTRUCTION_BYTES = 32 * 1024
-
-
-class TranspileError(Exception):
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(f"{code}: {message}")
-        self.code = code
-        self.message = message
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,16 +40,22 @@ class InstructionFile:
     sha256: str
 
 
-def _read_limited(path: Path, limit: int, code: str, what: str) -> bytes:
+def _fail(stage: Stage, code: Code, message: str, pointer: str = "") -> TranspileError:
+    return TranspileError(stage, [Diagnostic(code=code, message=message, pointer=pointer)])
+
+
+def read_spec_bytes(path: Path) -> bytes:
     try:
         if not path.is_file():
-            raise TranspileError(code, f"{what} não encontrado ou não é um arquivo: {path}")
+            raise _fail(Stage.IO, Code.E_IO, f"arquivo de spec não encontrado: {path}")
         with path.open("rb") as handle:
-            data = handle.read(limit + 1)
+            data = handle.read(MAX_SPEC_BYTES + 1)
     except OSError as exc:
-        raise TranspileError(code, f"não foi possível ler {what} {path}: {exc.strerror}") from exc
-    if len(data) > limit:
-        raise TranspileError(code, f"{what} excede o limite de {limit} bytes: {path}")
+        raise _fail(Stage.IO, Code.E_IO, f"não foi possível ler {path}: {exc.strerror}") from exc
+    if len(data) > MAX_SPEC_BYTES:
+        raise _fail(
+            Stage.SCHEMA, Code.E_SPEC_TOO_LARGE, f"a spec excede {MAX_SPEC_BYTES} bytes: {path}"
+        )
     return data
 
 
@@ -56,70 +63,94 @@ def _reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
-            raise TranspileError("E_DUPLICATE_KEY", f'chave "{key}" repetida no mesmo objeto')
+            raise _fail(Stage.SCHEMA, Code.E_DUPLICATE_KEY, f'chave "{key}" repetida no objeto')
         result[key] = value
     return result
 
 
 def _reject_constant(name: str) -> None:
-    raise TranspileError("E_SPEC_JSON", f"{name} não é um valor JSON válido")
+    raise _fail(Stage.SCHEMA, Code.E_SPEC_JSON, f"{name} não é um valor JSON válido")
 
 
 def parse_json(data: bytes) -> dict[str, Any]:
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise TranspileError("E_SPEC_ENCODING", f"a spec não é UTF-8 válido: {exc}") from exc
+        raise _fail(
+            Stage.SCHEMA, Code.E_SPEC_ENCODING, f"a spec não é UTF-8 válido (byte {exc.start})"
+        ) from exc
     try:
         raw = json.loads(
             text, object_pairs_hook=_reject_duplicates, parse_constant=_reject_constant
         )
     except json.JSONDecodeError as exc:
-        raise TranspileError(
-            "E_SPEC_JSON", f"JSON inválido na linha {exc.lineno}, coluna {exc.colno}: {exc.msg}"
+        raise _fail(
+            Stage.SCHEMA,
+            Code.E_SPEC_JSON,
+            f"JSON inválido na linha {exc.lineno}, coluna {exc.colno}: {exc.msg}",
         ) from exc
     if not isinstance(raw, dict):
-        raise TranspileError("E_SPEC_JSON", "a spec deve ser um objeto JSON")
+        raise _fail(Stage.SCHEMA, Code.E_SPEC_JSON, "a spec deve ser um objeto JSON")
     return raw
 
 
 def parse_spec(raw: dict[str, Any]) -> AgentSpec:
-    secrets = find_inline_secrets(raw)
-    if secrets:
-        keys = ", ".join("/".join(str(part) for part in path) for path in secrets)
-        raise TranspileError("E_INLINE_SECRET", f"segredo literal na spec: {keys}")
+    """Schema pass: inline-secret scan plus model validation, reporting every error found."""
+    diagnostics = [
+        Diagnostic(
+            code=Code.E_INLINE_SECRET,
+            message=f'"{path[-1]}" parece um segredo com valor literal',
+            pointer=json_pointer(path),
+            hint=f'use "{path[-1]}_env" com o nome de uma variável de ambiente',
+        )
+        for path in find_inline_secrets(raw)
+    ]
     try:
-        return AgentSpec.model_validate(raw)
+        spec = AgentSpec.model_validate(raw)
     except ValidationError as exc:
-        raise TranspileError("E_SCHEMA", str(exc)) from exc
+        secret_pointers = {d.pointer for d in diagnostics}
+        diagnostics.extend(
+            d
+            for d in diagnostics_from_validation_error(exc, raw)
+            if not (d.code is Code.E_UNKNOWN_FIELD and d.pointer in secret_pointers)
+        )
+        raise TranspileError(Stage.SCHEMA, diagnostics) from exc
+    if diagnostics:
+        raise TranspileError(Stage.SCHEMA, diagnostics)
+    return spec
 
 
 def load_spec(path: Path) -> LoadedSpec:
-    data = _read_limited(path, MAX_SPEC_BYTES, "E_IO", "arquivo de spec")
+    data = read_spec_bytes(path)
     spec = parse_spec(parse_json(data))
     return LoadedSpec(path=path, sha256=hashlib.sha256(data).hexdigest(), spec=spec)
 
 
-def read_instruction(spec_dir: Path, relative_path: str) -> InstructionFile:
+def read_instruction(spec_dir: Path, relative_path: str, pointer: str = "") -> InstructionFile:
     """Reads an instruction file, which must live under the spec's directory."""
+
+    def fail(message: str) -> TranspileError:
+        return _fail(Stage.SEMANTIC, Code.E_INSTRUCTION_FILE, message, pointer)
+
     if Path(relative_path).is_absolute():
-        raise TranspileError(
-            "E_INSTRUCTION_FILE", f"instruction_file deve ser relativo: {relative_path}"
-        )
+        raise fail(f"instruction_file deve ser relativo: {relative_path}")
     base = spec_dir.resolve()
     target = (base / relative_path).resolve()
     if not target.is_relative_to(base):
-        raise TranspileError(
-            "E_INSTRUCTION_FILE",
-            f"instruction_file aponta para fora do diretório da spec: {relative_path}",
-        )
-    data = _read_limited(target, MAX_INSTRUCTION_BYTES, "E_INSTRUCTION_FILE", "instruction_file")
+        raise fail(f"instruction_file aponta para fora do diretório da spec: {relative_path}")
+    try:
+        if not target.is_file():
+            raise fail(f"instruction_file não encontrado: {relative_path}")
+        with target.open("rb") as handle:
+            data = handle.read(MAX_INSTRUCTION_BYTES + 1)
+    except OSError as exc:
+        raise fail(f"não foi possível ler {relative_path}: {exc.strerror}") from exc
+    if len(data) > MAX_INSTRUCTION_BYTES:
+        raise fail(f"instruction_file excede {MAX_INSTRUCTION_BYTES} bytes: {relative_path}")
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise TranspileError(
-            "E_INSTRUCTION_FILE", f"instruction_file não é UTF-8 válido: {relative_path}"
-        ) from exc
+        raise fail(f"instruction_file não é UTF-8 válido: {relative_path}") from exc
     return InstructionFile(
         relative_path=relative_path, text=text, sha256=hashlib.sha256(data).hexdigest()
     )

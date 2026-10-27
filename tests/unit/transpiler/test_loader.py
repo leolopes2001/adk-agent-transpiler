@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 
+from transpiler.errors import Stage, TranspileError
 from transpiler.spec.loader import (
     MAX_INSTRUCTION_BYTES,
     MAX_SPEC_BYTES,
-    TranspileError,
     load_spec,
     parse_json,
     read_instruction,
@@ -20,7 +20,8 @@ type SpecDict = dict[str, Any]
 
 
 def _code(exc: pytest.ExceptionInfo[TranspileError]) -> str:
-    return exc.value.code
+    [diagnostic] = exc.value.diagnostics
+    return diagnostic.code
 
 
 def test_load_valid_spec(spec_dict: SpecDict, write_spec: Any) -> None:
@@ -36,6 +37,7 @@ def test_missing_file(tmp_path: Path) -> None:
     with pytest.raises(TranspileError) as exc:
         load_spec(tmp_path / "nope.json")
     assert _code(exc) == "E_IO"
+    assert exc.value.exit_code == 1
 
 
 def test_directory_is_not_a_spec(tmp_path: Path) -> None:
@@ -50,8 +52,8 @@ def test_spec_size_limit(tmp_path: Path) -> None:
 
     with pytest.raises(TranspileError) as exc:
         load_spec(path)
-    assert _code(exc) == "E_IO"
-    assert "limite" in exc.value.message
+    assert _code(exc) == "E_SPEC_TOO_LARGE"
+    assert exc.value.stage is Stage.SCHEMA
 
 
 def test_not_utf8() -> None:
@@ -95,6 +97,13 @@ def test_schema_error(spec_dict: SpecDict, write_spec: Any) -> None:
     with pytest.raises(TranspileError) as exc:
         load_spec(write_spec(spec_dict))
     assert _code(exc) == "E_SCHEMA"
+
+
+def test_instruction_error_carries_pointer(tmp_path: Path) -> None:
+    with pytest.raises(TranspileError) as exc:
+        read_instruction(tmp_path, "nope.md", pointer="/llm_agents/a/instruction_file")
+    assert exc.value.diagnostics[0].pointer == "/llm_agents/a/instruction_file"
+    assert exc.value.stage is Stage.SEMANTIC
 
 
 def test_read_instruction(tmp_path: Path) -> None:
