@@ -67,6 +67,23 @@ def test_param_out_of_range(spec_dict: SpecDict) -> None:
     assert diagnostic.node_id == "resolve"
 
 
+@pytest.mark.parametrize("top_k", [11, 20])
+def test_top_k_above_the_rag_limit_is_rejected(spec_dict: SpecDict, top_k: int) -> None:
+    spec_dict["workflow"]["nodes"][3]["params"] = {"top_k": top_k}
+
+    diagnostic = _single(spec_dict)
+
+    assert diagnostic.code is Code.E_SCHEMA
+    assert diagnostic.pointer == "/workflow/nodes/3/params/top_k"
+    assert "10" in diagnostic.message
+
+
+def test_top_k_at_the_rag_limit_is_accepted(spec_dict: SpecDict) -> None:
+    spec_dict["workflow"]["nodes"][3]["params"] = {"top_k": 10}
+
+    parse_spec(spec_dict)
+
+
 def test_unknown_field_in_subworkflow(spec_dict: SpecDict) -> None:
     spec_dict["subworkflows"]["extraction"]["nodes"][2]["retry"] = {}
 

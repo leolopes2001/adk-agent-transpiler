@@ -18,6 +18,8 @@ from typing import Annotated, Literal, Self
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from lab_common.contracts.rag import MAX_TOP_K
+
 IDENTIFIER_PATTERN = r"^[a-z][a-z0-9_]{0,62}$"
 ENV_VAR_PATTERN = r"^[A-Z][A-Z0-9_]{1,63}$"
 NODE_REF_PATTERN = r"^(START|[a-z][a-z0-9_]{0,62})$"
@@ -155,7 +157,8 @@ class ReconcileParams(_Model):
 
 
 class RagResolveParams(_Model):
-    top_k: Annotated[int, Field(ge=1, le=20)] = 5
+    top_k: Annotated[int, Field(ge=1, le=MAX_TOP_K)] = 5
+    """Capped by the RAG server's contract, which rejects larger values."""
 
 
 class ConfidenceGateParams(_Model):

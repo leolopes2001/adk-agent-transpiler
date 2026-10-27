@@ -63,7 +63,7 @@ def specs(draw: st.DrawFn) -> tuple[dict[str, Any], str]:
             "kind": "rag_resolve",
             "server": "rag",
             "tool": "batch_search",
-            "params": {"top_k": draw(st.integers(1, 20))},
+            "params": {"top_k": draw(st.integers(1, 10))},
             "timeout_s": 60,
         },
         {
