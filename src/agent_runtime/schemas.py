@@ -43,13 +43,30 @@ class GuardedDocument(_Schema):
     injection: InjectionReport
 
 
-class ExtractedExam(_Schema):
+def _without_additional_properties(schema: dict[str, Any]) -> None:
+    schema.pop("additionalProperties", None)
+
+
+class _LlmSchema(_Schema):
+    """Schema the model must answer in (`Agent.output_schema`).
+
+    Validation still forbids unknown fields; only the JSON schema sent to the
+    model leaves out `additionalProperties`, which the Gemini API rejects in a
+    response schema (400 INVALID_ARGUMENT).
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", json_schema_extra=_without_additional_properties
+    )
+
+
+class ExtractedExam(_LlmSchema):
     name: Annotated[str, Field(min_length=2, max_length=120)]
     evidence: Annotated[str, Field(min_length=1, max_length=200)]
     """Text copied from the document; checked for grounding by reconcile."""
 
 
-class ExtractedExams(_Schema):
+class ExtractedExams(_LlmSchema):
     exams: Annotated[list[ExtractedExam], Field(max_length=30)]
 
 
