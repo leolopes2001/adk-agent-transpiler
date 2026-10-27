@@ -37,6 +37,7 @@ CORPUS = {
     "E_JOIN_ARITY": "/workflow/nodes/9",
     "E_UNCONDITIONAL_CYCLE": "/workflow/nodes/2",
     "E_SUBWORKFLOW_CYCLE": "/subworkflows/extraction/nodes/4/ref",
+    "E_JOIN_ROUTED_INPUT": "/workflow/edges/7/route",
 }
 
 
@@ -218,3 +219,19 @@ def test_diagnostics_name_the_node(spec_dict: SpecDict, check: Check) -> None:
     [diagnostic] = check(spec_dict)
     assert (diagnostic.node_id, diagnostic.kind) == ("schedule", "schedule")
     assert ROOT_NODES.index("schedule") == 6
+
+
+def test_join_rejects_routed_inputs(spec_dict: SpecDict, check: Check) -> None:
+    spec_dict["workflow"]["nodes"].append({"id": "wait", "kind": "join"})
+    _edges(spec_dict)[7]["to"] = "wait"  # gate --accepted--> wait
+    _edges(spec_dict)[10]["to"] = "wait"  # review --confirmed--> wait
+    _edges(spec_dict).append({"from": "wait", "to": "schedule"})
+
+    routed = [d for d in check(spec_dict) if d.code is Code.E_JOIN_ROUTED_INPUT]
+    assert [d.pointer for d in routed] == ["/workflow/edges/7/route", "/workflow/edges/10/route"]
+    assert routed[0].hint is not None
+    assert "incondicionais" in routed[0].hint
+
+
+def test_join_with_unconditional_inputs_is_fine(spec_dict: SpecDict, check: Check) -> None:
+    assert [d for d in check(spec_dict) if d.code is Code.E_JOIN_ROUTED_INPUT] == []

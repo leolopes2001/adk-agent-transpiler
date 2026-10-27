@@ -127,3 +127,14 @@ def test_registry_is_read_only() -> None:
 def test_unknown_kind() -> None:
     with pytest.raises(ValueError, match="shell"):
         kind_spec("shell")
+
+
+def test_tools_are_declared_for_kinds_that_call_a_tool() -> None:
+    with_tools = {kind: spec.tools for kind, spec in REGISTRY.items() if spec.tools}
+
+    assert with_tools == {
+        NodeKind.OCR_EXTRACT: {"extract_text"},
+        NodeKind.LEXICAL_EXTRACT: {"batch_search"},
+        NodeKind.RAG_RESOLVE: {"batch_search"},
+    }
+    assert all(("tool" in spec.requires) == bool(spec.tools) for spec in REGISTRY.values())

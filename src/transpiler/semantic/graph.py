@@ -181,6 +181,18 @@ def _fan_in(graph: GraphView) -> Iterator[Diagnostic]:
                     Code.E_JOIN_ARITY,
                     f'join "{node_id}" precisa de ao menos 2 predecessores (tem {len(sources)})',
                 )
+            for edge in incoming:
+                if edge.route is not None:
+                    # JoinNode waits for every predecessor; a route not taken blocks it forever.
+                    yield edge_diagnostic(
+                        graph,
+                        edge,
+                        Code.E_JOIN_ROUTED_INPUT,
+                        f'join "{node_id}" recebe a rota "{edge.route}" de "{edge.source}"; '
+                        "o join esperaria para sempre se essa rota não for tomada",
+                        field="route",
+                        hint="ligue ao join só arestas incondicionais (ramos que sempre executam)",
+                    )
             continue
         unconditional = [e for e in incoming if e.route is None]
         if len(unconditional) >= 2:  # noqa: PLR2004

@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from transpiler.errors import Code, Diagnostic, json_pointer
 from transpiler.registry import NodeKind
 from transpiler.semantic.context import GraphView, SemanticContext, node_diagnostic
-from transpiler.spec.models import START, NodeSpec, SubworkflowNode
+from transpiler.spec.models import START, LlmExtractNode, NodeSpec, SubworkflowNode
 
 
 @dataclass
@@ -139,5 +139,28 @@ def _pii_policy(ctx: SemanticContext) -> Iterator[Diagnostic]:
         )
 
 
+def _llm_input_trust(ctx: SemanticContext) -> Iterator[Diagnostic]:
+    # llm_extract always receives document text, which comes from OCR and is never trusted.
+    for graph, node in ctx.nodes():
+        if not isinstance(node, LlmExtractNode):
+            continue
+        agent = ctx.spec.llm_agents.get(node.agent)
+        if agent is not None and agent.input_trust != "untrusted":
+            yield node_diagnostic(
+                graph,
+                node,
+                Code.E_LLM_EXTRACT_REQUIRES_UNTRUSTED,
+                f'o agente "{node.agent}" recebe texto do documento e não pode ser '
+                f'input_trust "{agent.input_trust}"',
+                field="agent",
+                hint=f'defina llm_agents.{node.agent}.input_trust como "untrusted"',
+            )
+
+
 def check(ctx: SemanticContext) -> list[Diagnostic]:
-    return [*_guard_and_gate(ctx), *_agent_tools(ctx), *_pii_policy(ctx)]
+    return [
+        *_guard_and_gate(ctx),
+        *_agent_tools(ctx),
+        *_llm_input_trust(ctx),
+        *_pii_policy(ctx),
+    ]

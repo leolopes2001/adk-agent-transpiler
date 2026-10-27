@@ -69,6 +69,8 @@ class NodeKindSpec:
     rerun_on_resume: bool = False
     join_inputs: tuple[PortType, ...] = ()
     """For kinds fed by a join: the exact types the join must combine, in sorted order."""
+    tools: frozenset[str] = frozenset()
+    """MCP tools the runtime factory knows how to call, for kinds that require a tool."""
 
     @property
     def is_router(self) -> bool:
@@ -100,6 +102,7 @@ REGISTRY: Mapping[NodeKind, NodeKindSpec] = MappingProxyType(
                 adk_primitive="function",
                 factory="ocr_extract",
                 accepts_retry=True,
+                tools=frozenset({"extract_text"}),
             ),
             NodeKindSpec(
                 kind=NodeKind.UNTRUSTED_TEXT_GUARD,
@@ -127,6 +130,7 @@ REGISTRY: Mapping[NodeKind, NodeKindSpec] = MappingProxyType(
                 adk_primitive="function",
                 factory="lexical_extract",
                 accepts_retry=True,
+                tools=frozenset({"batch_search"}),
             ),
             NodeKindSpec(
                 kind=NodeKind.JOIN,
@@ -153,6 +157,7 @@ REGISTRY: Mapping[NodeKind, NodeKindSpec] = MappingProxyType(
                 adk_primitive="function",
                 factory="rag_resolve",
                 accepts_retry=True,
+                tools=frozenset({"batch_search"}),
             ),
             NodeKindSpec(
                 kind=NodeKind.CONFIDENCE_GATE,

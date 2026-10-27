@@ -4,7 +4,7 @@ from collections import Counter
 from collections.abc import Iterator
 
 from transpiler.errors import Code, Diagnostic, TranspileError, json_pointer
-from transpiler.semantic.context import SemanticContext, node_diagnostic
+from transpiler.semantic.context import SemanticContext, kind_of, node_diagnostic
 from transpiler.spec.loader import read_instruction
 from transpiler.spec.models import (
     LexicalExtractNode,
@@ -27,6 +27,16 @@ def _node_refs(ctx: SemanticContext) -> Iterator[Diagnostic]:
     spec = ctx.spec
     for graph, node in ctx.nodes():
         if isinstance(node, OcrExtractNode | LexicalExtractNode | RagResolveNode):
+            accepted = kind_of(node).tools
+            if node.tool not in accepted:
+                yield node_diagnostic(
+                    graph,
+                    node,
+                    Code.E_TOOL_KIND_MISMATCH,
+                    f'{node.kind} não sabe chamar a tool "{node.tool}"',
+                    field="tool",
+                    hint=f"tools aceitas por {node.kind}: {', '.join(sorted(accepted))}",
+                )
             server = spec.mcp_servers.get(node.server)
             if server is None:
                 message, hint = _unknown("servidor MCP", node.server, list(spec.mcp_servers))

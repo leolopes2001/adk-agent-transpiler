@@ -22,6 +22,7 @@ def _codes(diagnostics: list[Diagnostic], code: Code) -> list[Diagnostic]:
 CORPUS = {
     "E_UNKNOWN_REF": "/workflow/nodes/3/server",
     "E_TOOL_NOT_ALLOWED": "/workflow/nodes/3/tool",
+    "E_TOOL_KIND_MISMATCH": "/workflow/nodes/0/tool",
     "E_AGENT_REUSED": "/subworkflows/extraction/nodes/4/agent",
     "E_INSTRUCTION_FILE": "/llm_agents/extractor_agent/instruction_file",
     "W_UNUSED_DECLARATION": "/models/spare",
@@ -116,3 +117,24 @@ def test_model_of_unused_agent_is_unused(spec_dict: SpecDict, check: Check) -> N
 
     pointers = {d.pointer for d in _codes(check(spec_dict), Code.W_UNUSED_DECLARATION)}
     assert pointers == {"/llm_agents/idle", "/models/other"}
+
+
+@pytest.mark.parametrize(
+    ("node", "tool", "accepted"),
+    [(0, "batch_search", "extract_text"), (3, "extract_text", "batch_search")],
+)
+def test_tool_must_match_kind(
+    spec_dict: SpecDict, check: Check, node: int, tool: str, accepted: str
+) -> None:
+    for server in spec_dict["mcp_servers"].values():
+        server["allowed_tools"] = ["extract_text", "batch_search"]
+    spec_dict["workflow"]["nodes"][node]["tool"] = tool
+
+    [diagnostic] = _codes(check(spec_dict), Code.E_TOOL_KIND_MISMATCH)
+    assert diagnostic.pointer == f"/workflow/nodes/{node}/tool"
+    assert diagnostic.hint is not None
+    assert diagnostic.hint.endswith(accepted)
+
+
+def test_matching_tools_pass(spec_dict: SpecDict, check: Check) -> None:
+    assert _codes(check(spec_dict), Code.E_TOOL_KIND_MISMATCH) == []

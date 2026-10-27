@@ -25,6 +25,7 @@ CORPUS = {
     "E_UNTRUSTED_AGENT_HAS_TOOLS": "/llm_agents/extractor_agent/tools",
     "E_AGENT_TOOLS_UNSUPPORTED": "/llm_agents/extractor_agent/tools",
     "E_PII_POLICY": "/policies/pii/fail_closed",
+    "E_LLM_EXTRACT_REQUIRES_UNTRUSTED": "/subworkflows/extraction/nodes/0/agent",
 }
 
 
@@ -78,10 +79,24 @@ def test_review_path_still_needs_gate(spec_dict: SpecDict, check: Check) -> None
     assert ("E_SCHEDULE_NOT_GATED", "/workflow/nodes/6") in _found(check(spec_dict))
 
 
-def test_trusted_agent_without_tools_is_fine(spec_dict: SpecDict, check: Check) -> None:
+def test_llm_extract_requires_untrusted_agent(spec_dict: SpecDict, check: Check) -> None:
     spec_dict["llm_agents"]["extractor_agent"]["input_trust"] = "trusted"
 
-    assert check(spec_dict) == []
+    [diagnostic] = check(spec_dict)
+    assert diagnostic.code is Code.E_LLM_EXTRACT_REQUIRES_UNTRUSTED
+    assert diagnostic.pointer == "/subworkflows/extraction/nodes/0/agent"
+    assert diagnostic.hint == 'defina llm_agents.extractor_agent.input_trust como "untrusted"'
+
+
+def test_unused_trusted_agent_is_not_an_input_trust_error(
+    spec_dict: SpecDict, check: Check
+) -> None:
+    spec_dict["llm_agents"]["spare"] = {
+        **spec_dict["llm_agents"]["extractor_agent"],
+        "input_trust": "trusted",
+    }
+
+    assert {d.code for d in check(spec_dict)} == {Code.W_UNUSED_DECLARATION}
 
 
 def test_pii_policy_is_unconditional(spec_dict: SpecDict, check: Check) -> None:
