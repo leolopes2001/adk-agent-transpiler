@@ -42,10 +42,13 @@ _WORD = (
     rf"(?:[{_UPPER}][{_LOWER}]+(?:['\u2019\-][{_UPPER}{_LOWER}]+)*"  # Maria, D'Ávila, Ana-Clara
     rf"|[{_UPPER}]{{2,}}(?:['\u2019\-][{_UPPER}]+)*"  # MARIA
     rf"|[{_UPPER}]\.)"  # J.
+    # Whole words only: "IgM" or "NS1" must not shrink to "Ig" or "NS", which
+    # would no longer match the exclusion list.
+    r"(?!\w)"
 )
 _CONNECTOR = r"(?:d[aeo]s?|D[AEO]S?|e|E)"
 _PATTERN = re.compile(
-    rf"(?<![\w.])(?i:{_LABEL})(?![\w])[^\S\n]*[:\-\u2013]?[^\S\n]*"
+    rf"(?<![\w.])(?i:{_LABEL})(?:(?<=\.)|(?!\w))[^\S\n]*[:\-\u2013]?[^\S\n]*"
     rf"(?P<value>{_WORD}(?:[^\S\n]+(?:{_CONNECTOR}[^\S\n]+)?{_WORD})*)"
 )
 _WORD_RE = re.compile(rf"{_WORD}|{_CONNECTOR}")

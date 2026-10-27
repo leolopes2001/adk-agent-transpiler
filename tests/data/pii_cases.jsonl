@@ -75,3 +75,4 @@
 {"id": "person-exam-pcr", "entity": "PERSON", "text": "7. PCR", "expected": []}
 {"id": "person-protein-c", "entity": "PERSON", "text": "Proteína C reativa", "expected": []}
 {"id": "person-label-inside-word", "entity": "PERSON", "text": "Pacientes atendidos", "expected": []}
+{"id": "person-label-glued", "entity": "PERSON", "text": "Dr.João Exemplo", "expected": ["João Exemplo"]}
