@@ -24,7 +24,6 @@ agent = [
 ocr = [
     "mcp>=1.24,<2",
     "uvicorn",
-    "pytesseract",
     "opencv-python-headless",
     "pillow",
     "anyio",
