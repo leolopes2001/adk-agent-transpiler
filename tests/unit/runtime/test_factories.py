@@ -1,6 +1,5 @@
 import socket
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 from google.adk import Workflow
@@ -10,7 +9,6 @@ from pydantic import ValidationError
 from agent_runtime import nodes, schemas
 from agent_runtime.bootstrap import HttpServiceConfig, McpServerConfig, RuntimeDeps
 from agent_runtime.models import resolve_model
-from agent_runtime.nodes import _not_implemented
 
 pytestmark = pytest.mark.unit
 
@@ -86,6 +84,18 @@ def test_retry_and_timeout_reach_the_node(deps: RuntimeDeps) -> None:
     assert ocr.timeout == 45.0
     assert ocr.retry_config is not None
     assert ocr.retry_config.max_attempts == 3
+    # Only transient failures are retried (ADR-0009).
+    assert ocr.retry_config.exceptions == ["TransientError", "NodeTimeoutError"]
+
+
+def test_nodes_without_io_have_no_retry(deps: RuntimeDeps) -> None:
+    no_io = [
+        n
+        for n in _all_nodes(deps)
+        if n.name not in {"ocr", "lexical_extract", "resolve", "schedule"}
+    ]
+
+    assert all(node.retry_config is None and node.timeout is None for node in no_io)
 
 
 def test_only_human_review_reruns_on_resume(deps: RuntimeDeps) -> None:
@@ -94,7 +104,7 @@ def test_only_human_review_reruns_on_resume(deps: RuntimeDeps) -> None:
     assert rerun == ["review"]
 
 
-def test_stub_nodes_build_a_workflow(deps: RuntimeDeps) -> None:
+def test_nodes_build_a_workflow(deps: RuntimeDeps) -> None:
     ocr, guard, *_, present, abort = _all_nodes(deps)
 
     workflow = Workflow(
@@ -106,11 +116,6 @@ def test_stub_nodes_build_a_workflow(deps: RuntimeDeps) -> None:
         ],
     )
     assert workflow.name == "skeleton"
-
-
-async def test_stub_function_raises_until_phase_06() -> None:
-    with pytest.raises(NotImplementedError, match="phase 06"):
-        await _not_implemented("ocr")(MagicMock(), None)
 
 
 def test_runtime_deps_records_configuration(deps: RuntimeDeps) -> None:
