@@ -27,3 +27,6 @@ generated/
 .DS_Store
 .idea/
 .vscode/
+
+# Logs saved by the e2e tests (KEEP_EVIDENCE=1 or a failure); a CI artifact
+evidence/e2e/
