@@ -4,7 +4,7 @@
 #   docker compose run --rm transpile          # spec -> generated code (named volume)
 #   docker compose run --rm export-generated   # copy it to ./generated on the host
 #   docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png
-#   docker compose down -v
+#   docker compose --profile "*" down -v      # also removes the agent/tool network and volume
 #
 # Networks: `backend` is internal (no internet) and holds every service; only the
 # agent also joins `egress` to reach Gemini, and only the API joins `edge`, which
