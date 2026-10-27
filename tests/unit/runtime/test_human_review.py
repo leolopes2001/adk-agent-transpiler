@@ -81,7 +81,7 @@ def test_apply_choices(response: Any, expected: tuple[str, str | None, str | Non
         assert item.selected is None or item.selected in item.candidates
 
 
-def test_choice_of_an_already_accepted_code_is_not_duplicated() -> None:
+def test_choice_of_an_already_accepted_code_keeps_the_item_as_already_accepted() -> None:
     decision = GateDecision(
         items=[
             _item("Hemograma completo", "accepted", HEMOGRAMA),
@@ -89,8 +89,28 @@ def test_choice_of_an_already_accepted_code_is_not_duplicated() -> None:
         ]
     )
 
-    assert _statuses(apply_choices(decision, {"choices": {"1": "LAB-10001"}}, 3)) == [
-        ("accepted", "LAB-10001", None)
+    reviewed = apply_choices(decision, {"choices": {"1": "LAB-10001"}}, 3)
+
+    assert _statuses(reviewed) == [
+        ("accepted", "LAB-10001", None),
+        ("rejected", None, "already_accepted"),
+    ]
+    assert [item.mention.text for item in reviewed.items] == ["Hemograma completo", "Hemograma"]
+
+
+def test_two_review_items_choosing_the_same_code_keep_both_lines() -> None:
+    decision = GateDecision(
+        items=[
+            _item("T4", "review", T4_FREE, T4_TOTAL),
+            _item("T4 L", "review", T4_FREE, T4_TOTAL),
+        ]
+    )
+
+    reviewed = apply_choices(decision, {"choices": {"0": "LAB-10044", "1": "LAB-10044"}}, 3)
+
+    assert _statuses(reviewed) == [
+        ("accepted", "LAB-10044", "reviewed"),
+        ("rejected", None, "already_accepted"),
     ]
 
 

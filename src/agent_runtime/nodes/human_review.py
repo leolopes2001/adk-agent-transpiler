@@ -5,7 +5,9 @@ Interactive runs (`run.interactive`) interrupt once with a `RequestInput`
 `max_candidates` options taken from the item's own candidates. The node
 reruns on resume and reads the answer `{"choices": {"<index>": "<code>" |
 "none"}}`. A choice outside the offered codes rejects the item
-(`invalid_review_response`): the operator picks, never types a code.
+(`invalid_review_response`): the operator picks, never types a code. A
+choice of a code another item already accepted keeps the item, rejected as
+`already_accepted`: every mention of the order stays in the result.
 
 Non-interactive runs reject review items (`needs_human_review`). Route:
 `confirmed` when at least one item ends accepted, else `rejected`.
@@ -89,7 +91,7 @@ def apply_choices(decision: GateDecision, response: object, max_candidates: int)
         elif not isinstance(choice, str) or choice not in offered:
             items.append(_rejected(item, "invalid_review_response"))
         elif choice in accepted_codes:
-            continue
+            items.append(_rejected(item, "already_accepted"))
         else:
             accepted_codes.add(choice)
             items.append(
