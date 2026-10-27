@@ -6,11 +6,15 @@ exists only in that call's locals: it is never returned, logged, written to
 disk or attached to an exception. If masking fails or leaves anything behind
 (the redactor's re-scan), the call fails with `PII_ENGINE_FAILURE` and no text.
 
+Every path except `/health` requires `Authorization: Bearer <MCP_AUTH_TOKEN>`;
+the check wraps the whole SSE app, so both `/sse` and `/messages/` are covered.
+
 Errors are tool results with `isError: true` and a JSON body
 `{code, message, retryable}` (`OcrToolError`). They are built here instead of
 raised, because FastMCP would prefix the message of a raised exception.
 """
 
+import hmac
 import json
 import logging
 import time
@@ -22,7 +26,9 @@ import anyio.to_thread
 import structlog
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent
-from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from lab_common import logging as lab_logging
 from lab_common.contracts.ocr import EngineInfo, OcrLine, OcrResult
@@ -216,9 +222,61 @@ def _ensure_json_logging(settings: OcrSettings) -> None:
         lab_logging.configure(SERVICE, settings.log_level)
 
 
+class BearerAuthMiddleware:
+    """Rejects HTTP requests without the bearer token, except on public paths.
+
+    The token is compared in constant time; the 401 body and the log line never
+    include what the client sent.
+    """
+
+    def __init__(self, app: ASGIApp, token: str, public_paths: frozenset[str]) -> None:
+        self._app = app
+        self._expected = f"bearer {token}".encode()
+        self._public_paths = public_paths
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["path"] in self._public_paths:
+            await self._app(scope, receive, send)
+            return
+        if not self._authorized(scope):
+            log.warning("auth_failed", path=scope["path"] if scope["path"] in _MCP_PATHS else None)
+            response = JSONResponse(
+                {"code": "UNAUTHORIZED", "message": "missing or invalid bearer token"},
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            await response(scope, receive, send)
+            return
+        await self._app(scope, receive, send)
+
+    def _authorized(self, scope: Scope) -> bool:
+        values = [v for k, v in scope["headers"] if k == b"authorization"]
+        if len(values) != 1:
+            return False
+        scheme, _, credentials = values[0].partition(b" ")
+        # The scheme is case-insensitive (RFC 9110); the token is not.
+        return hmac.compare_digest(scheme.lower() + b" " + credentials, self._expected)
+
+
+_MCP_PATHS = frozenset({"/sse", "/messages/"})
+HEALTH_PATH = "/health"
+
+
 def build_server(service: OcrService, settings: OcrSettings) -> FastMCP:
     _ensure_json_logging(settings)
     mcp = FastMCP(SERVICE, host=settings.host, port=settings.port, log_level=settings.log_level)
+
+    @mcp.custom_route(HEALTH_PATH, methods=["GET"], include_in_schema=False)
+    async def health(request: Request) -> Response:
+        engine = service.engine
+        try:
+            version = await anyio.to_thread.run_sync(engine.version)
+        except Exception as exc:  # noqa: BLE001 - report unhealthy instead of failing the probe
+            log.error("health_check_failed", error_type=type(exc).__name__)
+            return JSONResponse({"status": "unavailable"}, status_code=503)
+        return JSONResponse(
+            {"status": "ok", "engine": engine.name, "lang": engine.lang, "version": version}
+        )
 
     @mcp.tool(name="extract_text", description=TOOL_DESCRIPTION, structured_output=False)
     async def extract_text(image_base64: str, request_id: str) -> CallToolResult:
@@ -232,6 +290,10 @@ def build_server(service: OcrService, settings: OcrSettings) -> FastMCP:
 
 def build_app(
     settings: OcrSettings, engine: OcrEngine, redactor: PiiRedactor | None = None
-) -> Starlette:
+) -> ASGIApp:
     service = OcrService(settings, engine, redactor)
-    return build_server(service, settings).sse_app()
+    return BearerAuthMiddleware(
+        build_server(service, settings).sse_app(),
+        token=settings.mcp_auth_token.get_secret_value(),
+        public_paths=frozenset({HEALTH_PATH}),
+    )
