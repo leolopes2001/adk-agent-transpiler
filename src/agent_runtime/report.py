@@ -11,8 +11,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from google.adk import Event
+from rich.console import Group, RenderableType
+from rich.text import Text
 
-from agent_runtime.nodes.present import RunResult, render_table
+from agent_runtime.nodes.present import RunResult, details_view, result_view, to_text
 
 EXIT_OK = 0
 EXIT_INVALID_INPUT = 2
@@ -130,12 +132,85 @@ def build_report(  # noqa: PLR0913 - every field of the report
     return report
 
 
-def render_text(report: dict[str, Any], result: RunResult | None) -> str:
-    """Human-readable report: the result table plus one line about the run."""
-    lines = [render_table(result).rstrip()] if result else []
-    timings = report["timings_ms"]
-    lines.append(
-        f"Execução {report['run_id']}: {report['outcome']} (exit {report['exit_code']}) "
-        f"em {timings['total']} ms; caminho: {' → '.join(report['path']) or '—'}"
+_ERRORS: tuple[tuple[str, str, str], ...] = (
+    (
+        "INPUT_REQUIRED",
+        "O pedido precisa de revisão humana, mas a execução é não interativa.",
+        "Rode de novo sem --non-interactive para escolher os exames.",
+    ),
+    (
+        "PII_TRIPWIRE",
+        "A execução foi interrompida para proteger dados pessoais do pedido.",
+        "Nada foi agendado. Encaminhe o pedido para conferência manual.",
+    ),
+    (
+        "LLM_",
+        "O serviço de IA não respondeu.",
+        "Tente de novo em alguns minutos; se continuar, confira a GOOGLE_API_KEY e a cota.",
+    ),
+    (
+        "MCP_",
+        "Um serviço necessário (leitura do pedido ou catálogo de exames) não respondeu.",
+        "Confira se os serviços estão no ar (docker compose ps) e tente de novo.",
+    ),
+    (
+        "NODE_TIMEOUT",
+        "Um serviço necessário demorou demais para responder.",
+        "Confira se os serviços estão no ar (docker compose ps) e tente de novo.",
+    ),
+)
+_UNEXPECTED = (
+    "Ocorreu um erro inesperado e nada foi agendado.",
+    "Tente de novo; se continuar, rode com --verbose e procure o suporte.",
+)
+
+
+def error_message(error_code: str) -> tuple[str, str]:
+    """What went wrong and what the user can do, for a run that ended without a result."""
+    for prefix, message, action in _ERRORS:
+        if error_code.startswith(prefix):
+            return message, action
+    return _UNEXPECTED
+
+
+def _error_view(error_code: str) -> Group:
+    message, action = error_message(error_code)
+    return Group(
+        Text("✘ Não foi possível concluir o pedido", style="bold red"),
+        Text(message),
+        Text(action),
+        Text(f"(código: {error_code})", style="dim"),
     )
-    return "\n".join(lines) + "\n"
+
+
+def _seconds(ms: int) -> str:
+    return f"{ms / 1000:.1f} s".replace(".", ",")
+
+
+def render_text(
+    report: dict[str, Any],
+    result: RunResult | None,
+    *,
+    verbose: bool = False,
+    width: int = 120,
+    color: bool = False,
+) -> str:
+    """Human-readable report: the result for the operator plus one line about the run.
+
+    `verbose` shows the technical table (scores, statuses, reasons) and the path.
+    """
+    parts: list[RenderableType] = []
+    if result:
+        parts.append(details_view(result) if verbose else result_view(result))
+    elif report.get("error_code"):
+        parts.append(_error_view(report["error_code"]))
+    timings = report["timings_ms"]
+    if verbose:
+        footer = (
+            f"Execução {report['run_id']}: {report['outcome']} (exit {report['exit_code']}) "
+            f"em {timings['total']} ms; caminho: {' → '.join(report['path']) or '—'}"
+        )
+    else:
+        footer = f"Execução {report['run_id']} · {_seconds(timings['total'])}"
+    parts += [Text(), Text(footer, style="dim")]
+    return to_text(Group(*parts), width, color=color)

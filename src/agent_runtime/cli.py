@@ -74,6 +74,8 @@ LLM_KEY_ENV = "GOOGLE_API_KEY"
 QUIET_LOG_LEVEL = "ERROR"
 """Warnings of a run (retries, injection, grounding) are in the report already."""
 VERBOSE_LOG_LEVEL = "INFO"
+REPORT_WIDTH = 120
+"""Width of the table report when stdout is not a terminal (a file, a pipe, a capture)."""
 
 type ReviewPrompt = Callable[[Mapping[str, Any]], dict[str, Any]]
 type Announce = Callable[["LoadedAgent", str], None]
@@ -475,9 +477,18 @@ def main(argv: list[str] | None = None) -> int:
     if output == "json":
         print(json.dumps(outcome.report, ensure_ascii=False, indent=2))
     else:
-        sys.stdout.write(render_text(outcome.report, outcome.result))
+        stdout = Console()
+        sys.stdout.write(
+            render_text(
+                outcome.report,
+                outcome.result,
+                verbose=args.verbose,
+                width=stdout.width if stdout.is_terminal else REPORT_WIDTH,
+                color=stdout.is_terminal and not stdout.no_color,
+            )
+        )
     error_code = outcome.report.get("error_code")
-    if error_code:
+    if error_code and output == "json":
         detail = _ERROR_MESSAGES.get(error_code, f"falha de dependência ({error_code})")
         print(f"lab-agent: {detail}", file=sys.stderr)
     return outcome.exit_code

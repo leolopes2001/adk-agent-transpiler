@@ -16,8 +16,9 @@ systems and never write to the repository. The script
   the appointment, the database rows, the logs of every container and the
   generated code, then removes the stack and its volumes.
 
-Each scenario runs once: its table capture (cli/) and, for the scenarios
-with a report, its JSON report (runs/) come from that same execution. The
+Each scenario runs once: its table capture (cli/) and its JSON report come
+from that same execution; the report is saved (runs/) for the scenarios with
+a report and feeds the index for all of them. The
 CLI prints one format per run, so the collector starts it through a small
 wrapper that also writes the report to stderr (`BOTH_OUTPUTS`).
 
@@ -71,9 +72,9 @@ REPORT_MARKER = "lab-evidence-report: "
 BOTH_OUTPUTS = (
     "import json, sys\n"
     "from agent_runtime import cli\n"
-    "def render_text(report, result):\n"
+    "def render_text(report, result, **options):\n"
     f"    print({REPORT_MARKER!r} + json.dumps(report, ensure_ascii=False), file=sys.stderr)\n"
-    "    return table(report, result)\n"
+    "    return table(report, result, **options)\n"
     "table, cli.render_text = cli.render_text, render_text\n"
     "sys.exit(cli.main(sys.argv[1:]))\n"
 )
@@ -260,7 +261,7 @@ class Collector:
     stale_exit: int | None = None
     stale_file: str = ""
 
-    def run(self, scenario: Scenario, *output: str, with_report: bool = False) -> AgentRun | None:
+    def run(self, scenario: Scenario, *output: str) -> AgentRun | None:
         backend = "gemini" if self.llm and scenario.uses_llm else "fake"
         if scenario.uses_llm and self.llm and self.quota_error:
             self.index.append(
@@ -272,12 +273,7 @@ class Collector:
         if self.llm:
             env |= {"APP_ENV": "dev", "AGENT_LLM_BACKEND": "gemini"}
             pass_env = (LLM_KEY_ENV,)
-        if with_report:
-            run = self._run_with_report(scenario, output, env, pass_env)
-        else:
-            run = self.stack.run_agent(
-                scenario.image, *scenario.args, *output, env=env, pass_env=pass_env
-            )
+        run = self._run_with_report(scenario, output, env, pass_env)
         error = (run.report or {}).get("error_code")
         if error in LLM_QUOTA_ERRORS:
             self.quota_error = error
@@ -377,7 +373,7 @@ def _index_markdown(collector: Collector) -> str:
             )
             continue
         run: AgentRun = entry["run"]
-        outcome, appointment = _from_text(run.stdout)
+        outcome, appointment = _from_report(run.report)
         lines.append(
             f"| {entry['scenario']} | {entry['backend']} | {run.exit_code} | {outcome} | "
             f"{appointment} | {entry.get('file', '—')} | {entry.get('report', '—')} |"
@@ -389,14 +385,12 @@ def _index_markdown(collector: Collector) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _from_text(stdout: str) -> tuple[str, str]:
-    """Outcome and appointment line of a table report."""
-    outcomes = re.findall(r": (\S+) \(exit \d+\)", stdout)
-    appointment = re.search(r"^Agendamento: ([^—\n]+)", stdout, re.MULTILINE)
-    return (
-        outcomes[-1] if outcomes else "—",
-        appointment.group(1).strip() if appointment else "—",
-    )
+def _from_report(report: dict[str, Any] | None) -> tuple[str, str]:
+    """Outcome and appointment status of a run, from its JSON report."""
+    if report is None:
+        return "—", "—"
+    appointment = report.get("appointment") or {}
+    return str(report.get("outcome") or "—"), str(appointment.get("status") or "—")
 
 
 def stack_evidence(use_llm: bool) -> str | None:
@@ -407,13 +401,13 @@ def stack_evidence(use_llm: bool) -> str | None:
         for number, scenario in enumerate([*REPORT_SCENARIOS, *TEXT_ONLY_SCENARIOS], start=1):
             # The lookup-only spec keeps its own output format.
             output = () if scenario.name == "spec-alternativa" else ("--output", "table")
-            run = collector.run(scenario, *output, with_report=scenario in REPORT_SCENARIOS)
+            run = collector.run(scenario, *output)
             if run is None:
                 continue
             name = f"cli/{number:02d}-{scenario.name}.txt"
             _write(name, _cli_text(scenario, run))
             collector.index[-1]["file"] = f"[`{name}`](../{name})"
-            if run.report is not None:
+            if run.report is not None and scenario in REPORT_SCENARIOS:
                 if run.report["run_id"] not in run.stdout:
                     raise SystemExit(f"{name}: the report is not from the captured run")
                 path = _write(

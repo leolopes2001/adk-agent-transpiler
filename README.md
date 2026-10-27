@@ -244,9 +244,37 @@ Exit codes:
 | 7 | Código gerado desatualizado em relação à spec, ou não importável |
 | 8 | Configuração inválida (variável faltando, `--agent-dir` fora de `GENERATED_ROOT`) |
 
-**Saída no terminal.** Por padrão, a CLI mostra só as perguntas da revisão humana, a tabela final e o resumo (caminho e tempo, mais uma linha `lab-agent:` quando a execução falha). Os logs JSON vão para o stderr e, sem `--verbose`, só os de nível ERROR aparecem; injection detectada e itens rejeitados já aparecem na tabela, e os retries por nó no `--output json`. Com `--verbose` (ou `-e LOG_LEVEL=INFO` no `docker compose run`), aparece cada evento da execução, com o `run_id`. O `LOG_LEVEL` do `.env` vale para os serviços e não é repassado ao container do agente.
+**Saída no terminal.** Em modo tabela, a CLI abre com uma linha sobre o agente e o arquivo lido (no stderr), faz as perguntas da revisão humana, se houver, e termina com o resultado: um resumo (solicitação registrada ou não, com o id; quantos exames foram agendados e quantos não; quantos dados pessoais foram mascarados), a tabela dos exames agendados e a dos não agendados, com o motivo em português. A coluna "Como estava no pedido" só aparece preenchida quando o texto do pedido difere do nome no catálogo; `✎` marca os exames escolhidos na revisão. Exemplo real com o pedido ambíguo, sem revisão (segunda execução do mesmo pedido, por isso o replay idempotente):
 
-**Revisão humana.** Quando o gate manda itens para revisão e a execução é interativa (o padrão; o serviço `agent` do compose tem TTY), a CLI mostra os candidatos do RAG e pede uma escolha. Com `pedido_ambiguo.png`, a pergunta é entre `T4 livre — LAB-10044` e `T4 total — LAB-10045`, ou nenhum. A resposta volta ao fluxo pelo resume do `RequestInput`, e só os códigos escolhidos são agendados.
+```text
+$ docker compose run --rm agent run --image /app/inputs/samples/pedido_ambiguo.png --non-interactive
+exam_scheduling_agent — Agenda exames a partir da imagem de um pedido médico:
+OCR, resolução no catálogo e solicitação de agendamento.
+Lendo /app/inputs/samples/pedido_ambiguo.png...
+✔ Solicitação já registrada antes; nada foi duplicado · id apt_01M5ZSTHX8SX5R73ZGM86AD46B
+1 exame agendado · 1 não agendado
+Dados pessoais mascarados: 8 (CPF 1, CRM 1, carteirinha 1, data de nascimento 1, endereço 1, nome 2, telefone 1)
+
+Exames agendados (1)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Exame              ┃ Código    ┃ Como estava no pedido ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Hemograma completo │ LAB-10001 │                       │
+└────────────────────┴───────────┴───────────────────────┘
+
+Não agendados (1)
+┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Como estava no pedido ┃ Motivo                                                 ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ T4                    │ precisa de revisão humana (rode sem --non-interactive) │
+└───────────────────────┴────────────────────────────────────────────────────────┘
+
+Execução 6ff74df6-fa9a-4871-a9fa-b94896f958a8 · 6,0 s
+```
+
+Quando a execução falha (injeção bloqueada, OCR ilegível, nenhum exame encontrado, serviço fora do ar), o lugar do resultado traz o que aconteceu e o que fazer. Score, status e motivos técnicos não aparecem nesse modo: estão completos no `--output json`, e `--verbose` mostra a tabela técnica (menção, nome no catálogo, score, status, motivo) e o caminho no grafo. Os logs JSON vão para o stderr e, sem `--verbose`, só os de nível ERROR aparecem. Com `--verbose` (ou `-e LOG_LEVEL=INFO` no `docker compose run`), aparece cada evento da execução, com o `run_id`. O `LOG_LEVEL` do `.env` vale para os serviços e não é repassado ao container do agente.
+
+**Revisão humana.** Quando o gate manda itens para revisão e a execução é interativa (o padrão; o serviço `agent` do compose tem TTY), a CLI explica antes quantos itens precisam de revisão e que 0 significa não agendar (na dúvida, 0). Cada item mostra, separados, o que foi lido no pedido, a interpretação da IA e as opções do catálogo com código e similaridade. Com `pedido_ambiguo.png`, a pergunta é entre `T4 livre — LAB-10044` e `T4 total — LAB-10045`, ou nenhum. A resposta volta ao fluxo pelo resume do `RequestInput`, e só os códigos escolhidos são agendados; um item cuja escolha já foi incluída por outra linha continua no resultado, como não agendado.
 
 **Saída JSON.** `--output json` imprime `run_id`, `outcome`, `exit_code`, o caminho percorrido no grafo, tempos por nó, retries, contagens de PII mascarada, severidade de injection, cada exame com menção, código, score e status, e o agendamento (`scheduled` ou `replayed`). Exemplos em [`evidence/runs/`](evidence/runs/).
 

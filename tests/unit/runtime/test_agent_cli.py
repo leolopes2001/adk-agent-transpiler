@@ -336,8 +336,40 @@ def test_main_prints_the_table_by_default(
     out = capsys.readouterr().out
     assert code == 0
     assert "LAB-10037" in out
-    assert APPOINTMENT_ID in out
+    assert f"✔ Solicitação registrada · id {APPOINTMENT_ID}" in out
+    assert "7 exames agendados · 0 não agendados" in out
+    assert "Execução " in out
+    assert "\x1b[" not in out
+    assert "caminho:" not in out
+    assert "Score" not in out
+
+
+def test_verbose_table_shows_scores_and_the_path(
+    services: Services, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = cli.main(
+        ["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive", "--verbose"]
+    )
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Score" in out
     assert "caminho: ocr → guard" in out
+
+
+def test_dependency_failure_is_explained_on_stdout_in_table_mode(
+    services: Services, capsys: pytest.CaptureFixture[str]
+) -> None:
+    services.mcp.responses[("ocr", "extract_text")] = [PermanentError("MCP_UNAUTHORIZED")]
+
+    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive"])
+
+    captured = capsys.readouterr()
+    assert code == 6
+    assert "Não foi possível concluir o pedido" in captured.out
+    assert "docker compose ps" in captured.out
+    assert "(código: MCP_UNAUTHORIZED)" in captured.out
+    assert "lab-agent:" not in captured.err
 
 
 def test_table_mode_opens_with_a_welcome_header_on_stderr(

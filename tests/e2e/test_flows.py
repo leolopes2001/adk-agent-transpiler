@@ -175,8 +175,9 @@ def test_alternative_spec_looks_exams_up_without_scheduling(e2e_stack: ComposeSt
     # The spec's own output format: a table, with the codes the catalog resolved.
     assert re.findall(r"LAB-\d{5}", run.stdout)
     assert set(re.findall(r"LAB-\d{5}", run.stdout)) <= set(EXPECTED_CODES)
-    assert "resolved (exit 0)" in run.stdout
-    assert "Agendamento: exames identificados (sem agendamento)" in run.stdout
+    assert "este agente não registra solicitação" in run.stdout
+    assert "Exames identificados (" in run.stdout
+    assert f"Execução {run_id}" in run.stdout
     assert _api_requests_of(e2e_stack, run_id) == []
     assert e2e_stack.count("appointments") == before
 
