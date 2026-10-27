@@ -3,9 +3,9 @@
 Each mention is decided by `lab_common.gate.gate_decision` (the same rule
 the RAG evaluation and the calibration script measure); an accepted mention
 selects its best candidate. A mention the model named is accepted only if
-its evidence resolves, by the same rule, to the same exam
-(`lab_common.gate.evidence_decision`); otherwise it goes to review with the
-candidates of both searches.
+its evidence ranks the same exam first, at or above `review_threshold` and
+without a tie within the margin (`lab_common.gate.evidence_decision`);
+otherwise it goes to review with the candidates of both searches.
 Accepted items are deduplicated by code (first mention wins), and a review
 item whose candidates at or above `review_threshold` are all already
 accepted is rejected (`already_accepted`): no choice could add an exam, so
@@ -84,7 +84,11 @@ def classify(item: ResolvedExam, params: ConfidenceGateParams) -> GateItem:
         evidence = ranked(item.evidence_candidates)
         same_best = bool(candidates and evidence) and candidates[0].code == evidence[0].code
         status, reason = evidence_decision(
-            (status, reason), _decision(evidence, params), same_best=same_best
+            (status, reason),
+            (c.score for c in evidence),
+            same_best=same_best,
+            review=params.review_threshold,
+            margin=params.min_margin,
         )
         if status == "review" and reason in {"evidence_ambiguous", "evidence_mismatch"}:
             candidates = _union(candidates, evidence)

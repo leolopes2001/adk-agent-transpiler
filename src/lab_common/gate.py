@@ -17,13 +17,15 @@ floating point 0.85 - 0.80 is 0.04999..., which would send a clear case to
 review.
 
 A mention named by the model is also resolved by its evidence (the text it
-copied from the document), and `evidence_decision` combines both: the name
-is accepted only when the evidence is accepted too and both point to the
-same exam. Otherwise an accepted name goes to `review`
-(`evidence_ambiguous` when the evidence itself needs review, as "T4" for
-"T4 total"; `evidence_mismatch` when it points elsewhere or nowhere, as
-"Hemograma completo" for "Ferritina"). The evidence never makes a mention
-more certain than its name.
+copied from the document), and `evidence_decision` combines both: an
+accepted name stays accepted when the evidence ranks the same exam first,
+with `best >= review` and the margin kept. The evidence need not reach
+`accept`, so an OCR typo ("Trigliceríideos") does not send an exam both
+searches agree on to review. Otherwise the name goes to `review`
+(`evidence_ambiguous` when the evidence's top two are within the margin, as
+"T4" for "T4 total"; `evidence_mismatch` when it points elsewhere or is
+below `review`, as "Hemograma completo" for "Ferritina"). The evidence never
+makes a mention more certain than its name.
 """
 
 from collections.abc import Iterable
@@ -51,20 +53,35 @@ def gate_decision(
     if not ranked:
         return "rejected", "not_found"
     best = ranked[0]
-    runner_up = ranked[1] if len(ranked) > 1 else None
-    margin_ok = runner_up is None or round(best - runner_up, MARGIN_DIGITS) >= margin
-    if best >= accept and margin_ok:
+    if best >= accept and _margin_ok(ranked, margin):
         return "accepted", None
     if best >= review:
         return "review", "low_margin" if best >= accept else "below_accept"
     return "rejected", "low_confidence"
 
 
-def evidence_decision(name: Decision, evidence: Decision, *, same_best: bool) -> Decision:
-    """Decision for a model mention from its name's and its evidence's decisions.
+def evidence_decision(
+    name: Decision,
+    evidence_scores: Iterable[float],
+    *,
+    same_best: bool,
+    review: float,
+    margin: float,
+) -> Decision:
+    """Decision for a model mention from its name's decision and its evidence's scores.
 
     `same_best` tells whether both searches ranked the same exam first.
     """
-    if name[0] != "accepted" or (evidence[0] == "accepted" and same_best):
+    if name[0] != "accepted":
         return name
-    return "review", "evidence_ambiguous" if evidence[0] == "review" else "evidence_mismatch"
+    ranked = sorted(evidence_scores, reverse=True)
+    if not ranked or ranked[0] < review:
+        return "review", "evidence_mismatch"
+    if not _margin_ok(ranked, margin):
+        return "review", "evidence_ambiguous"
+    return name if same_best else ("review", "evidence_mismatch")
+
+
+def _margin_ok(ranked: list[float], margin: float) -> bool:
+    best, *rest = ranked
+    return not rest or round(best - rest[0], MARGIN_DIGITS) >= margin

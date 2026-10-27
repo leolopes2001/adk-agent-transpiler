@@ -151,6 +151,28 @@ def test_specific_name_for_an_ambiguous_evidence_goes_to_review() -> None:
     assert [c.code for c in item.candidates] == ["LAB-10045", "LAB-10044"]
 
 
+def test_ocr_typo_in_the_evidence_of_the_same_exam_is_accepted() -> None:
+    triglicerideos = cand("LAB-10020", 1.0)
+    # Real RAG scores for the typo, below accept_threshold.
+    evidence = [cand("LAB-10020", 0.7241), cand("LAB-10012", 0.5063)]
+
+    item = classify(
+        from_model("Triglicerídeos", "8. Trigliceríideos", [triglicerideos], evidence), PARAMS
+    )
+
+    assert (item.status, item.reason, item.selected) == ("accepted", None, triglicerideos)
+
+
+def test_evidence_below_review_threshold_goes_to_review() -> None:
+    evidence = [cand("LAB-10020", 0.55)]
+
+    item = classify(
+        from_model("Triglicerídeos", "8. Tr", [cand("LAB-10020", 1.0)], evidence), PARAMS
+    )
+
+    assert (item.status, item.reason, item.selected) == ("review", "evidence_mismatch", None)
+
+
 @pytest.mark.parametrize(
     ("name", "evidence", "code"),
     [
