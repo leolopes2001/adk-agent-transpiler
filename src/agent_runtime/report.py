@@ -15,13 +15,13 @@ from rich.console import Group, RenderableType
 from rich.text import Text
 
 from agent_runtime.nodes.present import (
-    FAIL_STYLE,
     RunResult,
     details_view,
     result_view,
     summary,
     to_text,
 )
+from agent_runtime.theme import FAIL, ICON_FAIL, MUTED
 
 EXIT_OK = 0
 EXIT_INVALID_INPUT = 2
@@ -183,12 +183,12 @@ def error_message(error_code: str) -> tuple[str, str]:
 def _error_view(error_code: str) -> Group:
     message, action = error_message(error_code)
     return summary(
-        "✘ Não foi possível concluir o pedido",
-        FAIL_STYLE,
+        f"{ICON_FAIL} Não foi possível concluir o pedido",
+        FAIL,
         [
             ("Motivo", message),
             ("O que fazer", action),
-            ("Código", Text(error_code, style="dim")),
+            ("Código", Text(error_code, style=MUTED)),
         ],
     )
 
@@ -222,5 +222,5 @@ def render_text(
         )
     else:
         footer = f"Execução {report['run_id']} · {_seconds(timings['total'])}"
-    parts += [Text(), Text(footer, style="dim")]
+    parts += [Text(), Text(footer, style=MUTED)]
     return to_text(Group(*parts), width, color=color)

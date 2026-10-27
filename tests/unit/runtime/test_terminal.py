@@ -6,6 +6,7 @@ import pytest
 from rich.console import Console
 
 from agent_runtime import cli, terminal
+from agent_runtime.theme import THEME
 
 pytestmark = pytest.mark.unit
 
@@ -137,7 +138,7 @@ MAGENTA = re.compile(
 
 
 def test_no_magenta_anywhere_in_the_review(monkeypatch: pytest.MonkeyPatch) -> None:
-    out = _console(force_terminal=True, color_system="truecolor", theme=terminal.THEME)
+    out = _console(force_terminal=True, color_system="truecolor", theme=THEME)
     answers = iter(["1", "0"])
 
     def ask(prompt: str, *, choices: list[str], console: Console, **_: Any) -> str:
@@ -153,9 +154,3 @@ def test_no_magenta_anywhere_in_the_review(monkeypatch: pytest.MonkeyPatch) -> N
     assert "[0/1/2]" in ANSI.sub("", text)
     assert not MAGENTA.search(text)
     assert "\x1b[" in text
-
-
-def test_the_review_console_uses_the_blue_choices_theme() -> None:
-    console = terminal.stderr_console()
-
-    assert str(console.get_style("prompt.choices")) == "bold cyan"

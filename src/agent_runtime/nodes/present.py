@@ -21,6 +21,16 @@ from rich.text import Text
 
 from agent_runtime.nodes._common import Params, function_node, parse_input
 from agent_runtime.schemas import GateDecision, GateItem, RunFailure, ScheduleOutcome
+from agent_runtime.theme import (
+    FAIL,
+    ICON_FAIL,
+    ICON_OK,
+    ICON_REVIEWED,
+    LABEL,
+    OK,
+    THEME,
+    WARN,
+)
 
 RESULT_STATE_KEY = "run.result"
 
@@ -42,9 +52,8 @@ _SCHEDULE_OUTCOMES: dict[str, Outcome] = {
     "failed": "schedule_failed",
 }
 REVIEWED = "reviewed"
-REVIEWED_MARK = "✎"
+REVIEWED_MARK = ICON_REVIEWED
 _REVIEW_REASONS = {"evidence_mismatch", "evidence_ambiguous"}
-_ATTENTION_REASONS = {"needs_human_review", "evidence_mismatch", "evidence_ambiguous"}
 _REASON_LABELS = {
     "not_found": "não encontrado no catálogo",
     "low_confidence": "não encontrado no catálogo",
@@ -57,17 +66,15 @@ _REASON_LABELS = {
     "evidence_mismatch": "precisa de revisão: a interpretação da IA não confere com o pedido",
     "evidence_ambiguous": "precisa de revisão: o texto do pedido serve para mais de um exame",
 }
-OK_STYLE = "bold green"
-FAIL_STYLE = "bold red"
 SUMMARY_LABEL_WIDTH = 18
 _SUMMARIES: dict[str, tuple[str, bool]] = {
     # outcome: (title, registered)
-    "scheduled": ("✔ Solicitação registrada", True),
-    "replayed": ("✔ Solicitação já registrada antes (nada foi duplicado)", True),
-    "resolved": ("✔ Exames identificados no catálogo", True),
-    "not_scheduled": ("✘ Solicitação não registrada", False),
-    "schedule_failed": ("✘ Solicitação não registrada", False),
-    "rejected": ("✘ Solicitação não registrada", False),
+    "scheduled": (f"{ICON_OK} Solicitação registrada", True),
+    "replayed": (f"{ICON_OK} Solicitação já registrada antes (nada foi duplicado)", True),
+    "resolved": (f"{ICON_OK} Exames identificados no catálogo", True),
+    "not_scheduled": (f"{ICON_FAIL} Solicitação não registrada", False),
+    "schedule_failed": (f"{ICON_FAIL} Solicitação não registrada", False),
+    "rejected": (f"{ICON_FAIL} Solicitação não registrada", False),
 }
 _NOT_SCHEDULED = {
     # reason or outcome: (why, what to do)
@@ -102,17 +109,17 @@ _ACCEPTED_TITLES = {
 _FAILURES: dict[str, tuple[str, str, str]] = {
     # outcome: (title, why, what to do); the run's own message stays in the JSON report
     "OCR_LOW_QUALITY": (
-        "✘ Não foi possível ler o pedido",
+        f"{ICON_FAIL} Não foi possível ler o pedido",
         "a imagem não tem qualidade suficiente para a leitura",
         "Envie uma imagem mais nítida, sem cortes e bem iluminada.",
     ),
     "INPUT_BLOCKED": (
-        "✘ Pedido bloqueado por segurança",
+        f"{ICON_FAIL} Pedido bloqueado por segurança",
         "o documento tem trechos que parecem instruções para a IA",
         "Nada foi agendado. Encaminhe o documento original para conferência manual.",
     ),
     "NO_EXAMS_RESOLVED": (
-        "✘ Nenhum exame do pedido foi encontrado no catálogo",
+        f"{ICON_FAIL} Nenhum exame do pedido foi encontrado no catálogo",
         "nenhum item do pedido corresponde, com confiança, a um exame do catálogo",
         "Confira o pedido ou procure o atendimento.",
     ),
@@ -272,7 +279,7 @@ def matches_catalog(row: ExamRow) -> bool:
 
 def as_written(row: ExamRow) -> Text:
     """The order's text for an accepted row; highlighted when it is not the catalog name."""
-    return Text(row.evidence, style="" if matches_catalog(row) else "bold yellow")
+    return Text(row.evidence, style="" if matches_catalog(row) else WARN)
 
 
 def reason_label(row: ExamRow) -> str:
@@ -294,13 +301,19 @@ def masked_summary(counts: Mapping[str, int]) -> str:
     return f"{total} ({detail})"
 
 
-def summary(title: str, style: str, pairs: list[tuple[str, Text | str]]) -> Group:
+Pair = tuple[str | Text, Text | str]
+
+
+def summary(title: str, style: str, pairs: list[Pair]) -> Group:
     """A title line and aligned label/value pairs under it, after a blank line."""
     grid = Table.grid(padding=(0, 1))
     grid.add_column(width=SUMMARY_LABEL_WIDTH, no_wrap=True)
     grid.add_column()
     for label, value in pairs:
-        grid.add_row(label, value if isinstance(value, Text) else Text(value))
+        grid.add_row(
+            label if isinstance(label, Text) else Text(label, style=LABEL),
+            value if isinstance(value, Text) else Text(value),
+        )
     return Group(Text(), Text(title, style=style), Padding(grid, (0, 0, 0, 2)))
 
 
@@ -308,17 +321,17 @@ def _exams(count: int) -> str:
     return _plural(count, "exame", "exames")
 
 
-def _attention(severity: str) -> list[tuple[str, Text | str]]:
+def _attention(severity: str) -> list[Pair]:
     if severity == "none":
         return []
     label = _SEVERITY_LABELS.get(severity, severity)
     text = f"o pedido tem trechos que parecem instruções (risco {label})"
-    return [("Atenção", Text(text, style=FAIL_STYLE))]
+    return [(Text("Atenção", style=f"{LABEL} {WARN}"), text)]
 
 
 def _summary(result: RunResult, accepted: int, other: int) -> Group:
     title, registered = _SUMMARIES[result.outcome]
-    pairs: list[tuple[str, Text | str]] = []
+    pairs: list[Pair] = []
     if result.appointment and result.appointment.id:
         pairs.append(("ID", result.appointment.id))
     done, missing = _COUNT_LABELS.get(result.outcome, _CONFIRMED_LABELS)
@@ -332,16 +345,16 @@ def _summary(result: RunResult, accepted: int, other: int) -> Group:
         why, what = why_and_what
         pairs.insert(0, ("Motivo", why))
         pairs.append(("O que fazer", what))
-    return summary(title, OK_STYLE if registered else FAIL_STYLE, pairs)
+    return summary(title, OK if registered else FAIL, pairs)
 
 
 def _accepted_table(result: RunResult, rows: list[ExamRow]) -> Table:
     title = _ACCEPTED_TITLES.get(result.outcome, "Exames confirmados, não agendados")
     table = Table(
         title=f"{title} ({len(rows)})",
-        title_style="bold green",
+        title_style=LABEL,
         title_justify="left",
-        border_style="green",
+        border_style="none",
     )
     table.add_column("Exame")
     table.add_column("Código", no_wrap=True)
@@ -349,10 +362,10 @@ def _accepted_table(result: RunResult, rows: list[ExamRow]) -> Table:
     for row in rows:
         name = Text(row.name or "")
         if row.reason == REVIEWED:
-            name.append(f" {REVIEWED_MARK}", style="bold")
+            name.append(f" {REVIEWED_MARK}", style=WARN)
         table.add_row(name, Text(row.code or ""), as_written(row))
     if any(row.reason == REVIEWED for row in rows):
-        table.caption = f"{REVIEWED_MARK} escolhido por você na revisão"
+        table.caption = Text.assemble((REVIEWED_MARK, WARN), " escolhido por você na revisão")
         table.caption_justify = "left"
     return table
 
@@ -361,29 +374,28 @@ def _other_table(result: RunResult, rows: list[ExamRow]) -> Table:
     missing = _COUNT_LABELS.get(result.outcome, _CONFIRMED_LABELS)[1]
     table = Table(
         title=f"{missing} ({len(rows)})",
-        title_style="bold yellow",
+        title_style=LABEL,
         title_justify="left",
-        border_style="yellow",
+        border_style="none",
     )
     table.add_column("Como estava no pedido")
     table.add_column("Motivo")
     for row in rows:
-        style = "red" if row.reason in _ATTENTION_REASONS else "yellow"
-        table.add_row(Text(row.evidence), Text(reason_label(row), style=style))
+        table.add_row(Text(row.evidence), Text(reason_label(row)))
     return table
 
 
 def _failure(result: RunResult) -> Group:
     message = result.user_message or ""
     title, why, what = _FAILURES.get(
-        result.outcome, ("✘ Não foi possível concluir o pedido", message, "")
+        result.outcome, (f"{ICON_FAIL} Não foi possível concluir o pedido", message, "")
     )
-    pairs: list[tuple[str, Text | str]] = [("Motivo", why)]
+    pairs: list[Pair] = [("Motivo", why)]
     pairs.append(("Dados mascarados", masked_summary(result.pii_masked)))
     pairs += _attention(result.injection_severity)
     if what:
         pairs.append(("O que fazer", what))
-    return summary(title, FAIL_STYLE, pairs)
+    return summary(title, FAIL, pairs)
 
 
 def _distinct(rows: list[ExamRow]) -> list[ExamRow]:
@@ -416,7 +428,7 @@ def details_view(result: RunResult) -> Group:
     """Every exam with score, status and technical reason (`--verbose`)."""
     parts: list[RenderableType] = []
     if result.user_message:
-        parts.append(Text(f"Resultado: {result.outcome}", style="bold"))
+        parts.append(Text(f"Resultado: {result.outcome}", style=LABEL))
         parts.append(Text(result.user_message))
     else:
         table = Table(title="Exames do pedido", show_lines=False)
@@ -461,6 +473,7 @@ def to_text(renderable: RenderableType, width: int = 120, *, color: bool = False
         force_terminal=color,
         no_color=not color,
         highlight=False,
+        theme=THEME,
     )
     console.print(renderable)
     file = console.file

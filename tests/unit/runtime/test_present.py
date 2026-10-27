@@ -285,7 +285,7 @@ def test_summary_per_outcome(outcome: str, fields: dict[str, Any], expected: str
     table = render_table(_result(outcome, row, **fields))
 
     assert expected in table.splitlines()
-    assert ("✘" in table) is (outcome in {"rejected", "schedule_failed", "not_scheduled"})
+    assert ("✖" in table) is (outcome in {"rejected", "schedule_failed", "not_scheduled"})
     assert "Unknown exam code" not in table
     assert "patient_identifier_missing" not in table
 
@@ -309,7 +309,7 @@ async def test_table_for_a_failure_explains_it(code: str, title: str, what: str)
     table = render_table(RunResult.model_validate(run.output))
     lines = table.splitlines()
 
-    assert lines[1] == f"✘ {title}"
+    assert lines[1] == f"✖ {title}"
     assert lines[2].startswith("  Motivo             ")
     assert "  Dados mascarados   nenhum" in lines
     assert any(line.startswith("  O que fazer        ") and what in line for line in lines)

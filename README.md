@@ -244,7 +244,7 @@ Exit codes:
 | 7 | Código gerado desatualizado em relação à spec, ou não importável |
 | 8 | Configuração inválida (variável faltando, `--agent-dir` fora de `GENERATED_ROOT`) |
 
-**Saída no terminal.** Em modo tabela, a CLI abre com uma linha sobre o agente e o arquivo lido (no stderr), faz as perguntas da revisão humana, se houver, e termina com o resultado: um resumo em pares rótulo/valor (solicitação registrada ou não, com o id; quantos exames foram agendados e quantos não; quantos dados pessoais foram mascarados, por tipo; e, quando nada foi registrado, o motivo e o que fazer), a tabela dos exames agendados e a dos não agendados, com o motivo em português. A coluna "Como estava no pedido" traz sempre o texto do pedido, em amarelo quando difere do nome no catálogo; `✎` marca os exames escolhidos na revisão. Sem terminal (pipe, arquivo) ou com `NO_COLOR`, a saída não tem cores. Exemplo real com o pedido ambíguo, sem revisão:
+**Saída no terminal.** Em modo tabela, a CLI abre com uma linha sobre o agente e o arquivo lido (no stderr), faz as perguntas da revisão humana, se houver, e termina com o resultado: um resumo em pares rótulo/valor (solicitação registrada ou não, com o id; quantos exames foram agendados e quantos não; quantos dados pessoais foram mascarados, por tipo; e, quando nada foi registrado, o motivo e o que fazer), a tabela dos exames agendados e a dos não agendados, com o motivo em português. A coluna "Como estava no pedido" traz sempre o texto do pedido, em amarelo quando difere do nome no catálogo; `✎` marca os exames escolhidos na revisão. A paleta é sóbria e fica em [`theme.py`](src/agent_runtime/theme.py): texto e bordas na cor padrão do terminal, cabeçalhos e rótulos em negrito, informação secundária esmaecida, e cor só com significado (verde no ✔ do sucesso, vermelho no ✖ da falha, amarelo em diferenças e atenção). Sem terminal (pipe, arquivo) ou com `NO_COLOR`, a saída não tem cores. Exemplo real com o pedido ambíguo, sem revisão (segunda execução do mesmo pedido, por isso o replay idempotente):
 
 ```text
 $ docker compose run --rm agent run --image /app/inputs/samples/pedido_ambiguo.png --non-interactive
@@ -252,7 +252,7 @@ exam_scheduling_agent — Agenda exames a partir da imagem de um pedido médico:
 OCR, resolução no catálogo e solicitação de agendamento.
 Lendo /app/inputs/samples/pedido_ambiguo.png...
 
-✔ Solicitação registrada
+✔ Solicitação já registrada antes (nada foi duplicado)
   ID                 apt_01M5ZW49FFY9F6GH09JGZADNKV
   Agendados          1 exame
   Não agendados      1 exame
@@ -272,7 +272,7 @@ Não agendados (1)
 │ T4                    │ precisa de revisão humana (rode sem --non-interactive) │
 └───────────────────────┴────────────────────────────────────────────────────────┘
 
-Execução 2557026a-38d3-4535-a4d2-e7cef4c73064 · 5,4 s
+Execução 7a523311-8fa4-442b-a8af-15f448fc5e7a · 7,4 s
 ```
 
 Quando a execução falha (injeção bloqueada, OCR ilegível, nenhum exame encontrado, serviço fora do ar), o lugar do resultado traz o que aconteceu e o que fazer. Score, status e motivos técnicos não aparecem nesse modo: estão completos no `--output json`, e `--verbose` mostra a tabela técnica (menção, nome no catálogo, score, status, motivo) e o caminho no grafo. Os logs JSON vão para o stderr e, sem `--verbose`, só os de nível ERROR aparecem. Com `--verbose` (ou `-e LOG_LEVEL=INFO` no `docker compose run`), aparece cada evento da execução, com o `run_id`. O `LOG_LEVEL` do `.env` vale para os serviços e não é repassado ao container do agente.

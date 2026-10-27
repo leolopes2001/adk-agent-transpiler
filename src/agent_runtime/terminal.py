@@ -23,18 +23,12 @@ from rich.rule import Rule
 from rich.status import Status
 from rich.table import Table
 from rich.text import Text
-from rich.theme import Theme
 
 from agent_runtime.nodes.human_review import NONE_CHOICE
+from agent_runtime.theme import LABEL, MUTED, THEME
 
 NONE_LABEL = "nenhum destes — não agendar"
 LABEL_WIDTH = 21
-
-_READ_STYLE = "bold cyan"
-_AI_STYLE = _READ_STYLE
-_CATALOG_STYLE = "bold green"
-THEME = Theme({"prompt.choices": _READ_STYLE, "prompt.default": _READ_STYLE})
-"""rich draws the prompt's choices in magenta by default; here they share the labels' blue."""
 
 
 def color_enabled(stream: IO[str]) -> bool:
@@ -89,10 +83,10 @@ class Progress:
             self.stop()
             return
         if self._status is None:
-            self._status = self._console.status(Text(label, style="dim"))
+            self._status = self._console.status(Text(label, style=MUTED))
             self._status.start()
         else:
-            self._status.update(Text(label, style="dim"))
+            self._status.update(Text(label, style=MUTED))
         if not self.shown or self.shown[-1] != label:
             self.shown.append(label)
 
@@ -113,9 +107,9 @@ class Progress:
 
 def welcome(console: Console, name: str, description: str, image: str) -> None:
     """Who is running and on which file; printed before the run starts."""
-    header = Text.assemble((name, "bold"), *((" — ", description) if description else ()))
+    header = Text.assemble((name, LABEL), *((" — ", description) if description else ()))
     console.print(header)
-    console.print(Text(f"Lendo {image}...", style="dim"))
+    console.print(Text(f"Lendo {image}...", style=MUTED))
 
 
 def similarity(score: float) -> str:
@@ -125,33 +119,35 @@ def similarity(score: float) -> str:
 def review_intro(pending: int) -> Panel:
     noun = "item do pedido precisa" if pending == 1 else "itens do pedido precisam"
     body = Text.assemble(
-        (f"{pending} {noun} da sua revisão.\n", "bold"),
+        (f"{pending} {noun} da sua revisão.\n", LABEL),
         "Para cada um, escolha o exame ",
-        ("EXATO", "bold"),
+        ("EXATO", LABEL),
         " do catálogo que corresponde ao que está escrito no pedido.\n",
-        ("0", "bold"),
+        ("0", LABEL),
         " = não agendar este item. ",
-        ("Na dúvida, escolha 0.", "bold"),
+        ("Na dúvida, escolha 0.", LABEL),
     )
-    return Panel(body, title="Revisão humana", title_align="left", border_style="yellow")
+    return Panel(
+        body, title=Text("Revisão humana", style=LABEL), title_align="left", border_style="none"
+    )
 
 
-def _labelled(label: str, style: str, value: Text) -> Table:
+def _labelled(label: str, value: Text) -> Table:
     grid = Table.grid(padding=(0, 1))
     grid.add_column(width=LABEL_WIDTH, no_wrap=True)
     grid.add_column()
-    grid.add_row(Text(label, style=style), value)
+    grid.add_row(Text(label, style=LABEL), value)
     return grid
 
 
 def _interpretation(item: Mapping[str, Any]) -> Text:
     if item.get("source") == "lexical":
-        return Text("— (item lido sem a IA)", style="dim")
+        return Text("— (item lido sem a IA)", style=MUTED)
     return Text(f"“{item.get('mention', '')}”")
 
 
 def _options(options: list[Mapping[str, Any]]) -> Table:
-    table = Table(box=box.SIMPLE, show_edge=False, pad_edge=False, header_style="bold")
+    table = Table(box=box.SIMPLE, show_edge=False, pad_edge=False, header_style=LABEL)
     table.add_column("#", justify="right")
     table.add_column("Exame")
     table.add_column("Código")
@@ -161,9 +157,9 @@ def _options(options: list[Mapping[str, Any]]) -> Table:
             str(number),
             Text(str(option["name"])),
             Text(str(option["code"])),
-            similarity(float(option["score"])),
+            Text(similarity(float(option["score"])), style=MUTED),
         )
-    table.add_row("0", Text(NONE_LABEL, style="yellow"), "", "")
+    table.add_row("0", Text(NONE_LABEL), "", "")
     return table
 
 
@@ -171,11 +167,11 @@ def review_item(item: Mapping[str, Any], position: int, total: int) -> Group:
     """One review item: what the order says, what the model read, what the catalog offers."""
     options = list(item.get("options", []))
     return Group(
-        Rule(Text(f"Item {position} de {total}", style="bold"), align="left"),
-        _labelled("Lido no pedido", _READ_STYLE, Text(f"“{item.get('evidence', '')}”")),
-        _labelled("Interpretação (IA)", _AI_STYLE, _interpretation(item)),
+        Rule(Text(f"Item {position} de {total}", style=LABEL), align="left", style="none"),
+        _labelled("Lido no pedido", Text(f"“{item.get('evidence', '')}”")),
+        _labelled("Interpretação (IA)", _interpretation(item)),
         Text(),
-        Text("Opções do catálogo", style=_CATALOG_STYLE),
+        Text("Opções do catálogo", style=LABEL),
         Padding(_options(options), (0, 0, 0, 2)),
     )
 
