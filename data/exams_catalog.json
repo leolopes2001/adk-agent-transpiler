@@ -1,0 +1,1275 @@
+{
+  "catalog_version": "2026.10.0",
+  "exams": [
+    {
+      "code": "LAB-10001",
+      "name": "Hemograma completo",
+      "aliases": [
+        "hemograma",
+        "HMG",
+        "hemograma com plaquetas"
+      ],
+      "category": "hematologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10002",
+      "name": "Contagem de plaquetas",
+      "aliases": [
+        "plaquetas",
+        "plaquetograma"
+      ],
+      "category": "hematologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10003",
+      "name": "Contagem de reticulócitos",
+      "aliases": [
+        "reticulócitos"
+      ],
+      "category": "hematologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10004",
+      "name": "Velocidade de hemossedimentação",
+      "aliases": [
+        "VHS",
+        "VSG"
+      ],
+      "category": "hematologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10005",
+      "name": "Eritrograma",
+      "aliases": [
+        "série vermelha"
+      ],
+      "category": "hematologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10006",
+      "name": "Leucograma",
+      "aliases": [
+        "série branca",
+        "contagem de leucócitos"
+      ],
+      "category": "hematologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10007",
+      "name": "Tipagem sanguínea ABO e fator Rh",
+      "aliases": [
+        "tipagem sanguínea",
+        "grupo sanguíneo"
+      ],
+      "category": "hematologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10008",
+      "name": "Teste da antiglobulina direta",
+      "aliases": [
+        "antiglobulina direta",
+        "TAD"
+      ],
+      "category": "hematologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10009",
+      "name": "Pesquisa de anticorpos irregulares",
+      "aliases": [
+        "PAI"
+      ],
+      "category": "hematologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10010",
+      "name": "Eletroforese de hemoglobina",
+      "aliases": [
+        "eletroforese de Hb"
+      ],
+      "category": "hematologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10011",
+      "name": "Esfregaço de sangue periférico",
+      "aliases": [
+        "hematoscopia"
+      ],
+      "category": "hematologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10012",
+      "name": "Glicemia de jejum",
+      "aliases": [
+        "glicose",
+        "glic jejum",
+        "glicemia"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 8 horas."
+    },
+    {
+      "code": "LAB-10013",
+      "name": "Hemoglobina glicada",
+      "aliases": [
+        "HbA1c",
+        "A1c",
+        "glicohemoglobina"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10014",
+      "name": "Glicose pós-prandial",
+      "aliases": [
+        "glicemia pós-prandial"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Coleta 2 horas após o almoço."
+    },
+    {
+      "code": "LAB-10015",
+      "name": "Teste de tolerância à glicose oral",
+      "aliases": [
+        "TOTG",
+        "curva glicêmica"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 8 horas."
+    },
+    {
+      "code": "LAB-10016",
+      "name": "Colesterol total e frações",
+      "aliases": [
+        "lipidograma",
+        "perfil lipídico"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 12 horas."
+    },
+    {
+      "code": "LAB-10017",
+      "name": "Colesterol HDL",
+      "aliases": [
+        "HDL",
+        "HDL colesterol"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 12 horas."
+    },
+    {
+      "code": "LAB-10018",
+      "name": "Colesterol LDL",
+      "aliases": [
+        "LDL",
+        "LDL colesterol"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 12 horas."
+    },
+    {
+      "code": "LAB-10019",
+      "name": "Colesterol VLDL",
+      "aliases": [
+        "VLDL"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 12 horas."
+    },
+    {
+      "code": "LAB-10020",
+      "name": "Triglicerídeos",
+      "aliases": [
+        "triglicérides",
+        "TG"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 12 horas."
+    },
+    {
+      "code": "LAB-10021",
+      "name": "Creatinina",
+      "aliases": [
+        "creatinina sérica"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10022",
+      "name": "Ureia",
+      "aliases": [
+        "ureia sérica"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10023",
+      "name": "TGO (AST)",
+      "aliases": [
+        "TGO",
+        "AST",
+        "aspartato aminotransferase"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10024",
+      "name": "TGP (ALT)",
+      "aliases": [
+        "TGP",
+        "ALT",
+        "alanina aminotransferase"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10025",
+      "name": "Gama GT",
+      "aliases": [
+        "GGT",
+        "gama glutamil transferase"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10026",
+      "name": "Fosfatase alcalina",
+      "aliases": [
+        "FA",
+        "FAL"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10027",
+      "name": "Bilirrubina total e frações",
+      "aliases": [
+        "bilirrubinas"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10028",
+      "name": "Proteínas totais e frações",
+      "aliases": [
+        "proteínas totais"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10029",
+      "name": "Albumina",
+      "aliases": [
+        "albumina sérica"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10030",
+      "name": "Ácido úrico",
+      "aliases": [
+        "uricemia",
+        "urato"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10031",
+      "name": "Sódio",
+      "aliases": [
+        "Na",
+        "sódio sérico"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10032",
+      "name": "Potássio",
+      "aliases": [
+        "potássio sérico"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10033",
+      "name": "Cálcio total",
+      "aliases": [
+        "cálcio",
+        "Ca"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10034",
+      "name": "Magnésio",
+      "aliases": [
+        "Mg"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10035",
+      "name": "Fósforo",
+      "aliases": [
+        "fosfato",
+        "fósforo sérico"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10036",
+      "name": "Cloreto",
+      "aliases": [
+        "Cl"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10037",
+      "name": "Proteína C reativa",
+      "aliases": [
+        "PCR",
+        "PCR ultrassensível"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10038",
+      "name": "Amilase",
+      "aliases": [
+        "amilase sérica"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10039",
+      "name": "Lipase",
+      "aliases": [
+        "lipase sérica"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10040",
+      "name": "Desidrogenase láctica",
+      "aliases": [
+        "DHL",
+        "LDH"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10041",
+      "name": "Creatinofosfoquinase",
+      "aliases": [
+        "CPK",
+        "CK"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10042",
+      "name": "Troponina I",
+      "aliases": [
+        "troponina"
+      ],
+      "category": "bioquimica",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10043",
+      "name": "TSH",
+      "aliases": [
+        "hormônio tireoestimulante",
+        "tireotrofina"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10044",
+      "name": "T4 livre",
+      "aliases": [
+        "T4L",
+        "tiroxina livre"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10045",
+      "name": "T4 total",
+      "aliases": [
+        "T4T",
+        "tiroxina total"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10046",
+      "name": "T3 total",
+      "aliases": [
+        "T3T",
+        "triiodotironina total"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10047",
+      "name": "T3 livre",
+      "aliases": [
+        "T3L",
+        "triiodotironina livre"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10048",
+      "name": "Anticorpos antitireoperoxidase",
+      "aliases": [
+        "anti-TPO"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10049",
+      "name": "Beta-HCG",
+      "aliases": [
+        "BHCG",
+        "HCG quantitativo",
+        "teste de gravidez no sangue"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10050",
+      "name": "FSH",
+      "aliases": [
+        "hormônio folículo-estimulante"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10051",
+      "name": "LH",
+      "aliases": [
+        "hormônio luteinizante"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10052",
+      "name": "Estradiol",
+      "aliases": [
+        "E2"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10053",
+      "name": "Progesterona",
+      "aliases": [
+        "progesterona sérica"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10054",
+      "name": "Prolactina",
+      "aliases": [
+        "PRL"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas e repouso de 30 minutos antes da coleta."
+    },
+    {
+      "code": "LAB-10055",
+      "name": "Testosterona total",
+      "aliases": [
+        "testosterona"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10056",
+      "name": "Cortisol basal",
+      "aliases": [
+        "cortisol",
+        "cortisol matinal"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Coleta entre 7h e 9h, jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10057",
+      "name": "Insulina de jejum",
+      "aliases": [
+        "insulina",
+        "insulinemia"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 8 horas."
+    },
+    {
+      "code": "LAB-10058",
+      "name": "Paratormônio",
+      "aliases": [
+        "PTH",
+        "PTH intacto"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10059",
+      "name": "Hormônio do crescimento",
+      "aliases": [
+        "GH",
+        "somatotrofina"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10060",
+      "name": "Sulfato de dehidroepiandrosterona",
+      "aliases": [
+        "DHEA-S",
+        "SDHEA"
+      ],
+      "category": "hormonios",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10061",
+      "name": "Anti-HIV 1 e 2",
+      "aliases": [
+        "HIV",
+        "sorologia para HIV"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10062",
+      "name": "HBsAg",
+      "aliases": [
+        "antígeno de superfície da hepatite B"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10063",
+      "name": "Anti-HBs",
+      "aliases": [
+        "anticorpo anti-HBs"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10064",
+      "name": "Anti-HBc total",
+      "aliases": [
+        "anti-HBc"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10065",
+      "name": "Anti-HCV",
+      "aliases": [
+        "sorologia para hepatite C"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10066",
+      "name": "Anti-HAV IgM",
+      "aliases": [
+        "hepatite A IgM"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10067",
+      "name": "VDRL",
+      "aliases": [
+        "sorologia para sífilis"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10068",
+      "name": "FTA-ABS IgG",
+      "aliases": [
+        "FTA-ABS"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10069",
+      "name": "Toxoplasmose IgG",
+      "aliases": [
+        "toxo IgG"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10070",
+      "name": "Toxoplasmose IgM",
+      "aliases": [
+        "toxo IgM"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10071",
+      "name": "Rubéola IgG",
+      "aliases": [
+        "anticorpos anti-rubéola IgG"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10072",
+      "name": "Citomegalovírus IgG",
+      "aliases": [
+        "CMV IgG"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10073",
+      "name": "Dengue NS1",
+      "aliases": [
+        "antígeno NS1"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10074",
+      "name": "Dengue IgM",
+      "aliases": [
+        "sorologia para dengue IgM"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10075",
+      "name": "Fator reumatoide",
+      "aliases": [
+        "FR",
+        "látex"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10076",
+      "name": "Fator antinuclear",
+      "aliases": [
+        "FAN"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10077",
+      "name": "Antiestreptolisina O",
+      "aliases": [
+        "ASLO",
+        "ASO"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10078",
+      "name": "Complemento C3",
+      "aliases": [
+        "C3"
+      ],
+      "category": "imunologia",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10079",
+      "name": "Urina tipo 1",
+      "aliases": [
+        "EAS",
+        "urina rotina",
+        "sumário de urina"
+      ],
+      "category": "urina_fezes",
+      "specimen": "urina",
+      "preparation": "Primeira urina da manhã, com higiene íntima prévia."
+    },
+    {
+      "code": "LAB-10080",
+      "name": "Parasitológico de fezes",
+      "aliases": [
+        "EPF",
+        "protoparasitológico"
+      ],
+      "category": "urina_fezes",
+      "specimen": "fezes",
+      "preparation": "Coletar amostra em frasco próprio; não requer jejum."
+    },
+    {
+      "code": "LAB-10081",
+      "name": "Sangue oculto nas fezes",
+      "aliases": [
+        "pesquisa de sangue oculto",
+        "PSOF"
+      ],
+      "category": "urina_fezes",
+      "specimen": "fezes",
+      "preparation": "Coletar amostra em frasco próprio; não requer jejum."
+    },
+    {
+      "code": "LAB-10082",
+      "name": "Calprotectina fecal",
+      "aliases": [
+        "calprotectina"
+      ],
+      "category": "urina_fezes",
+      "specimen": "fezes",
+      "preparation": "Coletar amostra em frasco próprio; não requer jejum."
+    },
+    {
+      "code": "LAB-10083",
+      "name": "Pesquisa de leucócitos nas fezes",
+      "aliases": [
+        "leucócitos fecais"
+      ],
+      "category": "urina_fezes",
+      "specimen": "fezes",
+      "preparation": "Coletar amostra em frasco próprio; não requer jejum."
+    },
+    {
+      "code": "LAB-10084",
+      "name": "Microalbuminúria",
+      "aliases": [
+        "albumina na urina",
+        "relação albumina/creatinina"
+      ],
+      "category": "urina_fezes",
+      "specimen": "urina",
+      "preparation": "Primeira urina da manhã, com higiene íntima prévia."
+    },
+    {
+      "code": "LAB-10085",
+      "name": "Proteinúria de 24 horas",
+      "aliases": [
+        "proteína na urina de 24h"
+      ],
+      "category": "urina_fezes",
+      "specimen": "urina",
+      "preparation": "Coletar toda a urina durante 24 horas em frasco fornecido pelo laboratório."
+    },
+    {
+      "code": "LAB-10086",
+      "name": "Clearance de creatinina",
+      "aliases": [
+        "depuração de creatinina"
+      ],
+      "category": "urina_fezes",
+      "specimen": "urina",
+      "preparation": "Urina de 24 horas e coleta de sangue no mesmo dia."
+    },
+    {
+      "code": "LAB-10087",
+      "name": "Tempo de protrombina",
+      "aliases": [
+        "TP",
+        "INR",
+        "TAP",
+        "TP/INR"
+      ],
+      "category": "coagulacao",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10088",
+      "name": "Tempo de tromboplastina parcial ativada",
+      "aliases": [
+        "TTPA",
+        "KPTT"
+      ],
+      "category": "coagulacao",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10089",
+      "name": "Fibrinogênio",
+      "aliases": [
+        "fibrinogênio plasmático"
+      ],
+      "category": "coagulacao",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10090",
+      "name": "D-dímero",
+      "aliases": [
+        "dímero D"
+      ],
+      "category": "coagulacao",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10091",
+      "name": "Tempo de trombina",
+      "aliases": [
+        "TT"
+      ],
+      "category": "coagulacao",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10092",
+      "name": "Antitrombina III",
+      "aliases": [
+        "antitrombina"
+      ],
+      "category": "coagulacao",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10093",
+      "name": "PSA total",
+      "aliases": [
+        "PSA",
+        "antígeno prostático específico"
+      ],
+      "category": "marcadores_tumorais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas; evitar atividade física intensa e relação sexual nas 48 horas anteriores."
+    },
+    {
+      "code": "LAB-10094",
+      "name": "PSA livre",
+      "aliases": [
+        "PSA L",
+        "antígeno prostático livre"
+      ],
+      "category": "marcadores_tumorais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas; evitar atividade física intensa e relação sexual nas 48 horas anteriores."
+    },
+    {
+      "code": "LAB-10095",
+      "name": "Antígeno carcinoembrionário",
+      "aliases": [
+        "CEA"
+      ],
+      "category": "marcadores_tumorais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10096",
+      "name": "CA 125",
+      "aliases": [
+        "CA125"
+      ],
+      "category": "marcadores_tumorais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10097",
+      "name": "CA 19-9",
+      "aliases": [
+        "CA19-9"
+      ],
+      "category": "marcadores_tumorais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10098",
+      "name": "Alfafetoproteína",
+      "aliases": [
+        "AFP",
+        "alfa-fetoproteína"
+      ],
+      "category": "marcadores_tumorais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10099",
+      "name": "Urocultura",
+      "aliases": [
+        "cultura de urina",
+        "urocultura com antibiograma"
+      ],
+      "category": "microbiologia",
+      "specimen": "urina",
+      "preparation": "Primeira urina da manhã, jato médio, com higiene íntima prévia."
+    },
+    {
+      "code": "LAB-10100",
+      "name": "Hemocultura",
+      "aliases": [
+        "cultura de sangue"
+      ],
+      "category": "microbiologia",
+      "specimen": "sangue",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10101",
+      "name": "Coprocultura",
+      "aliases": [
+        "cultura de fezes"
+      ],
+      "category": "microbiologia",
+      "specimen": "fezes",
+      "preparation": "Coletar amostra em frasco próprio; não requer jejum."
+    },
+    {
+      "code": "LAB-10102",
+      "name": "Cultura de secreção de orofaringe",
+      "aliases": [
+        "cultura de garganta"
+      ],
+      "category": "microbiologia",
+      "specimen": "swab de orofaringe",
+      "preparation": "Não escovar os dentes nem usar enxaguante antes da coleta."
+    },
+    {
+      "code": "LAB-10103",
+      "name": "Baciloscopia de escarro",
+      "aliases": [
+        "BAAR",
+        "pesquisa de BAAR"
+      ],
+      "category": "microbiologia",
+      "specimen": "escarro",
+      "preparation": "Primeira amostra de escarro da manhã, antes de escovar os dentes."
+    },
+    {
+      "code": "LAB-10104",
+      "name": "RT-PCR para SARS-CoV-2",
+      "aliases": [
+        "RT-PCR covid",
+        "PCR covid",
+        "teste molecular covid"
+      ],
+      "category": "microbiologia",
+      "specimen": "swab nasofaríngeo",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10105",
+      "name": "Teste rápido de antígeno para SARS-CoV-2",
+      "aliases": [
+        "antígeno covid",
+        "teste rápido covid"
+      ],
+      "category": "microbiologia",
+      "specimen": "swab nasofaríngeo",
+      "preparation": "Não requer jejum."
+    },
+    {
+      "code": "LAB-10106",
+      "name": "Pesquisa de rotavírus nas fezes",
+      "aliases": [
+        "rotavírus"
+      ],
+      "category": "microbiologia",
+      "specimen": "fezes",
+      "preparation": "Coletar amostra em frasco próprio; não requer jejum."
+    },
+    {
+      "code": "LAB-10107",
+      "name": "Vitamina D (25-OH)",
+      "aliases": [
+        "vitamina D",
+        "25-hidroxivitamina D"
+      ],
+      "category": "vitaminas_minerais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10108",
+      "name": "Vitamina B12",
+      "aliases": [
+        "B12",
+        "cobalamina"
+      ],
+      "category": "vitaminas_minerais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10109",
+      "name": "Ferritina",
+      "aliases": [
+        "ferritina sérica"
+      ],
+      "category": "vitaminas_minerais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10110",
+      "name": "Ferro sérico",
+      "aliases": [
+        "ferro",
+        "sideremia"
+      ],
+      "category": "vitaminas_minerais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10111",
+      "name": "Ácido fólico",
+      "aliases": [
+        "folato"
+      ],
+      "category": "vitaminas_minerais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10112",
+      "name": "Zinco sérico",
+      "aliases": [
+        "zinco"
+      ],
+      "category": "vitaminas_minerais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10113",
+      "name": "Transferrina",
+      "aliases": [
+        "transferrina sérica"
+      ],
+      "category": "vitaminas_minerais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 4 horas."
+    },
+    {
+      "code": "LAB-10114",
+      "name": "Vitamina C",
+      "aliases": [
+        "ácido ascórbico"
+      ],
+      "category": "vitaminas_minerais",
+      "specimen": "sangue",
+      "preparation": "Jejum de 8 horas."
+    },
+    {
+      "code": "LAB-10115",
+      "name": "Ultrassonografia de abdome total",
+      "aliases": [
+        "USG abdome total",
+        "ultrassom de abdome total",
+        "ecografia abdominal total"
+      ],
+      "category": "imagem",
+      "specimen": "não se aplica",
+      "preparation": "Jejum de 8 horas e bexiga cheia."
+    },
+    {
+      "code": "LAB-10116",
+      "name": "Ultrassonografia de abdome superior",
+      "aliases": [
+        "USG abdome superior",
+        "ultrassom de abdome superior"
+      ],
+      "category": "imagem",
+      "specimen": "não se aplica",
+      "preparation": "Jejum de 8 horas."
+    },
+    {
+      "code": "LAB-10117",
+      "name": "Ultrassonografia pélvica",
+      "aliases": [
+        "USG pélvica",
+        "ultrassom pélvico"
+      ],
+      "category": "imagem",
+      "specimen": "não se aplica",
+      "preparation": "Bexiga cheia: beber 1 litro de água 1 hora antes."
+    },
+    {
+      "code": "LAB-10118",
+      "name": "Ultrassonografia de tireoide",
+      "aliases": [
+        "USG tireoide",
+        "ultrassom de tireoide"
+      ],
+      "category": "imagem",
+      "specimen": "não se aplica",
+      "preparation": "Sem preparo específico."
+    },
+    {
+      "code": "LAB-10119",
+      "name": "Radiografia de tórax",
+      "aliases": [
+        "raio-x de tórax",
+        "RX de tórax"
+      ],
+      "category": "imagem",
+      "specimen": "não se aplica",
+      "preparation": "Sem preparo específico."
+    },
+    {
+      "code": "LAB-10120",
+      "name": "Densitometria óssea",
+      "aliases": [
+        "densitometria"
+      ],
+      "category": "imagem",
+      "specimen": "não se aplica",
+      "preparation": "Não tomar suplemento de cálcio nas 24 horas anteriores."
+    }
+  ]
+}
