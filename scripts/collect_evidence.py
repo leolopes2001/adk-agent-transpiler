@@ -16,6 +16,11 @@ systems and never write to the repository. The script
   the appointment, the database rows, the logs of every container and the
   generated code, then removes the stack and its volumes.
 
+Each scenario runs once: its table capture (cli/) and, for the scenarios
+with a report, its JSON report (runs/) come from that same execution. The
+CLI prints one format per run, so the collector starts it through a small
+wrapper that also writes the report to stderr (`BOTH_OUTPUTS`).
+
 The folders it writes (runs/, cli/, logs/, api/, transpiler/) are replaced on
 every run. Logs are already redacted by the services; the security test
 `tests/security/test_e2e_pii.py` scans the whole folder for personal data.
@@ -60,6 +65,18 @@ SPECS = {
 }
 LLM_QUOTA_ERRORS = {"LLM_RESOURCE_EXHAUSTED", "LLM_429", "LLM_402"}
 NON_INTERACTIVE = ("--non-interactive",)
+REPORT_MARKER = "lab-evidence-report: "
+# `lab-agent run ... --output table`, plus the JSON report of the same run on
+# stderr: the CLI renders the table from that report.
+BOTH_OUTPUTS = (
+    "import json, sys\n"
+    "from agent_runtime import cli\n"
+    "def render_text(report, result):\n"
+    f"    print({REPORT_MARKER!r} + json.dumps(report, ensure_ascii=False), file=sys.stderr)\n"
+    "    return table(report, result)\n"
+    "table, cli.render_text = cli.render_text, render_text\n"
+    "sys.exit(cli.main(sys.argv[1:]))\n"
+)
 DB_QUERY = (
     "SELECT a.id, a.patient_ref, a.source_document_sha256, a.requested_by, "
     "string_agg(e.code, ',' ORDER BY e.code) FROM appointments a "
@@ -243,7 +260,7 @@ class Collector:
     stale_exit: int | None = None
     stale_file: str = ""
 
-    def run(self, scenario: Scenario, *output: str) -> AgentRun | None:
+    def run(self, scenario: Scenario, *output: str, with_report: bool = False) -> AgentRun | None:
         backend = "gemini" if self.llm and scenario.uses_llm else "fake"
         if scenario.uses_llm and self.llm and self.quota_error:
             self.index.append(
@@ -255,9 +272,12 @@ class Collector:
         if self.llm:
             env |= {"APP_ENV": "dev", "AGENT_LLM_BACKEND": "gemini"}
             pass_env = (LLM_KEY_ENV,)
-        run = self.stack.run_agent(
-            scenario.image, *scenario.args, *output, env=env, pass_env=pass_env
-        )
+        if with_report:
+            run = self._run_with_report(scenario, output, env, pass_env)
+        else:
+            run = self.stack.run_agent(
+                scenario.image, *scenario.args, *output, env=env, pass_env=pass_env
+            )
         error = (run.report or {}).get("error_code")
         if error in LLM_QUOTA_ERRORS:
             self.quota_error = error
@@ -272,6 +292,33 @@ class Collector:
             }
         )
         return run
+
+    def _run_with_report(
+        self,
+        scenario: Scenario,
+        output: tuple[str, ...],
+        env: dict[str, str],
+        pass_env: tuple[str, ...],
+    ) -> AgentRun:
+        """One run through BOTH_OUTPUTS: table on stdout, its report taken from stderr."""
+        options = ["run", "--rm", "-T", "--entrypoint", "python"]
+        for name, value in env.items():
+            options += ["-e", f"{name}={value}"]
+        for name in pass_env:
+            options += ["-e", name]
+        args = ("run", "--image", scenario.image, *scenario.args, *output)
+        forwarded = {name: os.environ.get(name, "") for name in pass_env}
+        result = self.stack.compose(
+            *options, "agent", "-c", BOTH_OUTPUTS, *args, check=False, extra_env=forwarded
+        )
+        report = None
+        stderr: list[str] = []
+        for line in result.stderr.splitlines(keepends=True):
+            if line.startswith(REPORT_MARKER):
+                report = json.loads(line.removeprefix(REPORT_MARKER))
+            else:
+                stderr.append(line)
+        return AgentRun(args, result.returncode, report, result.stdout, "".join(stderr))
 
 
 def _cli_text(scenario: Scenario, run: AgentRun) -> str:
@@ -315,34 +362,29 @@ def _index_markdown(collector: Collector) -> str:
         "",
         "Gerado por `scripts/collect_evidence.py`; não editar à mão.",
         "",
-        "Primeiro as execuções com `--output json` (relatórios em `runs/`); depois o banco "
-        "é esvaziado (`TRUNCATE appointments CASCADE`) e os mesmos cenários rodam com a "
-        "saída em tabela (`cli/`), para que as duas séries comecem com um agendamento novo.",
+        "Cada cenário roda uma vez. A captura em tabela (`cli/`) e, quando há, o relatório "
+        "JSON (`runs/`) são da mesma execução: o `run_id` do relatório é o da última linha "
+        "da captura.",
         "",
-        "| Cenário | Saída | LLM | Exit | Outcome | Agendamento | Arquivo |",
+        "| Cenário | LLM | Exit | Outcome | Agendamento | Captura | Relatório |",
         "|---|---|---|---|---|---|---|",
     ]
     for entry in collector.index:
-        output = " ".join(entry["output"]) or "padrão da spec"
         if "pending" in entry:
             lines.append(
-                f"| {entry['scenario']} | `{output}` | gemini | — | pendente: cota do Gemini "
-                f"({entry['pending']}) | — | — |"
+                f"| {entry['scenario']} | gemini | — | pendente: cota do Gemini "
+                f"({entry['pending']}) | — | — | — |"
             )
             continue
         run: AgentRun = entry["run"]
-        if run.report is not None:
-            outcome = run.report["outcome"]
-            appointment = (run.report.get("appointment") or {}).get("status", "—")
-        else:
-            outcome, appointment = _from_text(run.stdout)
+        outcome, appointment = _from_text(run.stdout)
         lines.append(
-            f"| {entry['scenario']} | `{output}` | {entry['backend']} | {run.exit_code} | "
-            f"{outcome} | {appointment} | {entry.get('file', '—')} |"
+            f"| {entry['scenario']} | {entry['backend']} | {run.exit_code} | {outcome} | "
+            f"{appointment} | {entry.get('file', '—')} | {entry.get('report', '—')} |"
         )
     lines.append(
-        f"| Spec alterada sem regenerar | — | — | {collector.stale_exit} | — | — | "
-        f"[`{collector.stale_file}`](../{collector.stale_file}) |"
+        f"| Spec alterada sem regenerar | — | {collector.stale_exit} | — | — | "
+        f"[`{collector.stale_file}`](../{collector.stale_file}) | — |"
     )
     return "\n".join(lines) + "\n"
 
@@ -361,27 +403,24 @@ def stack_evidence(use_llm: bool) -> str | None:
     """Runs the scenarios; returns the Gemini quota error code, if any."""
     with compose_stack() as stack:
         collector = Collector(stack, llm=use_llm)
-
-        for scenario in REPORT_SCENARIOS:
-            run = collector.run(scenario, "--output", "json")
-            if run is not None and run.report is not None:
-                path = _write(
-                    f"runs/{run.report['run_id']}.json",
-                    json.dumps(run.report, ensure_ascii=False, indent=2),
-                )
-                collector.index[-1]["file"] = f"[`runs/{path.name}`](./{path.name})"
-
-        stack.db_rows("TRUNCATE appointments CASCADE")
         appointment_id = None
         for number, scenario in enumerate([*REPORT_SCENARIOS, *TEXT_ONLY_SCENARIOS], start=1):
             # The lookup-only spec keeps its own output format.
             output = () if scenario.name == "spec-alternativa" else ("--output", "table")
-            run = collector.run(scenario, *output)
+            run = collector.run(scenario, *output, with_report=scenario in REPORT_SCENARIOS)
             if run is None:
                 continue
             name = f"cli/{number:02d}-{scenario.name}.txt"
             _write(name, _cli_text(scenario, run))
             collector.index[-1]["file"] = f"[`{name}`](../{name})"
+            if run.report is not None:
+                if run.report["run_id"] not in run.stdout:
+                    raise SystemExit(f"{name}: the report is not from the captured run")
+                path = _write(
+                    f"runs/{run.report['run_id']}.json",
+                    json.dumps(run.report, ensure_ascii=False, indent=2),
+                )
+                collector.index[-1]["report"] = f"[`runs/{path.name}`](./{path.name})"
             match = re.search(r"\bid (apt_[0-9A-Z]{26})", run.stdout)
             if scenario.name == "feliz" and match:
                 appointment_id = match.group(1)

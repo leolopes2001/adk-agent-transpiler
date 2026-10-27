@@ -45,8 +45,8 @@ O override `docker-compose.e2e.yml` faz duas coisas: publica a API numa porta al
 
 | Caminho | Origem |
 |---|---|
-| `runs/<run_id>.json`, `runs/index.md` | Relatórios `--output json` dos cenários feliz, replay, injeção e ambíguo, e um índice com LLM, exit e outcome de cada execução. Gerados pelo script. |
-| `cli/NN-*.txt` | Saída da CLI em tabela: o comando dentro do container, o stdout, as mensagens `lab-agent:` do stderr e o exit code. Gerados pelo script. |
+| `runs/<run_id>.json`, `runs/index.md` | Relatórios JSON dos cenários feliz, replay, injeção e ambíguo, e um índice com LLM, exit e outcome de cada execução. Cada relatório é da mesma execução que a captura correspondente em `cli/` (o `run_id` aparece na última linha da captura). Gerados pelo script. |
+| `cli/NN-*.txt` | Saída da CLI em tabela: o comando dentro do container, o stdout, as mensagens `lab-agent:` do stderr e o exit code. Cada cenário roda uma vez; o script lê o relatório JSON dessa mesma execução por um wrapper da CLI. Gerados pelo script. |
 | `logs/compose.log` | `docker compose logs` de todos os serviços e o stderr (JSON) de cada execução do agent. Gerado pelo script. |
 | `api/appointment.json`, `api/database.txt` | Resposta da API e linhas do banco ao fim da coleta. Gerados pelo script. |
 | `transpiler/*` | Saída do `lab-transpile` e cópias do código gerado. Gerados pelo script. |
