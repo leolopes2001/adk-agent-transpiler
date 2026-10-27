@@ -3,7 +3,7 @@
 import hmac
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, Security, status
+from fastapi import Depends, Header, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 
 from scheduler_api.domain.catalog import Catalog
@@ -12,6 +12,8 @@ from scheduler_api.log import get_logger
 from scheduler_api.settings import Settings
 
 API_KEY_HEADER = "X-API-Key"
+IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
+IDEMPOTENCY_KEY_PATTERN = r"^[A-Za-z0-9_\-:.]{8,128}$"
 
 _log = get_logger(__name__)
 
@@ -51,3 +53,20 @@ def get_appointment_service(request: Request) -> AppointmentService:
 
 CatalogDep = Annotated[Catalog, Depends(get_catalog)]
 AppointmentServiceDep = Annotated[AppointmentService, Depends(get_appointment_service)]
+
+
+# Validation errors on this header are answered with 400 instead of 422 (see errors.py).
+IdempotencyKey = Annotated[
+    str,
+    Header(
+        alias=IDEMPOTENCY_KEY_HEADER,
+        min_length=8,
+        max_length=128,
+        pattern=IDEMPOTENCY_KEY_PATTERN,
+        description=(
+            "Client-chosen key, 8 to 128 characters from `A-Z a-z 0-9 _ - : .`. "
+            "Repeating a request with the same key and body returns the original "
+            "appointment instead of creating another one."
+        ),
+    ),
+]

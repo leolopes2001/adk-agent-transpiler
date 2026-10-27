@@ -17,7 +17,13 @@ from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import Scope
 
-from scheduler_api.domain.models import AppointmentNotFoundError, CatalogValidationError
+from scheduler_api.domain.models import (
+    AppointmentNotFoundError,
+    CatalogValidationError,
+    IdempotencyKeyReuseError,
+)
+
+IDEMPOTENCY_KEY_LOC = ("header", "idempotency-key")
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 TYPE_BASE = "https://errors.lab-agent.example/"
@@ -167,6 +173,20 @@ async def _http_exception(request: Request, exc: Exception) -> JSONResponse:
 async def _validation_error(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)  # noqa: S101 - registered for it only
     errors = field_errors(exc.errors())
+    # A missing or malformed Idempotency-Key is a protocol error (400), and it is
+    # reported alone: the body is not worth validating without a usable key.
+    key_errors = [
+        e for e in errors if tuple(str(part).lower() for part in e.loc[:2]) == IDEMPOTENCY_KEY_LOC
+    ]
+    if key_errors:
+        return problem_response(
+            request.scope,
+            status=400,
+            code="invalid_idempotency_key",
+            title="Invalid Idempotency-Key",
+            detail="Idempotency-Key is required: 8 to 128 characters from A-Z a-z 0-9 _ - : .",
+            errors=key_errors,
+        )
     return problem_response(
         request.scope,
         status=422,
@@ -208,10 +228,21 @@ async def _appointment_not_found(request: Request, exc: Exception) -> JSONRespon
     )
 
 
+async def _idempotency_key_reuse(request: Request, exc: Exception) -> JSONResponse:
+    return problem_response(
+        request.scope,
+        status=409,
+        code="idempotency_key_reuse",
+        title="Idempotency key reuse",
+        detail="This Idempotency-Key was already used with a different request body.",
+    )
+
+
 def install_error_handlers(app: FastAPI) -> None:
     """Unexpected exceptions are handled by `RequestContextMiddleware` (it owns the request id)."""
     app.add_exception_handler(ApiError, _api_error)
     app.add_exception_handler(CatalogValidationError, _catalog_validation)
     app.add_exception_handler(AppointmentNotFoundError, _appointment_not_found)
+    app.add_exception_handler(IdempotencyKeyReuseError, _idempotency_key_reuse)
     app.add_exception_handler(StarletteHTTPException, _http_exception)
     app.add_exception_handler(RequestValidationError, _validation_error)

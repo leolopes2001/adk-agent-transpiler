@@ -2,9 +2,9 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Path, Response, status
+from fastapi import APIRouter, Depends, Path, Response, status
 
-from scheduler_api.api.deps import AppointmentServiceDep, require_api_key
+from scheduler_api.api.deps import AppointmentServiceDep, IdempotencyKey, require_api_key
 from scheduler_api.schemas import APPOINTMENT_ID_PATTERN, AppointmentCreate, AppointmentOut
 
 router = APIRouter(prefix="/v1", tags=["appointments"], dependencies=[Depends(require_api_key)])
@@ -19,10 +19,13 @@ def create_appointment(
     body: AppointmentCreate,
     response: Response,
     service: AppointmentServiceDep,
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    idempotency_key: IdempotencyKey,
 ) -> AppointmentOut:
-    appointment = service.create(body.to_domain())
+    appointment, replayed = service.create(body.to_domain(), idempotency_key)
     response.headers["Location"] = f"/v1/appointments/{appointment.id}"
+    if replayed:
+        response.status_code = status.HTTP_200_OK
+        response.headers["Idempotent-Replayed"] = "true"
     return AppointmentOut.from_domain(appointment)
 
 

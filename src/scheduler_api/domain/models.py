@@ -1,6 +1,8 @@
 """Entities and domain errors (plain dataclasses, no framework types)."""
 
-from dataclasses import dataclass
+import hashlib
+import json
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Literal
 
@@ -40,6 +42,28 @@ class Appointment:
     created_at: datetime
 
 
+def canonical_request_hash(request: AppointmentRequest) -> str:
+    """SHA-256 of the request as canonical JSON: sorted keys, exams sorted by code.
+
+    The order in which the client lists exams does not change the hash; any
+    other difference in the body does.
+    """
+    canonical = asdict(request)
+    canonical["exams"] = sorted(canonical["exams"], key=lambda exam: exam["code"])
+    encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class IdempotencyRecord:
+    key: str
+    request_hash: str
+    appointment_id: str
+    response_status: int
+    created_at: datetime
+    expires_at: datetime
+
+
 class DomainError(Exception):
     """Base for errors the HTTP layer maps to a specific problem."""
 
@@ -69,3 +93,15 @@ class AppointmentNotFoundError(DomainError):
     def __init__(self, appointment_id: str) -> None:
         super().__init__(appointment_id)
         self.appointment_id = appointment_id
+
+
+class IdempotencyKeyReuseError(DomainError):
+    """The key was already used, within its TTL, for a different request body."""
+
+
+class IdempotencyKeyTakenError(Exception):
+    """Raised by storage when a concurrent request committed the same key first.
+
+    Not a `DomainError`: the service handles it by re-reading the key, and it
+    only escapes (as a 500) if the same race happens twice in a row.
+    """

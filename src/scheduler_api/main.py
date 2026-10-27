@@ -7,6 +7,7 @@ state. Run with `uvicorn scheduler_api.main:create_app --factory`.
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import timedelta
 
 from fastapi import FastAPI
 
@@ -36,7 +37,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     session_factory = make_session_factory(engine)
     app.state.catalog = catalog
     app.state.appointment_service = AppointmentService(
-        lambda: SqlUnitOfWork(session_factory), catalog
+        lambda: SqlUnitOfWork(session_factory),
+        catalog,
+        idempotency_ttl=timedelta(hours=settings.idempotency_ttl_hours),
     )
     app.state.readiness_checks = {
         "database": lambda: ping(engine),

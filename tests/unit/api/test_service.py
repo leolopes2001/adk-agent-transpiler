@@ -1,5 +1,7 @@
+import hashlib
 import json
-from datetime import UTC, datetime
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
@@ -13,6 +15,10 @@ from scheduler_api.domain.models import (
     AppointmentRequest,
     CatalogValidationError,
     ExamRef,
+    IdempotencyKeyReuseError,
+    IdempotencyKeyTakenError,
+    IdempotencyRecord,
+    canonical_request_hash,
 )
 from scheduler_api.domain.services import AppointmentService
 
@@ -20,6 +26,8 @@ pytestmark = pytest.mark.unit
 
 NOW = datetime(2026, 10, 26, 22, 48, tzinfo=UTC)
 SHA = "9b1e" + "0" * 60
+TTL = timedelta(hours=24)
+KEY = "key-0001"
 CATALOG = Catalog(
     [
         CatalogExam("LAB-10001", "Hemograma completo"),
@@ -42,11 +50,38 @@ class FakeAppointments:
         return self.pending.get(appointment_id) or self._store.get(appointment_id)
 
 
+class FakeIdempotency:
+    """Mimics the primary key: adding a key that is already committed fails."""
+
+    def __init__(self, db: "FakeDatabase") -> None:
+        self._db = db
+        self.pending: dict[str, IdempotencyRecord] = {}
+        self.deleted: set[str] = set()
+
+    def get(self, key: str) -> IdempotencyRecord | None:
+        record = self._db.keys.get(key)
+        if record is None:
+            self._db.on_miss()
+        return record
+
+    def add(self, record: IdempotencyRecord) -> None:
+        if self._db.failing_adds:
+            self._db.failing_adds -= 1
+            raise IdempotencyKeyTakenError(record.key)
+        if record.key in self._db.keys and record.key not in self.deleted:
+            raise IdempotencyKeyTakenError(record.key)
+        self.pending[record.key] = record
+
+    def delete_expired(self, key: str, now: datetime) -> None:
+        if self._db.keys[key].expires_at <= now:
+            self.deleted.add(key)
+
+
 class FakeUnitOfWork:
-    def __init__(self, store: dict[str, Appointment]) -> None:
-        self._store = store
-        self.appointments = FakeAppointments(store)
-        self.committed = False
+    def __init__(self, db: "FakeDatabase") -> None:
+        self._db = db
+        self.appointments = FakeAppointments(db.appointments)
+        self.idempotency = FakeIdempotency(db)
 
     def __enter__(self) -> Self:
         return self
@@ -58,23 +93,63 @@ class FakeUnitOfWork:
         tb: TracebackType | None,
     ) -> None:
         self.appointments.pending.clear()
+        self.idempotency.pending.clear()
 
     def commit(self) -> None:
-        self._store.update(self.appointments.pending)
+        for key in self.idempotency.deleted:
+            del self._db.keys[key]
+        self._db.appointments.update(self.appointments.pending)
+        self._db.keys.update(self.idempotency.pending)
         self.appointments.pending.clear()
-        self.committed = True
+        self.idempotency.pending.clear()
+
+
+class FakeDatabase:
+    def __init__(self) -> None:
+        self.appointments: dict[str, Appointment] = {}
+        self.keys: dict[str, IdempotencyRecord] = {}
+        self.races: list[Callable[[], None]] = []
+        """Run once each when a key lookup misses: a concurrent request committing first."""
+        self.failing_adds = 0
+        """Number of key inserts that fail as taken, without any record appearing."""
+
+    def on_miss(self) -> None:
+        if self.races:
+            self.races.pop(0)()
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = NOW
+
+    def __call__(self) -> datetime:
+        return self.now
 
 
 @pytest.fixture
-def store() -> dict[str, Appointment]:
-    return {}
+def db() -> FakeDatabase:
+    return FakeDatabase()
 
 
 @pytest.fixture
-def service(store: dict[str, Appointment]) -> AppointmentService:
+def store(db: FakeDatabase) -> dict[str, Appointment]:
+    return db.appointments
+
+
+@pytest.fixture
+def clock() -> Clock:
+    return Clock()
+
+
+@pytest.fixture
+def service(db: FakeDatabase, clock: Clock) -> AppointmentService:
     ids = iter(f"apt_{n:026d}" for n in range(1, 100))
     return AppointmentService(
-        lambda: FakeUnitOfWork(store), CATALOG, clock=lambda: NOW, new_id=lambda: next(ids)
+        lambda: FakeUnitOfWork(db),
+        CATALOG,
+        idempotency_ttl=TTL,
+        clock=clock,
+        new_id=lambda: next(ids),
     )
 
 
@@ -90,8 +165,8 @@ def request(*exams: tuple[str, str]) -> AppointmentRequest:
 def test_create_records_a_requested_appointment(
     service: AppointmentService, store: dict[str, Appointment]
 ) -> None:
-    created = service.create(
-        request(("LAB-10012", "Glicemia de jejum"), ("LAB-10001", "Hemograma completo"))
+    created, replayed = service.create(
+        request(("LAB-10012", "Glicemia de jejum"), ("LAB-10001", "Hemograma completo")), KEY
     )
 
     assert created == Appointment(
@@ -106,32 +181,36 @@ def test_create_records_a_requested_appointment(
         requested_by="exam_scheduling_agent",
         created_at=NOW,
     )
+    assert not replayed
     assert store == {created.id: created}
 
 
 def test_names_are_compared_normalized_and_stored_as_in_catalog(
     service: AppointmentService,
 ) -> None:
-    created = service.create(request(("LAB-10003", "  CONTAGEM de reticulocitos. ")))
+    created, _ = service.create(request(("LAB-10003", "  CONTAGEM de reticulocitos. ")), KEY)
 
     assert created.exams == (ExamRef("LAB-10003", "Contagem de reticulócitos"),)
 
 
 def test_unknown_code_is_rejected_without_writing(
-    service: AppointmentService, store: dict[str, Appointment]
+    service: AppointmentService, store: dict[str, Appointment], db: FakeDatabase
 ) -> None:
     with pytest.raises(CatalogValidationError) as info:
-        service.create(request(("LAB-10001", "Hemograma completo"), ("LAB-99999", "Inventado")))
+        service.create(
+            request(("LAB-10001", "Hemograma completo"), ("LAB-99999", "Inventado")), KEY
+        )
 
     [issue] = info.value.issues
     assert (issue.index, issue.field, issue.kind) == (1, "code", "unknown_exam_code")
     assert issue.message == "LAB-99999 not found"
     assert store == {}
+    assert db.keys == {}
 
 
 def test_name_mismatch_is_rejected(service: AppointmentService) -> None:
     with pytest.raises(CatalogValidationError) as info:
-        service.create(request(("LAB-10001", "Glicemia de jejum")))
+        service.create(request(("LAB-10001", "Glicemia de jejum")), KEY)
 
     [issue] = info.value.issues
     assert (issue.index, issue.field, issue.kind) == (0, "name", "exam_name_mismatch")
@@ -145,7 +224,8 @@ def test_reports_every_catalog_issue(service: AppointmentService) -> None:
                 ("LAB-10001", "Outro nome"),
                 ("LAB-10012", "Glicemia de jejum"),
                 ("LAB-00000", "Nada"),
-            )
+            ),
+            KEY,
         )
 
     assert [(i.index, i.kind) for i in info.value.issues] == [
@@ -156,7 +236,7 @@ def test_reports_every_catalog_issue(service: AppointmentService) -> None:
 
 
 def test_get_returns_stored_appointment(service: AppointmentService) -> None:
-    created = service.create(request(("LAB-10001", "Hemograma completo")))
+    created, _ = service.create(request(("LAB-10001", "Hemograma completo")), KEY)
 
     assert service.get(created.id) == created
 
@@ -169,10 +249,11 @@ def test_get_missing_raises(service: AppointmentService) -> None:
 
 
 def test_default_ids_are_prefixed_ulids() -> None:
-    service = AppointmentService(lambda: FakeUnitOfWork({}), CATALOG)
+    db = FakeDatabase()
+    service = AppointmentService(lambda: FakeUnitOfWork(db), CATALOG)
 
-    first = service.create(request(("LAB-10001", "Hemograma completo")))
-    second = service.create(request(("LAB-10001", "Hemograma completo")))
+    first, _ = service.create(request(("LAB-10001", "Hemograma completo")), "key-a")
+    second, _ = service.create(request(("LAB-10001", "Hemograma completo")), "key-b")
 
     assert first.id.startswith("apt_")
     assert len(first.id) == 30
@@ -235,3 +316,205 @@ def test_rejects_malformed_catalog(tmp_path: Path, content: Any) -> None:
 def test_rejects_missing_catalog(tmp_path: Path) -> None:
     with pytest.raises(CatalogError, match="cannot read"):
         Catalog.load(tmp_path / "missing.json")
+
+
+# Idempotency
+
+
+HEMOGRAMA = ("LAB-10001", "Hemograma completo")
+GLICEMIA = ("LAB-10012", "Glicemia de jejum")
+
+
+def test_records_the_key_with_hash_and_ttl(service: AppointmentService, db: FakeDatabase) -> None:
+    created, _ = service.create(request(HEMOGRAMA), KEY)
+
+    assert db.keys == {
+        KEY: IdempotencyRecord(
+            key=KEY,
+            request_hash=canonical_request_hash(request(HEMOGRAMA)),
+            appointment_id=created.id,
+            response_status=201,
+            created_at=NOW,
+            expires_at=NOW + TTL,
+        )
+    }
+
+
+def test_same_key_and_body_replays(service: AppointmentService, db: FakeDatabase) -> None:
+    first, first_replayed = service.create(request(HEMOGRAMA, GLICEMIA), KEY)
+    second, second_replayed = service.create(request(HEMOGRAMA, GLICEMIA), KEY)
+
+    assert (first_replayed, second_replayed) == (False, True)
+    assert second == first
+    assert len(db.appointments) == 1
+
+
+def test_exam_order_does_not_matter_for_replay(service: AppointmentService) -> None:
+    first, _ = service.create(request(HEMOGRAMA, GLICEMIA), KEY)
+    second, replayed = service.create(request(GLICEMIA, HEMOGRAMA), KEY)
+
+    assert replayed
+    assert second.id == first.id
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        request(HEMOGRAMA),
+        request(HEMOGRAMA, ("LAB-10012", "GLICEMIA DE JEJUM")),
+        AppointmentRequest(
+            "pt_AAAAAAAAAAAAAAAAAAAAAAAAAA",
+            (ExamRef(*HEMOGRAMA), ExamRef(*GLICEMIA)),
+            SHA,
+            "exam_scheduling_agent",
+        ),
+        AppointmentRequest(
+            "pt_K7Q2M4XZB3C6D7E5F6G7H2J4KA",
+            (ExamRef(*HEMOGRAMA), ExamRef(*GLICEMIA)),
+            "f" * 64,
+            "exam_scheduling_agent",
+        ),
+        AppointmentRequest(
+            "pt_K7Q2M4XZB3C6D7E5F6G7H2J4KA",
+            (ExamRef(*HEMOGRAMA), ExamRef(*GLICEMIA)),
+            SHA,
+            "other_system",
+        ),
+    ],
+    ids=["fewer-exams", "name-spelling", "patient", "document", "requester"],
+)
+def test_same_key_with_different_body_conflicts(
+    service: AppointmentService, db: FakeDatabase, changed: AppointmentRequest
+) -> None:
+    service.create(request(HEMOGRAMA, GLICEMIA), KEY)
+
+    with pytest.raises(IdempotencyKeyReuseError):
+        service.create(changed, KEY)
+    assert len(db.appointments) == 1
+
+
+def test_different_keys_create_separate_appointments(
+    service: AppointmentService, db: FakeDatabase
+) -> None:
+    first, _ = service.create(request(HEMOGRAMA), "key-0001")
+    second, replayed = service.create(request(HEMOGRAMA), "key-0002")
+
+    assert not replayed
+    assert first.id != second.id
+    assert len(db.appointments) == 2
+
+
+def test_expired_key_creates_a_new_appointment(
+    service: AppointmentService, db: FakeDatabase, clock: Clock
+) -> None:
+    first, _ = service.create(request(HEMOGRAMA), KEY)
+    clock.now = NOW + TTL
+
+    second, replayed = service.create(request(HEMOGRAMA), KEY)
+
+    assert not replayed
+    assert second.id != first.id
+    assert db.keys[KEY].appointment_id == second.id
+    assert db.keys[KEY].expires_at == NOW + 2 * TTL
+
+
+def test_expired_key_accepts_a_different_body(service: AppointmentService, clock: Clock) -> None:
+    service.create(request(HEMOGRAMA), KEY)
+    clock.now = NOW + TTL + timedelta(seconds=1)
+
+    _, replayed = service.create(request(GLICEMIA), KEY)
+
+    assert not replayed
+
+
+def test_key_just_before_expiry_still_replays(service: AppointmentService, clock: Clock) -> None:
+    service.create(request(HEMOGRAMA), KEY)
+    clock.now = NOW + TTL - timedelta(microseconds=1)
+
+    _, replayed = service.create(request(HEMOGRAMA), KEY)
+
+    assert replayed
+
+
+def _concurrent_commit(
+    db: FakeDatabase, body: AppointmentRequest, appointment_id: str = "apt_" + "W" * 26
+) -> Callable[[], None]:
+    """A request with the same key that commits between our read and our insert."""
+
+    def commit() -> None:
+        winner = Appointment(
+            appointment_id, "requested", body.patient_ref, body.exams, SHA, body.requested_by, NOW
+        )
+        db.appointments[winner.id] = winner
+        db.keys[KEY] = IdempotencyRecord(
+            KEY, canonical_request_hash(body), winner.id, 201, NOW, NOW + TTL
+        )
+
+    return commit
+
+
+def test_race_on_insert_rereads_and_replays(service: AppointmentService, db: FakeDatabase) -> None:
+    db.races.append(_concurrent_commit(db, request(HEMOGRAMA)))
+
+    appointment, replayed = service.create(request(HEMOGRAMA), KEY)
+
+    assert replayed
+    assert appointment.id == "apt_" + "W" * 26
+    assert list(db.appointments) == [appointment.id]
+
+
+def test_race_with_different_body_conflicts(service: AppointmentService, db: FakeDatabase) -> None:
+    db.races.append(_concurrent_commit(db, request(GLICEMIA)))
+
+    with pytest.raises(IdempotencyKeyReuseError):
+        service.create(request(HEMOGRAMA), KEY)
+
+
+def test_second_race_in_a_row_is_not_retried(service: AppointmentService, db: FakeDatabase) -> None:
+    db.failing_adds = 2
+
+    with pytest.raises(IdempotencyKeyTakenError):
+        service.create(request(HEMOGRAMA), KEY)
+    assert db.appointments == {}
+
+
+def test_single_failed_insert_is_retried(service: AppointmentService, db: FakeDatabase) -> None:
+    db.failing_adds = 1
+
+    _, replayed = service.create(request(HEMOGRAMA), KEY)
+
+    assert not replayed
+    assert len(db.appointments) == 1
+
+
+def test_canonical_hash_is_independent_of_exam_order() -> None:
+    assert canonical_request_hash(request(HEMOGRAMA, GLICEMIA)) == canonical_request_hash(
+        request(GLICEMIA, HEMOGRAMA)
+    )
+
+
+def test_canonical_hash_format_is_pinned() -> None:
+    expected_json = (
+        '{"exams":[{"code":"LAB-10001","name":"Hemograma completo"},'
+        '{"code":"LAB-10012","name":"Glicemia de jejum"}],'
+        '"patient_ref":"pt_K7Q2M4XZB3C6D7E5F6G7H2J4KA",'
+        '"requested_by":"exam_scheduling_agent",'
+        f'"source_document_sha256":"{SHA}"}}'
+    )
+
+    assert (
+        canonical_request_hash(request(GLICEMIA, HEMOGRAMA))
+        == hashlib.sha256(expected_json.encode()).hexdigest()
+    )
+
+
+def test_canonical_hash_keeps_unicode_as_utf8() -> None:
+    body = request(("LAB-10003", "Contagem de reticulócitos"))
+    expected = (
+        '{"exams":[{"code":"LAB-10003","name":"Contagem de reticulócitos"}],'
+        '"patient_ref":"pt_K7Q2M4XZB3C6D7E5F6G7H2J4KA",'
+        '"requested_by":"exam_scheduling_agent",'
+        f'"source_document_sha256":"{SHA}"}}'
+    )
+
+    assert canonical_request_hash(body) == hashlib.sha256(expected.encode()).hexdigest()
