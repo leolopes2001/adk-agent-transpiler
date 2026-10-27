@@ -1,4 +1,4 @@
-.PHONY: setup lint typecheck lint-imports test-unit check
+.PHONY: setup lint typecheck lint-imports test-unit check golden
 
 setup:
 	uv sync --all-extras --group dev
@@ -18,3 +18,8 @@ test-unit:
 	uv run pytest -m "unit or contract"
 
 check: lint typecheck lint-imports test-unit
+
+# Regenerates tests/golden from the versioned specs; review the diff before committing.
+golden:
+	uv run lab-transpile generate specs/exam_scheduling_agent.json --out tests/golden/
+	uv run lab-transpile generate specs/examples/exam_lookup_only.json --out tests/golden/

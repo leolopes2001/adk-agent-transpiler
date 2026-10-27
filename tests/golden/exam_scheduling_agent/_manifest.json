@@ -1,0 +1,26 @@
+{
+  "transpiler_version": "0.1.0",
+  "spec_path": "specs/exam_scheduling_agent.json",
+  "spec_sha256": "54dcc984c29c9de186c13927fbda49acabde99dabd28452fd0a0ce6637164d02",
+  "ir_digest": "52c4736f5d0c14fba1aa1ddd36ceff2fa7b46c59ee69c365d5efdabb7a4f1f5e",
+  "instructions": {
+    "exam_extractor": "3a6f658eb5ae03223e7534860203182d0aade880b42e8c1e1c98f2ce0f74ea95"
+  },
+  "adk_requirement": "google-adk==2.13.0",
+  "node_names": [
+    "abort",
+    "exam_extractor",
+    "extraction",
+    "gate",
+    "guard",
+    "lexical_extract",
+    "llm_extract_input",
+    "merge",
+    "ocr",
+    "present",
+    "reconcile",
+    "resolve",
+    "review",
+    "schedule"
+  ]
+}

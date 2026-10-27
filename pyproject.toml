@@ -68,6 +68,10 @@ dev = [
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+# Golden files are transpiler output; test_golden checks that they stay ruff-formatted.
+extend-exclude = ["tests/golden"]
+# Also applies the exclusion to files pre-commit passes explicitly.
+force-exclude = true
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "BLE", "SIM", "RUF", "PL", "PT", "ASYNC"]

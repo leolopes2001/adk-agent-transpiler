@@ -1,0 +1,17 @@
+{
+  "transpiler_version": "0.1.0",
+  "spec_path": "specs/examples/exam_lookup_only.json",
+  "spec_sha256": "9ca4adea69fc685d80808fb7bdfb9b026276d3e8dc1c92725f583c393a89e239",
+  "ir_digest": "27c57d068b42e931c7d5bffc4f08efc21d84d86f1acd73315e97039df81ebadc",
+  "instructions": {},
+  "adk_requirement": "google-adk==2.13.0",
+  "node_names": [
+    "abort",
+    "gate",
+    "guard",
+    "lexical_extract",
+    "ocr",
+    "present",
+    "resolve"
+  ]
+}
