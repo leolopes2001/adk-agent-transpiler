@@ -17,6 +17,7 @@ from google.adk import Context, Event
 from google.adk.workflow import FunctionNode
 
 from agent_runtime.errors import PermanentError
+from agent_runtime.guardrails import injection
 from agent_runtime.nodes._common import Params, function_node, parse_input, routed
 from agent_runtime.schemas import GuardedDocument, InjectionReport, OcrDocument, RunFailure
 from lab_common import logging as lab_logging
@@ -38,11 +39,6 @@ log = lab_logging.get_logger(__name__)
 class UntrustedTextGuardParams(Params):
     max_chars: int = 8000
     block_at: Literal["high", "medium"] = "high"
-
-
-def _scanner_pending(text: str, removed_chars: int) -> InjectionReport:
-    # Fail closed until the scanner exists: no text gets past an unscored guard.
-    raise PermanentError("INJECTION_SCANNER_MISSING", "no injection scanner configured")
 
 
 def _sanitized_lines(lines: list[OcrLine], max_chars: int) -> tuple[list[OcrLine], int, bool]:
@@ -115,7 +111,7 @@ def untrusted_text_guard(
 
 
 def _guard_node(
-    name: str, params: UntrustedTextGuardParams, scan: Scanner = _scanner_pending
+    name: str, params: UntrustedTextGuardParams, scan: Scanner = injection.scan
 ) -> FunctionNode:
     redactor = PiiRedactor(default_detectors())
 
