@@ -101,6 +101,7 @@ deps = RuntimeDeps.lazy(
     generate_content_config=types.GenerateContentConfig(
         temperature={{ node.agent.model.temperature | pyrepr }},
         max_output_tokens={{ node.agent.model.max_output_tokens | pyrepr }},
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
 {% if node.retry %}
         http_options=types.HttpOptions(
             retry_options=types.HttpRetryOptions(

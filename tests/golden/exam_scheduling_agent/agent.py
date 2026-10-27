@@ -107,6 +107,7 @@ exam_extractor = Agent(
     generate_content_config=types.GenerateContentConfig(
         temperature=0.0,
         max_output_tokens=2048,
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         http_options=types.HttpOptions(
             retry_options=types.HttpRetryOptions(
                 attempts=2,

@@ -238,6 +238,10 @@ def test_agent_definition(package: RenderedPackage) -> None:
     assert keywords["before_model_callback"] == "guardrails.pii_tripwire"
     assert keywords["timeout"] == "30.0"
     assert "HttpRetryOptions(attempts=1" in keywords["generate_content_config"]
+    assert (
+        "automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)"
+        in keywords["generate_content_config"]
+    )
 
 
 def test_instruction_round_trips(package: RenderedPackage) -> None:

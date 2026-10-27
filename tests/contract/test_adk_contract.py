@@ -21,7 +21,7 @@ from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import SseConnectionParams
 from google.adk.tools.mcp_tool.mcp_tool import McpTool
 from google.adk.workflow import FunctionNode, JoinNode, NodeTimeoutError, RetryConfig
-from google.genai import types
+from google.genai import _extra_utils, types
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 from pydantic import BaseModel, Field
@@ -258,6 +258,7 @@ async def test_single_turn_agent_sends_only_the_node_input_and_instruction() -> 
         output_schema=Mentions,
         generate_content_config=types.GenerateContentConfig(
             temperature=0.0,
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             http_options=types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=2)),
         ),
         before_model_callback=callback,
@@ -279,6 +280,11 @@ async def test_single_turn_agent_sends_only_the_node_input_and_instruction() -> 
     assert request.config.http_options is not None
     assert request.config.http_options.retry_options is not None
     assert request.config.http_options.retry_options.attempts == 2
+    # AFC off travels with the request, and the Gemini client then skips its
+    # automatic function calling loop without a warning.
+    assert request.config.automatic_function_calling is not None
+    assert request.config.automatic_function_calling.disable is True
+    assert _extra_utils.should_disable_afc(request.config) is True
     # The callback gets keyword arguments and the request the model would get.
     assert calls[0]["request"] is request
 
