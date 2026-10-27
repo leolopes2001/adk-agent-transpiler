@@ -16,7 +16,7 @@ OTHER_SECRET = b"t" * 32
 # Patient data printed on the sample images (scripts/make_sample_images.py).
 CPF = "202.393.613-69"
 NAME = "Maria Fictícia da Silva"
-# Format the scheduler API accepts (07 §2.1 documents an invalid example; this is the regex).
+# Format the scheduler API accepts (scheduler_api.schemas.PATIENT_REF_PATTERN).
 REF_REGEX = re.compile(r"^pt_[A-Z2-7]{26}$")
 
 
