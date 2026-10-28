@@ -17,6 +17,11 @@ stderr and, by default, only errors, so the terminal shows the review
 questions, the report and the summary; --verbose (or LOG_LEVEL=INFO) shows
 every run event.
 
+With the `observability` profile up (see `lab_common.telemetry`) the run is
+also one trace: a `lab-agent run` span over ADK's workflow, node and model
+spans and the MCP and HTTP calls. Message content capture is turned off in
+ADK and google-genai before anything runs.
+
 Exit codes: 0 done, 2 invalid input, 3 blocked by the guard, 4 low OCR
 quality, 5 no exam resolved, 6 dependency failure or scheduling refused,
 7 stale generated code, 8 invalid configuration, 130 cancelled with Ctrl+C.
@@ -30,6 +35,7 @@ import hashlib
 import importlib
 import json
 import logging
+import os
 import signal
 import sys
 import threading
@@ -39,7 +45,7 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from types import FrameType, ModuleType
+from types import FrameType, MappingProxyType, ModuleType
 from typing import Any, NoReturn
 
 import structlog
@@ -86,6 +92,7 @@ from agent_runtime.terminal import (
     welcome,
 )
 from lab_common import logging as lab_logging
+from lab_common import telemetry as lab_telemetry
 from lab_common.mcp_server import LibraryLogFilter
 
 SERVICE = "agent"
@@ -101,12 +108,23 @@ EXIT_CANCELLED = 130
 """Ctrl+C, as shells report a process ended by SIGINT (128 + 2)."""
 REPORT_WIDTH = 120
 """Width of the table report when stdout is not a terminal (a file, a pipe, a capture)."""
+RUN_SPAN = "lab-agent run"
+CONTENT_CAPTURE_OFF = MappingProxyType(
+    {
+        # ADK's own spans (`call_llm` request and response, tool arguments): on by default.
+        "ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS": "false",
+        # GenAI semantic conventions, read by ADK and by google-genai's instrumentation.
+        "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT": "false",
+    }
+)
+"""Set before every run: no prompt, document text or model answer is put on a span."""
 
 type ReviewPrompt = Callable[[Mapping[str, Any]], dict[str, Any]]
 type Announce = Callable[["LoadedAgent", str], Progress | None]
 """Opens the run on the terminal; returns the progress indicator to drive, if any."""
 
 log = lab_logging.get_logger(__name__)
+tracer = lab_telemetry.tracer(__name__)
 
 
 class CliError(Exception):
@@ -522,7 +540,48 @@ async def execute(  # noqa: PLR0913 - the CLI options
     review: ReviewPrompt | None = None,
     announce: Announce | None = None,
 ) -> RunOutcome:
-    """Checks, runs and reports; raises CliError for failures before the run."""
+    """Checks, runs and reports in one `lab-agent run` span; raises CliError before the run."""
+    os.environ.update(CONTENT_CAPTURE_OFF)
+    with tracer.start_as_current_span(
+        RUN_SPAN, attributes={"lab.run_id": run_id}, record_exception=False
+    ) as span:
+        try:
+            outcome = await _execute(
+                image=image,
+                agent_dir=agent_dir,
+                spec=spec,
+                interactive=interactive,
+                run_id=run_id,
+                settings=settings,
+                review=review,
+                announce=announce,
+            )
+        except CliError as error:
+            lab_telemetry.annotate(exit_code=error.exit_code)
+            lab_telemetry.fail("NOT_STARTED", span)
+            raise
+        report = outcome.report
+        lab_telemetry.annotate(
+            outcome=report["outcome"],
+            exit_code=outcome.exit_code,
+            error_code=report.get("error_code"),
+        )
+        if outcome.exit_code != 0:
+            span.set_status(lab_telemetry.Status(lab_telemetry.StatusCode.ERROR))
+        return outcome
+
+
+async def _execute(  # noqa: PLR0913 - the CLI options
+    *,
+    image: str,
+    agent_dir: Path,
+    spec: Path,
+    interactive: bool,
+    run_id: str,
+    settings: AgentSettings,
+    review: ReviewPrompt | None,
+    announce: Announce | None,
+) -> RunOutcome:
     try:
         agent = load_agent(agent_dir, spec, settings)
     except ConfigurationError as error:
@@ -648,11 +707,13 @@ def _interrupt_at_once() -> Iterator[None]:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    telemetry: lab_telemetry.Telemetry | None = None
     try:
         settings = AgentSettings.from_env()
         _configure_logging(log_level(settings, verbose=args.verbose))
         run_id = _run_id(args.run_id)
         structlog.contextvars.bind_contextvars(run_id=run_id)
+        telemetry = lab_telemetry.setup(SERVICE, instance_id=run_id)
         with _interrupt_at_once():
             outcome = asyncio.run(
                 execute(
@@ -676,6 +737,8 @@ def main(argv: list[str] | None = None) -> int:
         return error.exit_code
     finally:
         structlog.contextvars.clear_contextvars()
+        if telemetry is not None:
+            telemetry.shutdown()
     output = args.output or (outcome.result.format if outcome.result else "table")
     if output == "json":
         print(json.dumps(outcome.report, ensure_ascii=False, indent=2))

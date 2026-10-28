@@ -14,6 +14,10 @@ complete `AppointmentOut` (status `requested`) for this request: same
 patient, document hash, requester and exam codes. Anything else is
 `SCHEDULER_UNEXPECTED_RESPONSE` (audit F04): a regression in the API must
 not show the user an appointment that does not match their order.
+
+Each request is a CLIENT span with the method, route template and status
+(never the body) and sends its `traceparent`, so the API's span joins the
+run's trace.
 """
 
 from collections.abc import Mapping
@@ -22,9 +26,13 @@ from datetime import datetime
 from typing import Annotated, Any, Literal, Protocol
 
 import httpx
+from opentelemetry.trace import SpanKind
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from agent_runtime.errors import PermanentError, TransientError
+from agent_runtime.errors import AgentRuntimeError, PermanentError, TransientError
+from lab_common import telemetry as lab_telemetry
+
+tracer = lab_telemetry.tracer(__name__)
 
 APPOINTMENTS_PATH = "/v1/appointments"
 API_KEY_HEADER = "X-API-Key"
@@ -130,9 +138,27 @@ class SchedulerClient:
     async def create_appointment(
         self, request: AppointmentRequest, *, idempotency_key: str, request_id: str
     ) -> AppointmentResult:
-        headers = {IDEMPOTENCY_KEY_HEADER: idempotency_key, REQUEST_ID_HEADER: request_id}
+        with tracer.start_as_current_span(
+            f"POST {APPOINTMENTS_PATH}",
+            kind=SpanKind.CLIENT,
+            attributes={"http.request.method": "POST", "http.route": APPOINTMENTS_PATH},
+            record_exception=False,
+        ) as span:
+            headers = lab_telemetry.inject_headers(
+                {IDEMPOTENCY_KEY_HEADER: idempotency_key, REQUEST_ID_HEADER: request_id}
+            )
+            lab_telemetry.annotate(exam_count=len(request.exams))
+            try:
+                response = await self._post(request, headers)
+                span.set_attribute("http.response.status_code", response.status_code)
+                return _result(response, request)
+            except AgentRuntimeError as error:
+                lab_telemetry.fail(error.code, span)
+                raise
+
+    async def _post(self, request: AppointmentRequest, headers: dict[str, str]) -> httpx.Response:
         try:
-            response = await self._http().post(
+            return await self._http().post(
                 APPOINTMENTS_PATH, json=request.payload(), headers=headers
             )
         except httpx.TimeoutException:
@@ -141,7 +167,6 @@ class SchedulerClient:
             ) from None
         except httpx.HTTPError:
             raise TransientError("SCHEDULER_UNAVAILABLE", "scheduler API is unreachable") from None
-        return _result(response, request)
 
     async def aclose(self) -> None:
         client, self._client = self._client, None

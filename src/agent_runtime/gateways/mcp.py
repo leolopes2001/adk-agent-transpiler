@@ -9,10 +9,17 @@ a `TransientError` or `PermanentError` whose message carries no payload.
 `SessionMcpGateway` is the default (ADR-0009): one SSE connection per call
 through the `mcp` SDK. `AdkMcpGateway` goes through ADK's `McpToolset`; it is
 kept as an alternative because ADK retries session setup once internally.
+
+Each call is a CLIENT span (`mcp <server>.<tool>`) tagged with the error code
+when it fails. `SessionMcpGateway` sends the span's `traceparent` in the
+request's `_meta`, so the server's span joins the run's trace; ADK's toolset
+offers no way to set `_meta`, so with `AdkMcpGateway` the server spans start
+traces of their own (they still carry the run id).
 """
 
 import json
 from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, Protocol, cast
@@ -24,6 +31,7 @@ from mcp import ClientSession
 from mcp.client.sse import sse_client
 from mcp.shared.exceptions import McpError
 from mcp.types import CallToolResult, TextContent
+from opentelemetry.trace import SpanKind
 
 from agent_runtime.errors import (
     AgentRuntimeError,
@@ -32,6 +40,9 @@ from agent_runtime.errors import (
     for_http_status,
     tool_error,
 )
+from lab_common import telemetry as lab_telemetry
+
+tracer = lab_telemetry.tracer(__name__)
 
 
 class McpGateway(Protocol):
@@ -124,6 +135,26 @@ def _text_json(content: object) -> object:
         return None
 
 
+@contextmanager
+def _client_span(server: str, tool: str) -> Iterator[None]:
+    with tracer.start_as_current_span(
+        f"mcp {server}.{tool}",
+        kind=SpanKind.CLIENT,
+        attributes={
+            "mcp.method.name": "tools/call",
+            "gen_ai.tool.name": tool,
+            "lab.mcp_server": server,
+        },
+        record_exception=False,
+    ) as span:
+        try:
+            yield
+        except AgentRuntimeError as error:
+            lab_telemetry.annotate(tool_error_code=getattr(error, "tool_code", None))
+            lab_telemetry.fail(error.code, span)
+            raise
+
+
 class _AllowlistGateway:
     def __init__(self, endpoints: Mapping[str, McpEndpoint]) -> None:
         self._endpoints = dict(endpoints)
@@ -141,6 +172,10 @@ class SessionMcpGateway(_AllowlistGateway):
     """`mcp.ClientSession` over SSE, one connection per call."""
 
     async def call(self, server: str, tool: str, args: Mapping[str, Any]) -> Mapping[str, Any]:
+        with _client_span(server, tool):
+            return await self._call(server, tool, args)
+
+    async def _call(self, server: str, tool: str, args: Mapping[str, Any]) -> Mapping[str, Any]:
         endpoint = self._endpoint(server, tool)
         read_timeout = timedelta(seconds=endpoint.read_timeout_s)
         try:
@@ -154,7 +189,9 @@ class SessionMcpGateway(_AllowlistGateway):
                 ClientSession(read, write, read_timeout_seconds=read_timeout) as session,
             ):
                 await session.initialize()
-                result: CallToolResult = await session.call_tool(tool, dict(args))
+                result: CallToolResult = await session.call_tool(
+                    tool, dict(args), meta=lab_telemetry.trace_meta() or None
+                )
         except Exception as exc:  # noqa: BLE001 - every failure is classified, none leaks
             raise classify(exc, server) from None
         return result_body(server, tool, _dump(result))
@@ -203,6 +240,10 @@ class AdkMcpGateway(_AllowlistGateway):
         return toolset
 
     async def call(self, server: str, tool: str, args: Mapping[str, Any]) -> Mapping[str, Any]:
+        with _client_span(server, tool):
+            return await self._call(server, tool, args)
+
+    async def _call(self, server: str, tool: str, args: Mapping[str, Any]) -> Mapping[str, Any]:
         endpoint = self._endpoint(server, tool)
         toolset = self._toolset(server, endpoint)
         try:

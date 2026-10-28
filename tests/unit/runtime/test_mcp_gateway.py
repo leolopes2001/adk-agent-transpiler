@@ -8,6 +8,7 @@ import httpx
 import pytest
 from mcp.shared.exceptions import McpError
 from mcp.types import CallToolResult, ErrorData, TextContent
+from opentelemetry.trace import SpanKind, StatusCode
 
 from agent_runtime import bootstrap
 from agent_runtime.bootstrap import McpServerConfig, RuntimeDeps
@@ -28,6 +29,7 @@ from agent_runtime.gateways.mcp import (
     classify,
     result_body,
 )
+from telemetry_capture import Exported
 
 pytestmark = pytest.mark.unit
 
@@ -80,8 +82,10 @@ class FakeSession:
     async def initialize(self) -> None:
         FakeSession.calls.append({"initialized": True})
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> CallToolResult:
-        FakeSession.calls.append({"tool": name, "arguments": arguments})
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any], *, meta: dict[str, Any] | None = None
+    ) -> CallToolResult:
+        FakeSession.calls.append({"tool": name, "arguments": arguments, "meta": meta})
         if isinstance(FakeSession.result, Exception):
             raise FakeSession.result
         return FakeSession.result
@@ -135,7 +139,37 @@ async def test_session_gateway_uses_the_spec_url_headers_and_timeouts(
     }
     assert session == {"read_timeout": timedelta(seconds=15)}
     assert initialized == {"initialized": True}
-    assert call == {"tool": "batch_search", "arguments": {"queries": ["TSH"], "top_k": 1}}
+    assert (call["tool"], call["arguments"]) == ("batch_search", {"queries": ["TSH"], "top_k": 1})
+
+
+async def test_session_gateway_sends_the_call_span_as_traceparent(
+    fake_sdk: list[dict[str, Any]], exported: Exported
+) -> None:
+    await SessionMcpGateway({"rag": ENDPOINT}).call("rag", "batch_search", {"queries": ["TSH"]})
+
+    [span] = exported.spans()
+    assert span.name == "mcp rag.batch_search"
+    assert span.kind == SpanKind.CLIENT
+    context = span.get_span_context()
+    meta = fake_sdk[-1]["meta"]
+    flags = int(context.trace_flags)
+    assert meta == {"traceparent": f"00-{context.trace_id:032x}-{context.span_id:016x}-{flags:02x}"}
+
+
+async def test_failed_call_span_carries_the_error_code_only(
+    fake_sdk: list[dict[str, Any]], exported: Exported
+) -> None:
+    FakeSession.result = httpx.ConnectError("rag.local refused: secret detail")
+
+    with pytest.raises(TransientError):
+        await SessionMcpGateway({"rag": ENDPOINT}).call("rag", "batch_search", {})
+
+    [span] = exported.spans()
+    assert span.status.status_code == StatusCode.ERROR
+    assert span.attributes is not None
+    assert span.attributes["lab.error_code"] == "MCP_UNAVAILABLE"
+    assert span.status.description is None
+    assert span.events == ()
 
 
 async def test_session_gateway_reads_json_from_text_content(

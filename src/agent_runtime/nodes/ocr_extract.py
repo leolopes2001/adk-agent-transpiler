@@ -21,6 +21,7 @@ from agent_runtime.errors import InvalidInputError, PermanentError, PermanentToo
 from agent_runtime.nodes._common import Params, function_node, request_id, routed
 from agent_runtime.schemas import OcrDocument, RunFailure, RunInput
 from lab_common import logging as lab_logging
+from lab_common import telemetry as lab_telemetry
 from lab_common.contracts.ocr import OcrErrorCode, OcrResult
 
 LOW_QUALITY_MESSAGE = (
@@ -149,6 +150,7 @@ def ocr_extract(  # noqa: PLR0913 - one keyword per node param
             has_patient_ref=result.patient_ref is not None,
             low_quality=low_quality,
         )
+        lab_telemetry.annotate(lines=len(result.lines), pii_masked=sum(result.pii_counts.values()))
         if low_quality:
             failure = RunFailure(code="OCR_LOW_QUALITY", user_message=LOW_QUALITY_MESSAGE)
             return routed(failure, "low_quality")

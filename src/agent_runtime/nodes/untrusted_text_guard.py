@@ -21,6 +21,7 @@ from agent_runtime.guardrails import injection
 from agent_runtime.nodes._common import Params, function_node, parse_input, routed
 from agent_runtime.schemas import GuardedDocument, InjectionReport, OcrDocument, RunFailure
 from lab_common import logging as lab_logging
+from lab_common import telemetry as lab_telemetry
 from lab_common.contracts.ocr import OcrLine
 from lab_common.pii import PiiEngineError, PiiRedactor, default_detectors
 from lab_common.text import sanitize
@@ -122,6 +123,7 @@ def _guard_node(
             log.warning("pii_residual_detected", node=name, counts=residual)
         severity = guarded.injection.severity
         ctx.state["run.injection_severity"] = severity
+        lab_telemetry.annotate(injection_severity=severity)
         if severity != "none":
             log.warning(
                 "injection_detected",

@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 import pytest
+from opentelemetry.trace import SpanKind, StatusCode
 
 from agent_runtime.errors import PermanentError, TransientError
 from agent_runtime.gateways.scheduler import (
@@ -12,6 +13,7 @@ from agent_runtime.gateways.scheduler import (
     SchedulerClient,
     SchedulerRejected,
 )
+from telemetry_capture import Exported
 
 pytestmark = pytest.mark.unit
 
@@ -256,3 +258,34 @@ async def test_response_that_breaks_the_contract_or_the_request_is_unexpected(
 
     assert caught.value.code == "SCHEDULER_UNEXPECTED_RESPONSE"
     assert caught.value.__cause__ is None
+
+
+async def test_request_span_sends_traceparent_and_records_the_status(exported: Exported) -> None:
+    requests: list[httpx.Request] = []
+
+    await _create(_client(_appointment(201), requests))
+
+    [span] = exported.spans()
+    assert (span.name, span.kind) == ("POST /v1/appointments", SpanKind.CLIENT)
+    assert dict(span.attributes or {}) == {
+        "http.request.method": "POST",
+        "http.route": "/v1/appointments",
+        "http.response.status_code": 201,
+        "lab.exam_count": 2,
+    }
+    context = span.get_span_context()
+    [request] = requests
+    assert request.headers["traceparent"].split("-")[1:3] == [
+        f"{context.trace_id:032x}",
+        f"{context.span_id:016x}",
+    ]
+
+
+async def test_failed_request_span_carries_the_error_code(exported: Exported) -> None:
+    with pytest.raises(TransientError):
+        await _create(_client(_appointment(503)))
+
+    [span] = exported.spans()
+    assert span.status.status_code == StatusCode.ERROR
+    assert span.attributes is not None
+    assert span.attributes["lab.error_code"] == "SCHEDULER_UNAVAILABLE"

@@ -20,6 +20,8 @@ agent = [
     "rich",
     "rapidfuzz",
     "mcp>=1.24,<2",
+    "opentelemetry-sdk>=1.44,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
 ]
 ocr = [
     "mcp>=1.24,<2",
@@ -28,6 +30,8 @@ ocr = [
     "pillow",
     "anyio",
     "pydantic-settings",
+    "opentelemetry-sdk>=1.44,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
 ]
 rag = [
     "mcp>=1.24,<2",
@@ -35,15 +39,19 @@ rag = [
     "rank-bm25",
     "rapidfuzz",
     "pydantic-settings",
+    "opentelemetry-sdk>=1.44,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
 ]
 api = [
-    "fastapi",
+    "fastapi>=0.162",
     "uvicorn[standard]",
     "sqlalchemy>=2",
     "psycopg[binary]",
     "alembic",
     "pydantic-settings",
     "python-ulid",
+    "opentelemetry-sdk>=1.44,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
 ]
 
 [project.scripts]

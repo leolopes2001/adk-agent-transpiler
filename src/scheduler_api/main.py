@@ -21,6 +21,8 @@ from scheduler_api.infra.db import make_engine, make_session_factory, ping
 from scheduler_api.infra.repositories import SqlUnitOfWork
 from scheduler_api.log import configure_logging, get_logger
 from scheduler_api.settings import Settings
+from scheduler_api.telemetry import TracingMiddleware
+from scheduler_api.telemetry import setup as setup_telemetry
 
 API_VERSION = "1.0.0"
 
@@ -57,6 +59,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()  # type: ignore[call-arg]  # fields come from the environment
     configure_logging(settings.log_level)
+    setup_telemetry()
 
     app = FastAPI(
         title="Lab Exam Scheduler API",
@@ -64,9 +67,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         description=docs.DESCRIPTION,
         openapi_tags=docs.TAGS,
         lifespan=_lifespan,
+        # FastAPI's own spans record raw paths and its logs exception messages;
+        # `TracingMiddleware` records route templates and status codes only.
+        telemetry={"tracing": False, "metrics": False, "logs": False, "operation_spans": False},
     )
     app.state.settings = settings
     app.add_middleware(RequestContextMiddleware)
+    # Outermost, so the request's log lines are written inside its span.
+    app.add_middleware(TracingMiddleware)
     install_error_handlers(app)
     app.include_router(routes_appointments.router)
     app.include_router(routes_exams.router)

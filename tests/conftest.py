@@ -8,6 +8,7 @@ import pytest
 if TYPE_CHECKING:
     from e2e.helpers import ComposeStack
     from runtime_stack import Stack
+    from telemetry_capture import Exported
 
 # Every test must declare its category so `pytest -m ...` selections in the
 # development check and CI never silently skip an unmarked test.
@@ -54,3 +55,20 @@ def e2e_stack(request: pytest.FixtureRequest) -> Iterator["ComposeStack"]:
         finally:
             if request.session.testsfailed or os.environ.get("KEEP_EVIDENCE") == "1":
                 save_logs(running)
+
+
+@pytest.fixture(scope="session")
+def _exported_session() -> "Exported":
+    # OpenTelemetry accepts one global provider per process, so it is installed
+    # once, through the same setup the services use, with in-memory exporters.
+    from telemetry_capture import install  # noqa: PLC0415
+
+    return install()
+
+
+@pytest.fixture
+def exported(_exported_session: "Exported") -> Iterator["Exported"]:
+    """Spans exported during the test (the exporters are emptied around it)."""
+    _exported_session.clear()
+    yield _exported_session
+    _exported_session.clear()

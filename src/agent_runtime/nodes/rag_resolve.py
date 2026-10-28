@@ -20,6 +20,7 @@ from agent_runtime.nodes._common import Params, function_node, parse_input, requ
 from agent_runtime.nodes.lexical_extract import batch_search
 from agent_runtime.schemas import ExamMention, ExamMentions, ResolvedExam, ResolvedExams
 from lab_common import logging as lab_logging
+from lab_common import telemetry as lab_telemetry
 from lab_common.contracts.rag import MAX_TOP_K
 
 log = lab_logging.get_logger(__name__)
@@ -78,6 +79,9 @@ def rag_resolve(  # noqa: PLR0913 - one keyword per node param
             mentions=len(items),
             without_candidates=sum(not item.candidates for item in items),
             catalog_sha256=catalog_sha256,
+        )
+        lab_telemetry.annotate(
+            mentions=len(items), without_candidates=sum(not item.candidates for item in items)
         )
         return Event(output=ResolvedExams(items=items))
 

@@ -12,6 +12,7 @@ from google.adk.workflow import FunctionNode, NodeTimeoutError, RetryConfig
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from agent_runtime.errors import PermanentError, TransientError
+from lab_common import telemetry as lab_telemetry
 from lab_common.text import normalize_for_search
 
 type NodeFunction = Callable[[Context, Any], Awaitable[Event | RequestInput]]
@@ -62,7 +63,8 @@ def request_id(ctx: Context) -> str:
 
 
 def routed(output: BaseModel, route: str) -> Event:
-    """Event with `output` that takes the `route` edge."""
+    """Event with `output` that takes the `route` edge (also set on the node's span)."""
+    lab_telemetry.annotate(route=route)
     return Event(output=output, actions=EventActions(route=route))
 
 

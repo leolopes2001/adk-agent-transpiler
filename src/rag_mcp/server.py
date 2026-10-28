@@ -12,7 +12,8 @@ Errors are tool results with `isError: true` and a JSON body
 FastMCP does not prefix the message. Arguments are checked here as well, so a
 range error has the same shape as any other error. Logs carry counts and
 timings only, never the mentions, under the caller's `request_id` (the agent
-sends its run id) when it is a UUID.
+sends its run id) when it is a UUID. Each call is a SERVER span in the
+agent's trace (`traceparent` in the request's `_meta`) with the same counts.
 """
 
 import json
@@ -23,7 +24,7 @@ from collections.abc import Callable
 from typing import Any
 
 import structlog
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import CallToolResult, TextContent
 from pydantic import BaseModel
 from starlette.requests import Request
@@ -31,6 +32,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from lab_common import logging as lab_logging
+from lab_common import telemetry as lab_telemetry
 from lab_common.contracts.rag import (
     EXAM_CODE_PATTERN,
     MAX_QUERY_CHARS,
@@ -146,17 +148,27 @@ def _run[R: BaseModel](
     call: Callable[[], R],
     summarize: Callable[[R], dict[str, int]],
     request_id: object = None,
+    ctx: Context | None = None,
 ) -> CallToolResult:
     started = time.perf_counter()
-    with structlog.contextvars.bound_contextvars(request_id=logged_request_id(request_id)):
+    logged_id = logged_request_id(request_id)
+    with (
+        structlog.contextvars.bound_contextvars(request_id=logged_id),
+        lab_telemetry.server_span(
+            f"tools/call {tool}", lab_telemetry.request_meta(ctx), run_id=logged_id
+        ),
+    ):
         try:
             result = call()
         except RagError as error:
             log.warning(
                 "rag_rejected", tool=tool, error_code=error.code.value, duration_ms=_ms(started)
             )
+            lab_telemetry.fail(error.code.value)
             return _json(error.as_dict(), is_error=True)
-        log.info("rag_done", tool=tool, duration_ms=_ms(started), **summarize(result))
+        counts = summarize(result)
+        log.info("rag_done", tool=tool, duration_ms=_ms(started), **counts)
+        lab_telemetry.annotate(**counts)
     return _json(result.model_dump(mode="json"))
 
 
@@ -198,13 +210,17 @@ def build_server(service: RagService, settings: RagSettings) -> FastMCP:
 
     @mcp.tool(name="search_exams", description=SEARCH_DESCRIPTION, structured_output=False)
     def search_exams(
-        query: str, top_k: int = DEFAULT_TOP_K, request_id: str | None = None
+        ctx: Context,
+        query: str,
+        top_k: int = DEFAULT_TOP_K,
+        request_id: str | None = None,
     ) -> CallToolResult:
         return _run(
             "search_exams",
             lambda: service.search_exams(query, top_k),
             _search_counts,
             request_id,
+            ctx,
         )
 
     @mcp.tool(
@@ -213,13 +229,17 @@ def build_server(service: RagService, settings: RagSettings) -> FastMCP:
         structured_output=False,
     )
     def batch_search(
-        queries: list[str], top_k: int = DEFAULT_TOP_K, request_id: str | None = None
+        ctx: Context,
+        queries: list[str],
+        top_k: int = DEFAULT_TOP_K,
+        request_id: str | None = None,
     ) -> CallToolResult:
         return _run(
             "batch_search",
             lambda: service.batch_search(queries, top_k),
             _batch_counts,
             request_id,
+            ctx,
         )
 
     @mcp.tool(name="get_exam", description=GET_EXAM_DESCRIPTION, structured_output=False)

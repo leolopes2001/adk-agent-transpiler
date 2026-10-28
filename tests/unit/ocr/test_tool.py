@@ -16,6 +16,7 @@ import structlog
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent
 from ocr_fakes import SECRET, FakeOcrEngine, make_settings, png_base64
+from opentelemetry.trace import SpanKind, StatusCode
 
 from lab_common import logging as lab_logging
 from lab_common.contracts.ocr import OcrResult
@@ -24,6 +25,7 @@ from ocr_mcp.engine import RecognizedLine
 from ocr_mcp.errors import ErrorCode, OcrError
 from ocr_mcp.server import OcrService, build_server
 from ocr_mcp.settings import OcrSettings
+from telemetry_capture import Exported
 
 pytestmark = pytest.mark.unit
 
@@ -299,6 +301,28 @@ class TestFailClosed:
         assert "PII_ENGINE_FAILURE" in logs
         for value in [*PII_VALUES, "Hemograma"]:
             assert value not in logs
+
+
+class TestSpans:
+    async def test_call_span_has_counts_and_the_run_id_only(self, exported: Exported) -> None:
+        request_id = str(uuid.uuid4())
+        await call(server(), request_id=request_id)
+
+        [span] = exported.spans()
+        assert (span.name, span.kind) == ("tools/call extract_text", SpanKind.SERVER)
+        assert dict(span.attributes or {}) == {
+            "lab.run_id": request_id,
+            "lab.lines": len(SAMPLE_LINES),
+            "lab.pii_masked": 8,
+        }
+
+    async def test_rejected_call_span_has_the_error_code(self, exported: Exported) -> None:
+        await call(server(), image_base64="%%%")
+
+        [span] = exported.spans()
+        assert span.status.status_code == StatusCode.ERROR
+        assert span.attributes is not None
+        assert span.attributes["lab.error_code"] == "INVALID_BASE64"
 
 
 class TestInputErrors:

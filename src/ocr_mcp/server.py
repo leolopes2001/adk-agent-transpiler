@@ -12,6 +12,10 @@ the check wraps the whole SSE app, so both `/sse` and `/messages/` are covered.
 Errors are tool results with `isError: true` and a JSON body
 `{code, message, retryable}` (`OcrToolError`). They are built here instead of
 raised, because FastMCP would prefix the message of a raised exception.
+
+Each call is a SERVER span (`tools/call extract_text`) in the agent's trace
+(`traceparent` in the request's `_meta`), with the run id, line and masking
+counts or the error code; never text or image data.
 """
 
 import json
@@ -23,13 +27,14 @@ from functools import partial
 import anyio
 import anyio.to_thread
 import structlog
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import CallToolResult, TextContent
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from lab_common import logging as lab_logging
+from lab_common import telemetry as lab_telemetry
 from lab_common.contracts.ocr import EngineInfo, OcrLine, OcrResult
 from lab_common.mcp_server import BearerAuthMiddleware
 from lab_common.pii import PiiRedactor, default_detectors
@@ -198,6 +203,7 @@ async def _call(service: OcrService, image_base64: str, request_id: str) -> Call
             retryable=error.retryable,
             duration_ms=_ms(started),
         )
+        lab_telemetry.fail(error.code.value)
         return _error_result(error)
     except Exception as exc:  # noqa: BLE001 - fail closed with a generic error
         # Only the type is logged: a message could quote document content.
@@ -207,7 +213,9 @@ async def _call(service: OcrService, image_base64: str, request_id: str) -> Call
             error_type=type(exc).__name__,
             duration_ms=_ms(started),
         )
+        lab_telemetry.fail(ErrorCode.INTERNAL_ERROR.value)
         return _error_result(OcrError(ErrorCode.INTERNAL_ERROR, "internal OCR error"))
+    lab_telemetry.annotate(lines=len(result.lines), pii_masked=sum(result.pii_counts.values()))
     return CallToolResult(
         content=[TextContent(type="text", text=result.model_dump_json())],
         structuredContent=result.model_dump(mode="json"),
@@ -242,10 +250,15 @@ def build_server(service: OcrService, settings: OcrSettings) -> FastMCP:
         )
 
     @mcp.tool(name="extract_text", description=TOOL_DESCRIPTION, structured_output=False)
-    async def extract_text(image_base64: str, request_id: str) -> CallToolResult:
+    async def extract_text(image_base64: str, request_id: str, ctx: Context) -> CallToolResult:
         # Only a well-formed id is logged; anything else is client input.
         logged_id = request_id if _is_uuid(request_id) else None
-        with structlog.contextvars.bound_contextvars(request_id=logged_id):
+        with (
+            structlog.contextvars.bound_contextvars(request_id=logged_id),
+            lab_telemetry.server_span(
+                "tools/call extract_text", lab_telemetry.request_meta(ctx), run_id=logged_id
+            ),
+        ):
             return await _call(service, image_base64, request_id)
 
     return mcp

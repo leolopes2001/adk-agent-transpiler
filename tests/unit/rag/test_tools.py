@@ -367,8 +367,12 @@ class TestMain:
         calls: list[dict[str, Any]] = []
         env.setattr(rag_main.uvicorn, "run", lambda app, **kwargs: calls.append(kwargs))
 
+        services: list[str] = []
+        env.setattr(rag_main.telemetry, "setup", services.append)
+
         rag_main.main()
 
+        assert services == ["rag-mcp"]
         [kwargs] = calls
         assert (kwargs["host"], kwargs["port"]) == ("0.0.0.0", 18102)  # noqa: S104
         assert kwargs["log_config"] is None

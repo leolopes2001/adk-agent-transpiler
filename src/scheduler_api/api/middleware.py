@@ -33,7 +33,7 @@ def _request_id(scope: Scope) -> str:
     return str(uuid.uuid4())
 
 
-def _route_template(scope: Scope) -> str:
+def route_template(scope: Scope) -> str:
     # Route templates, not raw paths, so unmatched URLs never end up in the logs.
     route = scope.get("route")
     path = getattr(route, "path", None)
@@ -78,13 +78,13 @@ class RequestContextMiddleware:
             try:
                 await self.app(scope, receive, send_with_request_id)
             except Exception:
-                _log.exception("unhandled_error", route=_route_template(scope))
+                _log.exception("unhandled_error", route=route_template(scope))
                 if status is not None:
                     # Headers already sent: nothing sensible to answer; let the server close it.
                     raise
                 await internal_error_response(scope)(scope, receive, send_with_request_id)
             finally:
-                route = _route_template(scope)
+                route = route_template(scope)
                 # Health checks run every few seconds and would drown the log;
                 # unmatched paths under /health are still logged.
                 if not route.startswith(_HEALTH_PREFIX):

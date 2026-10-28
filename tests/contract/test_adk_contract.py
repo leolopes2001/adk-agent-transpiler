@@ -467,3 +467,21 @@ def test_mcp_sdk_sse_client_takes_the_spec_timeouts() -> None:
 
     assert {"url", "headers", "timeout", "sse_read_timeout"} <= set(sse)
     assert "read_timeout_seconds" in session
+
+
+def test_message_content_capture_is_switched_off_by_the_variables_the_cli_sets() -> None:
+    """ADK reads the variables `cli.CONTENT_CAPTURE_OFF` sets to keep content off spans."""
+    from google.adk.telemetry import context, tracing  # noqa: PLC0415
+
+    from agent_runtime.cli import CONTENT_CAPTURE_OFF  # noqa: PLC0415
+
+    assert tracing.ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS in CONTENT_CAPTURE_OFF
+    assert tracing.OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT in CONTENT_CAPTURE_OFF
+    source = inspect.getsource(context)
+    for name in CONTENT_CAPTURE_OFF:
+        assert name in source, name
+
+
+def test_mcp_sdk_call_tool_takes_request_meta() -> None:
+    """The run's `traceparent` reaches the MCP servers in the request's `_meta`."""
+    assert "meta" in inspect.signature(ClientSession.call_tool).parameters

@@ -9,8 +9,9 @@ import sys
 import uvicorn
 
 from lab_common import logging as lab_logging
+from lab_common import telemetry
 from rag_mcp.catalog import CatalogError, load_catalog
-from rag_mcp.logs import configure_logging
+from rag_mcp.logs import SERVICE, configure_logging
 from rag_mcp.server import build_app
 from rag_mcp.settings import RagSettings
 
@@ -20,6 +21,7 @@ log = lab_logging.get_logger(__name__)
 def main() -> None:
     settings = RagSettings()  # type: ignore[call-arg]  # fields come from the environment
     configure_logging(settings.log_level)
+    telemetry.setup(SERVICE)
     try:
         catalog = load_catalog(settings.catalog_path)
     except CatalogError as error:

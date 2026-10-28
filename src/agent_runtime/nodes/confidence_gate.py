@@ -31,6 +31,7 @@ from agent_runtime.schemas import (
     RunFailure,
 )
 from lab_common import logging as lab_logging
+from lab_common import telemetry as lab_telemetry
 from lab_common.gate import Decision, evidence_decision, gate_decision
 
 EMPTY_MESSAGE = (
@@ -152,6 +153,11 @@ def confidence_gate(
             "gate_decision",
             node=name,
             route=route,
+            accepted=[item.selected.code for item in decision.items if item.selected],
+            review=sum(item.status == "review" for item in decision.items),
+            rejected=sum(item.status == "rejected" for item in decision.items),
+        )
+        lab_telemetry.annotate(
             accepted=[item.selected.code for item in decision.items if item.selected],
             review=sum(item.status == "review" for item in decision.items),
             rejected=sum(item.status == "rejected" for item in decision.items),

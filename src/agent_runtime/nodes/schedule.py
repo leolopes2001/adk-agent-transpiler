@@ -23,6 +23,7 @@ from agent_runtime.gateways.scheduler import AppointmentRequest, SchedulerReject
 from agent_runtime.nodes._common import function_node, parse_input, request_id
 from agent_runtime.schemas import Candidate, GateDecision, ScheduleOutcome
 from lab_common import logging as lab_logging
+from lab_common import telemetry as lab_telemetry
 
 KEY_VERSION = "v1"
 
@@ -77,6 +78,7 @@ def schedule(
             appointment_id=outcome.appointment_id,
             exams=[exam.code for exam in exams],
         )
+        lab_telemetry.annotate(status=outcome.status, exams=[exam.code for exam in exams])
         return Event(output=outcome)
 
     async def _request(

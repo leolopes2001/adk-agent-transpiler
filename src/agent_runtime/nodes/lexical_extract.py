@@ -34,6 +34,7 @@ from agent_runtime.nodes._common import (
 )
 from agent_runtime.schemas import ExamMention, ExamMentions, GuardedDocument
 from lab_common import logging as lab_logging
+from lab_common import telemetry as lab_telemetry
 from lab_common.contracts.rag import MAX_BATCH_QUERIES, BatchSearchResult
 
 MIN_SEGMENT_CHARS = 2
@@ -163,6 +164,7 @@ def lexical_extract(  # noqa: PLR0913 - one keyword per node param
                 if found.candidates and found.candidates[0].score >= params.min_score
             ]
         log.info("lexical_extract_done", node=name, segments=len(candidates), found=len(mentions))
+        lab_telemetry.annotate(segments=len(candidates), mentions=len(mentions))
         return Event(output=ExamMentions(items=mentions))
 
     return function_node(name, run, retry=retry, timeout=timeout)

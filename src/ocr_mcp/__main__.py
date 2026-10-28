@@ -2,8 +2,9 @@
 
 import uvicorn
 
+from lab_common import telemetry
 from ocr_mcp.engine import TesseractEngine
-from ocr_mcp.logs import configure_logging
+from ocr_mcp.logs import SERVICE, configure_logging
 from ocr_mcp.server import build_app
 from ocr_mcp.settings import OcrSettings
 
@@ -11,6 +12,7 @@ from ocr_mcp.settings import OcrSettings
 def main() -> None:
     settings = OcrSettings()  # type: ignore[call-arg]  # fields come from the environment
     configure_logging(settings.log_level)
+    telemetry.setup(SERVICE)
     app = build_app(settings, TesseractEngine())
     # log_config=None keeps uvicorn's loggers on the root JSON handler (with PII
     # redaction); the access log is off because paths carry session ids only.
