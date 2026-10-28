@@ -168,6 +168,13 @@ services:
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
       GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /otel-lgtm/lab-dashboards/lab-exam-agent.json
+    # Everything Grafana shows is versioned in observability/grafana: the datasources
+    # (replacing the image's, with the log <-> trace links) and the dashboard.
+    volumes:
+      - ./observability/grafana/provisioning/datasources/datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/grafana-datasources.yaml:ro
+      - ./observability/grafana/provisioning/dashboards/lab-exam-agent.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/lab-exam-agent.yaml:ro
+      - ./observability/grafana/dashboards:/otel-lgtm/lab-dashboards:ro
     ports: ["127.0.0.1:3000:3000"]
     networks: [backend, edge]
     deploy:

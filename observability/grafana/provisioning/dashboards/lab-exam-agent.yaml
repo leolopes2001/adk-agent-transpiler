@@ -1,0 +1,9 @@
+apiVersion: 1
+
+providers:
+  - name: lab-exam-agent
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /otel-lgtm/lab-dashboards
