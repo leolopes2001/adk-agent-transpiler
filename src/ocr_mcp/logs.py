@@ -1,10 +1,3 @@
-"""Logging setup of the OCR server.
-
-Shared JSON logging (with PII redaction) plus `LibraryLogFilter`, which keeps
-request payloads that the `mcp` and `uvicorn` libraries put into their error
-messages out of the log (see `lab_common.mcp_server`).
-"""
-
 from typing import TextIO
 
 from lab_common import logging as lab_logging

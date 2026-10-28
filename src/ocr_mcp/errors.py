@@ -1,14 +1,11 @@
-"""Errors the `extract_text` tool reports, as `{code, message, retryable}`.
-
-Messages are fixed strings chosen here, never built from the input or from a
-lower-level exception, so an error can be logged and returned without risk of
-carrying document content.
-"""
+"""Messages are fixed strings, never built from input, so they cannot carry document content."""
 
 from lab_common.contracts.ocr import RETRYABLE_ERRORS, OcrToolError
 from lab_common.contracts.ocr import OcrErrorCode as ErrorCode
 
-__all__ = ["ErrorCode", "OcrError"]
+__all__ = ["OCR_TIMEOUT_MESSAGE", "ErrorCode", "OcrError"]
+
+OCR_TIMEOUT_MESSAGE = "OCR exceeded the time limit"
 
 
 class OcrError(Exception):

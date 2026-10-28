@@ -1,14 +1,3 @@
-"""OCR port and its Tesseract adapter.
-
-`OcrEngine` is what the server depends on, so tests can use a fake engine and
-another OCR backend can be plugged in without touching the tool.
-
-`TesseractEngine` runs the `tesseract` binary with the image on stdin and the
-TSV result (the same table `pytesseract.image_to_data` parses) on stdout.
-pytesseract would write both the image and the recognized text to temporary
-files; piping keeps document content off the disk entirely.
-"""
-
 import shutil
 import subprocess
 from collections.abc import Sequence
@@ -18,15 +7,20 @@ from typing import Protocol
 import cv2
 import numpy as np
 
-from ocr_mcp.errors import ErrorCode, OcrError
+from ocr_mcp.errors import OCR_TIMEOUT_MESSAGE, ErrorCode, OcrError
 
 DEFAULT_LANG = "por"
-DEFAULT_PSM = 6
-"""Assume a single uniform block of text: fits printed forms and keeps line order."""
-DEFAULT_OEM = 1
-"""LSTM engine only."""
+PSM_SINGLE_BLOCK = 6
+"""Fits printed forms and keeps line order."""
+OEM_LSTM_ONLY = 1
 
 _TSV_COLUMNS = 12
+_TSV_LEVEL = 0
+_TSV_BLOCK = 2
+_TSV_PARAGRAPH = 3
+_TSV_LINE = 4
+_TSV_CONFIDENCE = 10
+_TSV_TEXT = 11
 _WORD_LEVEL = "5"
 
 
@@ -35,7 +29,6 @@ class RecognizedLine:
     text: str
     """Raw OCR text: personal data until masked; never logged or returned."""
     confidence: float
-    """Mean word confidence, 0..1."""
 
 
 class OcrEngine(Protocol):
@@ -60,61 +53,24 @@ class Word:
     line: int
     text: str
     confidence: float
-    """Tesseract's 0..100 scale; -1 for entries that are not words."""
-
-
-def parse_tsv(tsv: str) -> list[Word]:
-    """Word rows of Tesseract's TSV output (header and layout rows skipped)."""
-    words = []
-    for row in tsv.splitlines()[1:]:
-        fields = row.split("\t")
-        if len(fields) != _TSV_COLUMNS or fields[0] != _WORD_LEVEL:
-            continue
-        words.append(
-            Word(
-                block=int(fields[2]),
-                paragraph=int(fields[3]),
-                line=int(fields[4]),
-                text=fields[11],
-                confidence=float(fields[10]),
-            )
-        )
-    return words
-
-
-def group_words(words: Sequence[Word]) -> list[RecognizedLine]:
-    """Join words into lines by (block, paragraph, line), in reading order.
-
-    Words with confidence -1 or blank text are dropped; a line's confidence is
-    the mean of its words, normalized to 0..1. Lines left empty are omitted.
-    """
-    lines: dict[tuple[int, int, int], list[Word]] = {}
-    for word in words:
-        if word.confidence < 0 or not word.text.strip():
-            continue
-        lines.setdefault((word.block, word.paragraph, word.line), []).append(word)
-    return [
-        RecognizedLine(
-            text=" ".join(w.text.strip() for w in line_words),
-            confidence=min(1.0, sum(w.confidence for w in line_words) / len(line_words) / 100),
-        )
-        for line_words in lines.values()
-    ]
 
 
 class TesseractEngine:
+    """Pipes stdin/stdout instead of using pytesseract, which writes the document to temp files."""
+
     name = "tesseract"
 
     def __init__(
         self,
         lang: str = DEFAULT_LANG,
-        psm: int = DEFAULT_PSM,
-        oem: int = DEFAULT_OEM,
+        psm: int = PSM_SINGLE_BLOCK,
+        oem: int = OEM_LSTM_ONLY,
         binary: str = "tesseract",
     ) -> None:
         path = shutil.which(binary)
         if path is None:
             raise RuntimeError(f"tesseract binary {binary!r} not found on PATH")
+
         self._binary = path
         self.lang = lang
         self.psm = psm
@@ -128,12 +84,17 @@ class TesseractEngine:
             )
             first_line = (result.stdout or result.stderr).splitlines()[0]
             self._version = first_line.removeprefix("tesseract").strip()
+
         return self._version
 
     def recognize(self, image: np.ndarray, timeout_s: float) -> list[RecognizedLine]:
         ok, encoded = cv2.imencode(".png", image)
         if not ok:
-            raise OcrError(ErrorCode.INTERNAL_ERROR, "image could not be prepared for OCR")
+            raise OcrError(
+                ErrorCode.INTERNAL_ERROR,
+                "image could not be prepared for OCR",
+            )
+
         command = [
             self._binary,
             "stdin",
@@ -146,6 +107,7 @@ class TesseractEngine:
             str(self.psm),
             "tsv",
         ]
+
         try:
             result = subprocess.run(  # noqa: S603 - fixed arguments, no shell
                 command,
@@ -155,8 +117,53 @@ class TesseractEngine:
                 check=False,
             )
         except subprocess.TimeoutExpired:
-            raise OcrError(ErrorCode.OCR_TIMEOUT, "OCR exceeded the time limit") from None
+            raise OcrError(
+                ErrorCode.OCR_TIMEOUT,
+                OCR_TIMEOUT_MESSAGE,
+            ) from None
+
         if result.returncode != 0:
             # stderr is not logged: it is diagnostics from a process that read the document.
-            raise OcrError(ErrorCode.INTERNAL_ERROR, "OCR engine failed")
+            raise OcrError(
+                ErrorCode.INTERNAL_ERROR,
+                "OCR engine failed",
+            )
+
         return group_words(parse_tsv(result.stdout.decode("utf-8", errors="replace")))
+
+
+def parse_tsv(tsv: str) -> list[Word]:
+    words = []
+    for row in tsv.splitlines()[1:]:
+        fields = row.split("\t")
+        if len(fields) != _TSV_COLUMNS or fields[_TSV_LEVEL] != _WORD_LEVEL:
+            continue
+
+        words.append(
+            Word(
+                block=int(fields[_TSV_BLOCK]),
+                paragraph=int(fields[_TSV_PARAGRAPH]),
+                line=int(fields[_TSV_LINE]),
+                text=fields[_TSV_TEXT],
+                confidence=float(fields[_TSV_CONFIDENCE]),
+            )
+        )
+
+    return words
+
+
+def group_words(words: Sequence[Word]) -> list[RecognizedLine]:
+    lines: dict[tuple[int, int, int], list[Word]] = {}
+    for word in words:
+        if word.confidence < 0 or not word.text.strip():
+            continue
+
+        lines.setdefault((word.block, word.paragraph, word.line), []).append(word)
+
+    return [
+        RecognizedLine(
+            text=" ".join(w.text.strip() for w in line_words),
+            confidence=min(1.0, sum(w.confidence for w in line_words) / len(line_words) / 100),
+        )
+        for line_words in lines.values()
+    ]
