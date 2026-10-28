@@ -1,27 +1,3 @@
-"""Scores in [0, 1] that mean the same thing for every query.
-
-For each candidate exam (proposed by the index), over its name and aliases:
-
-- exact: the normalized query equals a name or alias -> 1.0;
-- fuzzy: best `rapidfuzz.fuzz.WRatio` / 100, which tolerates typos, extra
-  words and reordering (a shared single letter alone is not a match, see
-  `fuzzy`);
-- coverage: best share of the query's tokens that appear in the field, which
-  keeps a long field from winning on one shared fragment;
-- score = round(0.75 * fuzzy + 0.25 * coverage, 4).
-
-Both parts depend only on the query and the field text (not on corpus
-statistics, as BM25 does), so a threshold means the same for any query.
-Candidates are ordered by (-score, code): equal scores always come out in the
-same order.
-
-Before normalizing, one leading list marker is removed ("1. ", "2) ", "- ",
-"a) "), since OCR returns order items with their numbering; a number that is
-part of the exam name ("25-hidroxivitamina D") is kept.
-
-Scoring never decides acceptance: that is the runtime's confidence gate.
-"""
-
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -33,17 +9,19 @@ from lab_common.text import normalize_for_search
 from rag_mcp.catalog import Catalog
 from rag_mcp.index import FieldDoc, HybridIndex
 
+# No corpus statistics in the score, so a threshold means the same for every query.
 FUZZY_WEIGHT = 0.75
 COVERAGE_WEIGHT = 0.25
 EXACT_SCORE = 1.0
-# rapidfuzz's WRatio: partial matching from a 1.5 length ratio, scaled by 0.9
-# (0.6 from 8), token-based parts scaled by 0.95.
+# Scales of rapidfuzz's WRatio, mirrored by _partial_without_shared_tokens.
 WRATIO_PARTIAL_FROM = 1.5
 WRATIO_LONG_FROM = 8
 WRATIO_PARTIAL_SCALE = 0.9
 WRATIO_LONG_SCALE = 0.6
 WRATIO_UNBASE = 0.95
+WRATIO_MAX = 100.0
 
+# OCR keeps the order's numbering; only one marker goes, so "25-hidroxivitamina D" keeps its 25.
 _LIST_MARKER = re.compile(
     r"""^\s*(?:
         \(?[0-9]{1,3}\s*[.)º°]               # "1." "1)" "(1)" "1º"
@@ -55,60 +33,6 @@ _LIST_MARKER = re.compile(
 )
 
 
-def strip_list_marker(query: str) -> str:
-    """`query` without one leading enumeration or bullet marker."""
-    return _LIST_MARKER.sub("", query, count=1)
-
-
-def prepare_query(query: str) -> str:
-    """Normalized form of a raw mention, as it is matched against the index."""
-    return normalize_for_search(strip_list_marker(query))
-
-
-def fuzzy(query: str, field: str) -> float:
-    """WRatio of two normalized strings, in [0, 1].
-
-    When one string is much longer, WRatio takes `partial_token_set_ratio`,
-    which is 100 as soon as the strings share any token. A shared single
-    letter ("b" in "apolipoproteina b" and "hepatite b") says nothing about
-    the exam, so then the score comes from WRatio's other partial parts.
-    """
-    score = fuzz.WRatio(query, field, processor=None)
-    shared = set(query.split()) & set(field.split())
-    if shared and max(map(len, shared)) == 1:
-        score = min(score, _partial_without_shared_tokens(query, field))
-    return score / 100
-
-
-def _partial_without_shared_tokens(query: str, field: str) -> float:
-    """WRatio without `partial_token_set_ratio` (same scales as rapidfuzz).
-
-    Below the partial length ratio WRatio never takes that part: 100 leaves it as is.
-    """
-    shorter, longer = sorted((len(query), len(field)))
-    length_ratio = longer / shorter
-    if length_ratio < WRATIO_PARTIAL_FROM:
-        return 100.0
-    scale = WRATIO_PARTIAL_SCALE if length_ratio < WRATIO_LONG_FROM else WRATIO_LONG_SCALE
-    return max(
-        fuzz.ratio(query, field, processor=None),
-        fuzz.partial_ratio(query, field, processor=None) * scale,
-        fuzz.partial_token_sort_ratio(query, field, processor=None) * WRATIO_UNBASE * scale,
-    )
-
-
-def coverage(query_tokens: Sequence[str], field_tokens: Sequence[str]) -> float:
-    """Share of the distinct query tokens found in the field, in [0, 1]."""
-    wanted = set(query_tokens)
-    if not wanted:
-        return 0.0
-    return len(wanted & set(field_tokens)) / len(wanted)
-
-
-def combine(fuzzy_score: float, coverage_score: float) -> float:
-    return round(FUZZY_WEIGHT * fuzzy_score + COVERAGE_WEIGHT * coverage_score, 4)
-
-
 @dataclass(frozen=True, slots=True)
 class ScoredExam:
     code: str
@@ -116,33 +40,8 @@ class ScoredExam:
     matched_on: MatchedOn
 
 
-def score_exam(query: str, docs: Sequence[FieldDoc]) -> ScoredExam:
-    """Score of one exam (given by its field docs) for the normalized `query`."""
-    if not docs:
-        raise ValueError("an exam needs at least one field doc")
-    code = docs[0].code
-    for doc in docs:
-        if doc.text == query:
-            return ScoredExam(
-                code, EXACT_SCORE, "exact_name" if doc.kind == "name" else "exact_alias"
-            )
-
-    query_tokens = query.split()
-    best_fuzzy, best_doc = max(
-        # Ties keep the first doc, so the name wins over an alias.
-        ((fuzzy(query, doc.text), doc) for doc in docs),
-        key=lambda pair: pair[0],
-    )
-    best_coverage = max(coverage(query_tokens, doc.tokens) for doc in docs)
-    return ScoredExam(code, combine(best_fuzzy, best_coverage), best_doc.kind)
-
-
-def rank(scored: Sequence[ScoredExam], top_k: int) -> list[ScoredExam]:
-    return sorted(scored, key=lambda s: (-s.score, s.code))[:top_k]
-
-
 class ExamSearcher:
-    """Retrieval and scoring over one loaded catalog."""
+    """Scores only rank candidates; accepting one is the runtime's confidence gate."""
 
     def __init__(self, catalog: Catalog, index: HybridIndex | None = None) -> None:
         self._catalog = catalog
@@ -158,26 +57,101 @@ class ExamSearcher:
             score_exam(normalized, self._index.docs_of(code))
             for code in self._index.candidate_codes(normalized)
         ]
-        candidates = []
-        for item in rank(scored, top_k):
-            exam = self._catalog.get(item.code)
-            # The index is built from this catalog; a miss would be a bug, and
-            # a code outside the catalog must never be returned.
-            if exam is None:
-                raise RuntimeError("index returned a code that is not in the catalog")
-            candidates.append(
-                Candidate(
-                    code=exam.code,
-                    name=exam.name,
-                    score=item.score,
-                    matched_on=item.matched_on,
-                    category=exam.category,
-                )
-            )
         return SearchResult(
             catalog_version=self._catalog.version,
             catalog_sha256=self._catalog.sha256,
             query=query,
             normalized_query=normalized,
-            candidates=candidates,
+            candidates=[self._candidate(item) for item in rank(scored, top_k)],
         )
+
+    def _candidate(self, scored: ScoredExam) -> Candidate:
+        exam = self._catalog.get(scored.code)
+        if exam is None:
+            raise RuntimeError("index returned a code that is not in the catalog")
+
+        return Candidate(
+            code=exam.code,
+            name=exam.name,
+            score=scored.score,
+            matched_on=scored.matched_on,
+            category=exam.category,
+        )
+
+
+def strip_list_marker(query: str) -> str:
+    return _LIST_MARKER.sub("", query, count=1)
+
+
+def prepare_query(query: str) -> str:
+    return normalize_for_search(strip_list_marker(query))
+
+
+def fuzzy(query: str, field: str) -> float:
+    score = fuzz.WRatio(query, field, processor=None)
+    shared = set(query.split()) & set(field.split())
+    # One shared letter ("b" in "hepatite b") would score 100 through partial_token_set_ratio.
+    if shared and max(map(len, shared)) == 1:
+        score = min(score, _partial_without_shared_tokens(query, field))
+
+    return score / WRATIO_MAX
+
+
+def coverage(query_tokens: Sequence[str], field_tokens: Sequence[str]) -> float:
+    """Keeps a long field from winning on one shared fragment."""
+    wanted = set(query_tokens)
+    if not wanted:
+        return 0.0
+
+    return len(wanted & set(field_tokens)) / len(wanted)
+
+
+def combine(fuzzy_score: float, coverage_score: float) -> float:
+    return round(FUZZY_WEIGHT * fuzzy_score + COVERAGE_WEIGHT * coverage_score, 4)
+
+
+def score_exam(query: str, docs: Sequence[FieldDoc]) -> ScoredExam:
+    if not docs:
+        raise ValueError("an exam needs at least one field doc")
+
+    code = docs[0].code
+    exact = _exact_match(code, query, docs)
+    if exact is not None:
+        return exact
+
+    fuzzy_scores = [fuzzy(query, doc.text) for doc in docs]
+    best_fuzzy = max(fuzzy_scores)
+    # index() takes the first tie, so the name wins over an alias.
+    best_doc = docs[fuzzy_scores.index(best_fuzzy)]
+    query_tokens = query.split()
+    best_coverage = max(coverage(query_tokens, doc.tokens) for doc in docs)
+    return ScoredExam(code, combine(best_fuzzy, best_coverage), best_doc.kind)
+
+
+def rank(scored: Sequence[ScoredExam], top_k: int) -> list[ScoredExam]:
+    """Equal scores come out by code, so the order never varies."""
+    return sorted(scored, key=lambda item: (-item.score, item.code))[:top_k]
+
+
+def _exact_match(code: str, query: str, docs: Sequence[FieldDoc]) -> ScoredExam | None:
+    for doc in docs:
+        if doc.text == query:
+            matched_on: MatchedOn = "exact_name" if doc.kind == "name" else "exact_alias"
+            return ScoredExam(code, EXACT_SCORE, matched_on)
+
+    return None
+
+
+def _partial_without_shared_tokens(query: str, field: str) -> float:
+    shorter, longer = sorted((len(query), len(field)))
+    length_ratio = longer / shorter
+    # Below this ratio WRatio never uses the partial parts, so its score stays as is.
+    if length_ratio < WRATIO_PARTIAL_FROM:
+        return WRATIO_MAX
+
+    scale = WRATIO_PARTIAL_SCALE if length_ratio < WRATIO_LONG_FROM else WRATIO_LONG_SCALE
+    return max(
+        fuzz.ratio(query, field, processor=None),
+        fuzz.partial_ratio(query, field, processor=None) * scale,
+        fuzz.partial_token_sort_ratio(query, field, processor=None) * WRATIO_UNBASE * scale,
+    )

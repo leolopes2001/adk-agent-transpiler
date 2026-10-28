@@ -1,16 +1,3 @@
-"""Exam catalog: loaded and validated once, at startup.
-
-Any problem (unreadable file, bad JSON, wrong field, invalid or repeated code,
-a name or alias that two exams share after normalization, too few exams)
-raises `CatalogError` and the server does not start: an inconsistent catalog
-would make the same mention resolve to different exams. Exam names are not
-checked against the PII person detector here; a unit test of `lab_common.pii`
-covers the versioned catalog.
-
-`sha256` is the hash of the file's bytes, so the version the runtime sees can
-be tied to one exact file.
-"""
-
 import hashlib
 import json
 from collections.abc import Iterator
@@ -27,7 +14,7 @@ _MAX_REPORTED_ERRORS = 5
 
 
 class CatalogError(Exception):
-    """The catalog cannot be used; the message says why."""
+    pass
 
 
 class _CatalogFile(BaseModel):
@@ -70,6 +57,7 @@ def load_catalog(path: Path, *, min_exams: int = MIN_EXAMS) -> Catalog:
         raw = path.read_bytes()
     except OSError as exc:
         raise CatalogError(f"cannot read catalog {path}: {exc.strerror or exc}") from None
+
     return parse_catalog(raw, min_exams=min_exams)
 
 
@@ -78,25 +66,24 @@ def parse_catalog(raw: bytes, *, min_exams: int = MIN_EXAMS) -> Catalog:
         data = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise CatalogError(f"catalog is not valid UTF-8 JSON: {exc}") from None
+
     try:
         parsed = _CatalogFile.model_validate(data)
     except ValidationError as exc:
-        raise CatalogError(f"invalid catalog: {_describe(exc)}") from None
+        raise CatalogError(f"invalid catalog: {_describe_validation_errors(exc)}") from None
 
-    if len(parsed.exams) < min_exams:
-        raise CatalogError(
-            f"catalog has {len(parsed.exams)} exams; at least {min_exams} are required"
-        )
+    _check_min_exams(parsed.exams, min_exams)
     _check_unique_codes(parsed.exams)
     _check_unique_terms(parsed.exams)
     return Catalog(
         version=parsed.catalog_version,
+        # Hash of the file's bytes, so a catalog version can be tied to one exact file.
         sha256=hashlib.sha256(raw).hexdigest(),
         exams=tuple(parsed.exams),
     )
 
 
-def _describe(error: ValidationError) -> str:
+def _describe_validation_errors(error: ValidationError) -> str:
     problems = [
         f"{'.'.join(str(part) for part in item['loc']) or '<root>'}: {item['msg']}"
         for item in error.errors(include_input=False, include_url=False)
@@ -106,26 +93,34 @@ def _describe(error: ValidationError) -> str:
     return f"{shown} (and {hidden} more)" if hidden > 0 else shown
 
 
+def _check_min_exams(exams: list[Exam], min_exams: int) -> None:
+    if len(exams) < min_exams:
+        raise CatalogError(f"catalog has {len(exams)} exams; at least {min_exams} are required")
+
+
 def _check_unique_codes(exams: list[Exam]) -> None:
     seen: set[str] = set()
     for exam in exams:
         if exam.code in seen:
             raise CatalogError(f"duplicate exam code {exam.code}")
+
         seen.add(exam.code)
 
 
 def _check_unique_terms(exams: list[Exam]) -> None:
-    """Every name and alias must map to one exam once normalized for search."""
+    """A term shared after normalization would make the same mention resolve to different exams."""
     owners: dict[str, tuple[str, str]] = {}
     for exam in exams:
         for term in [exam.name, *exam.aliases]:
             key = normalize_for_search(term)
             if not key:
                 raise CatalogError(f"{exam.code}: {term!r} has no searchable characters")
+
             if key in owners:
                 other_code, other_term = owners[key]
                 raise CatalogError(
                     f"{exam.code}: {term!r} collides with {other_term!r} of {other_code} "
                     f"(both normalize to {key!r})"
                 )
+
             owners[key] = (exam.code, term)
