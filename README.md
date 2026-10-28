@@ -199,45 +199,90 @@ Mais de 2.000 testes, com 98% de cobertura.
 
 ## Evidências
 
-**Transpilador**
+Prints de execução real, gerados com os comandos deste README.
 
-![Geração das duas specs](evidence/transpiler/01-generate.png)
+| Área | O que mostra |
+|---|---|
+| [Transpilador](#transpilador-1) | Geração do agente, erros de validação e lista de agentes |
+| [Agente (CLI)](#agente-cli) | Fluxo completo, idempotência, revisão humana, prompt injection e pedido manuscrito |
+| [API](#api-1) | Swagger e consulta dos agendamentos registrados |
+| [Logs e traces](#logs-e-traces-1) | Logs estruturados e trace de uma execução no Aspire |
+| [Docker](#docker) | Serviços do Compose no ar |
+| [Testes](#testes-1) | Suíte de testes e cobertura |
 
-![Spec inválida com os erros acumulados](evidence/transpiler/02-validate-errors.png)
+### Transpilador
 
-**Agente (CLI)**
+**Geração do agente a partir da spec.** O transpilador lê `exam_scheduling_agent.json` e gera `agent.py`, `__init__.py` e `_manifest.json`.
 
-![Fluxo feliz](evidence/cli/01-feliz.png)
+![Geração do agente exam_scheduling_agent](evidence/transpiler/01-generate.jpeg)
 
-![Replay idempotente](evidence/cli/02-replay.png)
+**Spec inválida.** Os quatro erros aparecem de uma vez, cada um com código, caminho na spec e dica de correção. Nenhum arquivo é gerado.
 
-![Revisão humana do pedido ambíguo](evidence/cli/03-revisao.png)
+![Spec inválida com os erros acumulados](evidence/transpiler/02-validate-errors.jpeg)
 
-![Prompt injection bloqueado](evidence/cli/04-injection.png)
+**Agentes gerados.** `agent list` mostra os dois agentes disponíveis para `--agent`.
 
-![Spec alternativa](evidence/cli/05-spec-alternativa.png)
+![Lista dos agentes gerados](evidence/transpiler/03-show-agent-list.png)
 
-Pedido manuscrito em papel pautado ([`samples/pedido_manuscrito.jpg`](samples/pedido_manuscrito.jpg)), com Gemini e `--non-interactive`: OCR com confiança média 0,68; Hemograma completo, Glicemia de jejum e Ferritina aceitos e agendados; TSH, lido como "15H", foi para revisão humana e ficou fora; 7 dados pessoais mascarados; exit 0.
+### Agente (CLI)
 
-**Swagger**
+**Fluxo completo.** Pedido digitado: 7 exames agendados, 8 dados pessoais mascarados. "PCR" e "Urina tipo 1 (EAS)" foram resolvidos para os nomes do catálogo.
 
-![Endpoints e botão Authorize](evidence/swagger/01-endpoints.png)
+![Fluxo completo com 7 exames agendados](evidence/cli/01-fluxo-completo.jpeg)
 
-![Diálogo Authorize com X-API-Key](evidence/swagger/02-authorize.png)
+**Idempotência.** A mesma imagem rodada de novo devolve o mesmo `ID` e nada é duplicado.
 
-![POST com o exemplo e Idempotency-Key](evidence/swagger/03-post-example.png)
+![Replay idempotente sem duplicar a solicitação](evidence/cli/02-idempotencia.jpeg)
 
-![Resposta 201](evidence/swagger/04-post-201.png)
+**Revisão humana.** "T4" é ambíguo (T4 livre ou T4 total, ambos com similaridade 0,93). O gate não decide sozinho e pede a escolha ao usuário.
 
-![Replay com 200 e Idempotent-Replayed](evidence/swagger/05-replay-200.png)
+![Revisão humana do pedido ambíguo](evidence/cli/03-revisao-humana.jpeg)
 
-![Mesma chave com outro corpo: 409](evidence/swagger/06-conflict-409.png)
+**Prompt injection.** O pedido contém trechos que parecem instruções para a IA. Ele é bloqueado antes do LLM e nada é agendado.
 
-**Docker e testes**
+![Prompt injection bloqueado](evidence/cli/04-prompt-injection.jpeg)
 
-![Serviços do Compose no ar](evidence/docker/01-ps.png)
+**Pedido manuscrito.** Pedido escrito à mão em papel pautado ([`samples/pedido_manuscrito.jpg`](samples/pedido_manuscrito.jpg)). O OCR leu "TSH" como "15H"; a IA sugeriu TSH e a confirmação veio da revisão humana. "FERRLTINA" foi resolvido para Ferritina. 4 exames agendados, 7 dados pessoais mascarados.
 
-![Cobertura dos testes](evidence/tests/01-coverage.png)
+![Pedido manuscrito com revisão humana](evidence/cli/05-pedido-manuscrito.jpeg)
+
+**Pedido manuscrito, segunda execução.** Mesmo com o OCR de um manuscrito, a chave de idempotência se mantém: mesmo `ID`, nada duplicado.
+
+![Replay idempotente do pedido manuscrito](evidence/cli/06-pedido-manuscrito-idempotencia.jpeg)
+
+### API
+
+**Swagger.** Rotas de agendamento, catálogo e health, autenticação por `X-API-Key` e contrato sem dados pessoais (só o pseudônimo `patient_ref`).
+
+![Endpoints no Swagger](evidence/swagger/01-endpoints.jpeg)
+
+**Consulta dos agendamentos.** `GET /v1/appointments` devolve a solicitação do pedido manuscrito com status `requested`, os códigos do catálogo e o hash do documento de origem.
+
+![GET /v1/appointments com 200 OK](evidence/swagger/02-test-endpoint.png)
+
+### Logs e traces
+
+**Logs estruturados.** Logs em JSON dos serviços `rag-mcp`, `ocr-mcp` e `scheduler-api` no Aspire Dashboard.
+
+![Logs estruturados no Aspire](evidence/observability/logs.jpeg)
+
+**Trace de uma execução.** Uma execução do agente de ponta a ponta (23 spans, 4 serviços): OCR, guard, extração em paralelo (Gemini e busca léxica), resolve, gate e `POST /v1/appointments`.
+
+![Trace de uma execução no Aspire](evidence/observability/trace.jpeg)
+
+### Docker
+
+**Serviços no ar.** `docker compose ps` com todos os serviços saudáveis. Só a API (8000) e o Aspire (18888) ficam expostos, e só em `127.0.0.1`.
+
+![docker compose ps](evidence/docker/02-containers.png)
+
+![Containers no Docker Desktop](evidence/docker/01-containers.png)
+
+### Testes
+
+**Suíte de testes e cobertura.** 2.102 testes passando, com relatório de cobertura por arquivo.
+
+![Testes e cobertura](evidence/tests/01-test.jpeg)
 
 ## Uso de IA
 
