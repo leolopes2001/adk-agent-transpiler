@@ -1,22 +1,3 @@
-"""Person names, recognized by the label before them ("Paciente:", "Dr.").
-
-Names have no fixed format, so this detector only looks right after a label
-and takes the whole run of capitalized words that follows (no word limit: a
-cut-off would leak the rest of a long name). A label that is clearly a form
-field (followed by ":" or "-", or a title ending in a dot: "Dr.", "Sra.")
-introduces a value in any case ("Paciente: maria silva", "dra. ana
-SOUZA"), on the same line or, when nothing follows the label, on the next
-one ("Responsável:\nana souza"). That value is every word up to the next
-field: a field label, a word followed by ":", a digit or punctuation (audit
-F01). Two safeguards keep exam names and form fields out of the span:
-
-- the run stops at a field label ("CPF", "Telefone", ...), so "Dr. João CRM 1"
-  masks the name and leaves the CRM to its own detector;
-- a run made only of medical vocabulary (`medical_terms.txt`: every token of
-  the exam catalog plus common clinical words) is not a name, so "Paciente:
-  Hemograma Completo" or "Paciente Diabético" are left alone.
-"""
-
 import re
 from collections.abc import Iterable
 from functools import cache
@@ -41,34 +22,36 @@ _ROLE_LABELS = {
 }
 _LABEL = "|".join(f"(?P<{role}>{labels})" for role, labels in _ROLE_LABELS.items())
 
-_UPPER = "A-ZÀ-ÖØ-Þ"
-_LOWER = "a-zß-öø-ÿ"
-_WORD = (
-    rf"(?:[{_UPPER}][{_LOWER}]+(?:['\u2019\-][{_UPPER}{_LOWER}]+)*"  # Maria, D'Ávila, Ana-Clara
-    rf"|[{_UPPER}]{{2,}}(?:['\u2019\-][{_UPPER}]+)*"  # MARIA
-    rf"|[{_UPPER}]\.)"  # J.
-    # Whole words only: "IgM" or "NS1" must not shrink to "Ig" or "NS", which
-    # would no longer match the exclusion list.
-    r"(?!\w)"
+_UPPER_LETTERS = "A-ZÀ-ÖØ-Þ"
+_LOWER_LETTERS = "a-zß-öø-ÿ"
+_TITLE_CASE_WORD = (
+    rf"[{_UPPER_LETTERS}][{_LOWER_LETTERS}]+(?:['\u2019\-][{_UPPER_LETTERS}{_LOWER_LETTERS}]+)*"
 )
+_ALL_CAPS_WORD = rf"[{_UPPER_LETTERS}]{{2,}}(?:['\u2019\-][{_UPPER_LETTERS}]+)*"
+_INITIAL = rf"[{_UPPER_LETTERS}]\."
+# Whole words only: "IgM" or "NS1" must not shrink to "Ig" or "NS" and escape the exclusion list.
+_WORD = rf"(?:{_TITLE_CASE_WORD}|{_ALL_CAPS_WORD}|{_INITIAL})(?!\w)"
 _CONNECTOR = r"(?:d[aeo]s?|D[AEO]S?|e|E)"
-_PATTERN = re.compile(
+# No word limit: cutting a long name short would leak the rest of it.
+_CAPITALIZED_NAME = re.compile(
     rf"(?<![\w.])(?i:{_LABEL})(?:(?<=\.)|(?!\w))[^\S\n]*[:\-\u2013]?[^\S\n]*"
     rf"(?P<value>{_WORD}(?:[^\S\n]+(?:{_CONNECTOR}[^\S\n]+)?{_WORD})*)"
 )
-_WORD_RE = re.compile(rf"{_WORD}|{_CONNECTOR}")
+_CAPITALIZED_WORD = re.compile(rf"{_WORD}|{_CONNECTOR}")
 
-# Any case; only after a label with an explicit separator.
-_FIELD_WORD = r"[^\W\d_]+(?:['\u2019\-][^\W\d_]+)*(?!\w)\.?"
-_FIELD_PATTERN = re.compile(
+_ANY_CASE_WORD = r"[^\W\d_]+(?:['\u2019\-][^\W\d_]+)*(?!\w)\.?"
+# After an explicit separator the name may be in any case, or on the next line.
+_LABELED_NAME = re.compile(
     rf"(?<![\w.])(?i:{_LABEL})(?:(?<=\.)[^\S\n]*:?|(?!\w)[^\S\n]*[:\-\u2013])"
     rf"[^\S\n]*(?:\n[^\S\n]*)?"
-    rf"(?P<value>{_FIELD_WORD}(?:[^\S\n]+{_FIELD_WORD})*)"
+    rf"(?P<value>{_ANY_CASE_WORD}(?:[^\S\n]+{_ANY_CASE_WORD})*)"
 )
-_FIELD_WORD_RE = re.compile(_FIELD_WORD)
+_ANY_CASE_WORD_RE = re.compile(_ANY_CASE_WORD)
 
-# Form labels (normalized) that end a name when they follow it on the same line.
-_FIELD_LABELS = frozenset(
+_NAME_PATTERNS = ((_CAPITALIZED_NAME, _CAPITALIZED_WORD), (_LABELED_NAME, _ANY_CASE_WORD_RE))
+
+# So "Dr. João CRM 1" leaves the CRM to its own detector.
+_LABELS_ENDING_NAME = frozenset(
     {
         "cpf",
         "rg",
@@ -93,52 +76,32 @@ _FIELD_LABELS = frozenset(
 )
 
 
-@cache
-def medical_terms() -> frozenset[str]:
-    """Normalized tokens that never make up a person name on their own."""
-    content = resources.files(__package__).joinpath("medical_terms.txt").read_text("utf-8")
-    terms: set[str] = set()
-    for line in content.splitlines():
-        terms.update(tokens(line.split("#", 1)[0]))
-    return frozenset(terms)
-
-
 class PersonDetector:
     entity = PiiEntity.PERSON
     name = "person"
 
     def __init__(self, extra_terms: Iterable[str] = ()) -> None:
-        self._excluded = medical_terms() | {t for term in extra_terms for t in tokens(term)}
+        self._non_name_terms = medical_terms() | {t for term in extra_terms for t in tokens(term)}
 
     def detect(self, text: str) -> list[PiiSpan]:
         found = []
-        for pattern, words in ((_PATTERN, _WORD_RE), (_FIELD_PATTERN, _FIELD_WORD_RE)):
+        for pattern, words in _NAME_PATTERNS:
             for match in pattern.finditer(text):
                 role = next(r for r in _ROLE_LABELS if match[r] is not None)
                 span = self._name_span(match, role, words)
                 if span is not None:
                     found.append(span)
-        # Both patterns usually find the same name: keep the longest span.
-        spans: list[PiiSpan] = []
-        for span in sorted(found, key=lambda s: (s.start, -len(s))):
-            if not spans or span.start >= spans[-1].end:
-                spans.append(span)
-        return spans
+
+        return _without_overlaps(found)
 
     def _name_span(self, match: re.Match[str], role: str, words: re.Pattern[str]) -> PiiSpan | None:
-        offset = match.start("value")
-        kept: list[re.Match[str]] = []
-        for word in words.finditer(match["value"]):
-            next_label = match.string.startswith(":", offset + word.end())
-            if next_label or _FIELD_LABELS.intersection(tokens(word[0])):
-                break
-            kept.append(word)
-        while kept and _is_connector(kept[-1][0]):
-            kept.pop()
-
+        kept = _name_words(match, words)
         name_tokens = tokens(" ".join(w[0] for w in kept))
-        if not name_tokens or all(t in self._excluded for t in name_tokens):
+        # A run of medical vocabulary ("Paciente: Hemograma Completo") is not a name.
+        if not name_tokens or all(t in self._non_name_terms for t in name_tokens):
             return None
+
+        offset = match.start("value")
         names = sum(not _is_connector(w[0]) for w in kept)
         return PiiSpan(
             PiiEntity.PERSON,
@@ -147,6 +110,41 @@ class PersonDetector:
             FULL_NAME_SCORE if names > 1 else SINGLE_WORD_SCORE,
             f"person.{role}",
         )
+
+
+@cache
+def medical_terms() -> frozenset[str]:
+    content = resources.files(__package__).joinpath("medical_terms.txt").read_text("utf-8")
+    terms: set[str] = set()
+    for line in content.splitlines():
+        terms.update(tokens(line.split("#", 1)[0]))
+
+    return frozenset(terms)
+
+
+def _name_words(match: re.Match[str], words: re.Pattern[str]) -> list[re.Match[str]]:
+    offset = match.start("value")
+    kept: list[re.Match[str]] = []
+    for word in words.finditer(match["value"]):
+        followed_by_colon = match.string.startswith(":", offset + word.end())
+        if followed_by_colon or _LABELS_ENDING_NAME.intersection(tokens(word[0])):
+            break
+
+        kept.append(word)
+
+    while kept and _is_connector(kept[-1][0]):
+        kept.pop()
+
+    return kept
+
+
+def _without_overlaps(spans: list[PiiSpan]) -> list[PiiSpan]:
+    kept: list[PiiSpan] = []
+    for span in sorted(spans, key=lambda s: (s.start, -len(s))):
+        if not kept or span.start >= kept[-1].end:
+            kept.append(span)
+
+    return kept
 
 
 def _is_connector(word: str) -> bool:

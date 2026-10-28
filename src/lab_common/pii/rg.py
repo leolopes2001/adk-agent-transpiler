@@ -1,10 +1,8 @@
-"""RG (registro geral), only next to a label: the number alone has no fixed
-format across states and would collide with any other document number."""
-
 import re
 
 from lab_common.pii.types import PiiEntity, RegexDetector
 
+# Only next to a label: an RG alone has no fixed format and collides with other numbers.
 _PATTERN = re.compile(
     r"(?i:\b(?:RG|R\.G\.|identidade|carteira\s+de\s+identidade))"
     r"[^\S\n]*(?i:n[º°o.]*)?[^\S\n]*[:\-]?[^\S\n]*"

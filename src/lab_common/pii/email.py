@@ -1,5 +1,3 @@
-"""E-mail addresses (simplified RFC 5322: dot-atom local part and domain)."""
-
 import re
 
 from lab_common.pii.types import PiiEntity, RegexDetector

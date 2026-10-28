@@ -1,11 +1,3 @@
-"""Deterministic detection of Brazilian personal data in document text.
-
-Each detector lives in its own module and finds one entity. `default_detectors`
-is the set the OCR server masks documents with; `high_precision_detectors` only
-reports values that are personal data wherever they appear (check digits or an
-unambiguous format), for scanning logs and model requests.
-"""
-
 from lab_common.pii.address import AddressDetector
 from lab_common.pii.birth_date import BirthDateDetector
 from lab_common.pii.cep import CepDetector
@@ -61,5 +53,6 @@ def default_detectors() -> list[PiiDetector]:
     ]
 
 
+# Values that are personal data wherever they appear (check digits, unambiguous format).
 def high_precision_detectors() -> list[PiiDetector]:
     return [CpfDetector(require_valid=True), CnsDetector(), EmailDetector(), PhoneDetector()]

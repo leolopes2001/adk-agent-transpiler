@@ -1,5 +1,3 @@
-"""CEP (postal code): hyphenated format anywhere, plain 8 digits only after a label."""
-
 import re
 
 from lab_common.pii.types import PiiEntity, RegexDetector

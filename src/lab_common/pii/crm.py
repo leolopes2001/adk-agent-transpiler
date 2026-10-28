@@ -1,5 +1,3 @@
-"""CRM (medical council registration), with optional state: `CRM-MG 123456`."""
-
 import re
 
 from lab_common.pii.types import PiiEntity, RegexDetector

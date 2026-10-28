@@ -1,5 +1,3 @@
-"""Health plan card numbers, recognized by the label before them."""
-
 import re
 
 from lab_common.pii.types import PiiEntity, RegexDetector, only_digits
@@ -10,7 +8,7 @@ _LABEL = (
     r"carteirinha|carteira[^\S\n]+do[^\S\n]+(?:plano|conv[eê]nio)|matr[ií]cula"
     r"|conv[eê]nio|cart[aã]o[^\S\n]+(?:do[^\S\n]+)?(?:plano|conv[eê]nio|benefici[aá]rio)"
 )
-# Up to 40 characters may separate label and number ("Convênio: Plano X nº").
+# A plan name may sit between label and number ("Convênio: Plano X nº").
 _PATTERN = re.compile(
     rf"(?i:\b(?:{_LABEL}))\b[^\n0-9]{{0,40}}?"
     r"(?P<value>[0-9](?:[0-9.\-/]|[^\S\n](?=[0-9]))*[0-9])(?![0-9])"

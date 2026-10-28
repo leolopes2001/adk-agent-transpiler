@@ -1,14 +1,3 @@
-"""Contract of the RAG server's tools (version "1").
-
-The server only retrieves and scores: a `SearchResult` lists catalog exams
-ranked by a score in [0, 1] that is comparable across queries, and never says
-whether a candidate is accepted. That decision belongs to the runtime's
-confidence gate, whose thresholds live in the agent spec.
-
-Every candidate code comes from the catalog the server loaded, identified by
-`catalog_version` and `catalog_sha256`.
-"""
-
 from enum import StrEnum
 from typing import Annotated, Literal
 
@@ -28,8 +17,7 @@ Score = Annotated[float, Field(ge=0, le=1)]
 NonEmpty = Annotated[str, Field(min_length=1)]
 
 MatchedOn = Literal["exact_name", "exact_alias", "name", "alias"]
-"""Which field of the exam produced the match: `exact_*` means the normalized
-query equals that field (score 1.0); `name`/`alias` mean the best fuzzy match."""
+"""`exact_*`: the normalized query equals that field (score 1.0); otherwise the best fuzzy match."""
 
 
 class _Contract(BaseModel):
@@ -53,15 +41,16 @@ class Candidate(_Contract):
     category: str
 
 
+# The RAG only ranks candidates; accepting one is the runtime confidence gate's decision.
 class SearchResult(_Contract):
     contract_version: Literal["1"] = CONTRACT_VERSION
     catalog_version: CatalogVersion
     catalog_sha256: Sha256
     query: str
     normalized_query: str
-    """Form the query was matched in; empty when nothing searchable was left."""
+    """Empty when nothing searchable was left."""
     candidates: list[Candidate]
-    """Best first, ordered by (-score, code); at most `top_k` items."""
+    """Ordered by (-score, code); at most `top_k` items."""
 
 
 class BatchSearchResult(_Contract):

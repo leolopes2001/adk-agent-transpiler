@@ -1,18 +1,11 @@
-"""Contract of the OCR server's `extract_text` tool (version "1").
-
-Every text field is already masked: the server applies the PII redactor before
-building any of these objects, so they are safe to log, store in session
-events or hand to a model.
-"""
-
 from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 
 CONTRACT_VERSION: Literal["1"] = "1"
+# Must match the patient reference the scheduler API accepts.
 PATIENT_REF_PATTERN = r"^pt_[A-Z2-7]{26}$"
-"""Same pattern the scheduler API accepts: "pt_" + 26 base32 characters."""
 
 Score = Annotated[float, Field(ge=0, le=1)]
 
@@ -32,6 +25,7 @@ class EngineInfo(_Contract):
     psm: int
 
 
+# Every text field is already masked: the server redacts PII before building it.
 class OcrResult(_Contract):
     contract_version: Literal["1"] = CONTRACT_VERSION
     document_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -39,9 +33,7 @@ class OcrResult(_Contract):
     lines: list[OcrLine]
     mean_confidence: Score
     pii_counts: dict[str, NonNegativeInt]
-    """Masked spans per entity name (`PERSON`, `CPF`, ...)."""
     patient_ref: Annotated[str, Field(pattern=PATIENT_REF_PATTERN)] | None
-    """Pseudonymous patient id; None when the order has no patient identifier."""
     engine: EngineInfo
     timings_ms: dict[str, NonNegativeInt]
 

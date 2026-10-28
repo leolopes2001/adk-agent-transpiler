@@ -1,5 +1,3 @@
-"""Birth dates: a date is only personal data next to a birth label."""
-
 import re
 
 from lab_common.pii.types import PiiEntity, RegexDetector
