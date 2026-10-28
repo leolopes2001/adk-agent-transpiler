@@ -23,9 +23,9 @@ stdin e a tabela TSV no stdout. O `pytesseract` não é usado porque grava a
 imagem e o texto reconhecido em arquivos temporários; assim, nada do
 documento toca o disco.
 
-As imagens de teste são geradas por `scripts/make_sample_images.py`, com
-fonte e semente fixas, para que a qualidade do OCR possa ser medida sobre
-entradas reproduzíveis.
+As imagens de teste são fictícias e versionadas em `samples/` e
+`tests/data/images/`, para que a qualidade do OCR possa ser medida sobre
+entradas fixas.
 
 ## Consequências
 

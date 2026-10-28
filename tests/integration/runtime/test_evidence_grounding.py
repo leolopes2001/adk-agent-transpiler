@@ -14,7 +14,7 @@ from runtime_stack import REPO_ROOT, Stack, run_agent
 
 pytestmark = pytest.mark.integration
 
-FONT = REPO_ROOT / "scripts" / "fonts" / "DejaVuSans.ttf"
+FONT = REPO_ROOT / "tests" / "fixtures" / "fonts" / "DejaVuSans.ttf"
 
 
 def _page(path: Path, lines: list[str]) -> None:

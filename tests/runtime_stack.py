@@ -57,7 +57,7 @@ HMAC_SECRET = "stack-hmac-secret-" + "y" * 32
 API_KEY = "stack-api-key-" + "z" * 32
 POSTGRES_IMAGE = "postgres:16-alpine"
 SAMPLE_PII = (
-    # Printed on the samples by scripts/make_sample_images.py (all fictional).
+    # Printed on the samples (all fictional).
     "Maria",
     "MARIA",
     "Fictícia da Silva",

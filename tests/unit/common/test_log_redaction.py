@@ -15,7 +15,7 @@ from lab_common.logging import MAX_STRING_CHARS, RedactPii
 
 pytestmark = pytest.mark.unit
 
-# Values printed on the sample images (scripts/make_sample_images.py).
+# Values printed on the sample images (all fictional).
 CPF = "202.393.613-69"
 PHONE = "(31) 90000-0000"
 

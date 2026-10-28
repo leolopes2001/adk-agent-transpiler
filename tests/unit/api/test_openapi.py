@@ -15,7 +15,6 @@ from scheduler_api.schemas import AppointmentCreate
 pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).parents[3]
-EVIDENCE = ROOT / "evidence" / "openapi.json"
 PROBLEM_JSON = "application/problem+json"
 V1_OPERATIONS = [
     ("/v1/appointments", "post"),
@@ -34,13 +33,6 @@ def _validator(schema: dict[str, Any], component: str) -> Draft202012Validator:
     # Refs are relative to the document root, so the components travel along.
     return Draft202012Validator(
         {"$ref": f"#/components/schemas/{component}", "components": schema["components"]}
-    )
-
-
-def test_committed_document_matches_the_code() -> None:
-    assert EVIDENCE.read_text(encoding="utf-8") == openapi.render(), (
-        "evidence/openapi.json is stale: run "
-        "`uv run python -m scheduler_api.openapi evidence/openapi.json` and commit the result"
     )
 
 

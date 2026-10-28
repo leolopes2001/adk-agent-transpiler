@@ -1,15 +1,14 @@
 """Swagger UI and the OpenAPI document as served by the running app."""
 
 import json
-from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 
-pytestmark = pytest.mark.integration
+from scheduler_api import openapi
 
-EVIDENCE = Path(__file__).parents[3] / "evidence" / "openapi.json"
+pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
@@ -29,8 +28,8 @@ async def test_docs_page_is_served_without_a_key(client: httpx.AsyncClient) -> N
     assert "/openapi.json" in response.text
 
 
-async def test_served_document_is_the_committed_one(served: dict[str, Any]) -> None:
-    assert served == json.loads(EVIDENCE.read_text(encoding="utf-8"))
+async def test_served_document_is_the_rendered_one(served: dict[str, Any]) -> None:
+    assert served == json.loads(openapi.render())
 
 
 async def test_declares_the_api_key_security_scheme(served: dict[str, Any]) -> None:

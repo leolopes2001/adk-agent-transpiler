@@ -1,7 +1,0 @@
-# Imagem ilegível
-$ lab-agent run --image /app/inputs/test-images/blank.png --non-interactive --output table
-Resultado: OCR_LOW_QUALITY
-Não foi possível ler o pedido com qualidade suficiente. Envie uma imagem mais nítida, sem cortes e bem iluminada.
-Dados pessoais mascarados: nenhum
-Execução bc160b2c-6e36-4d0b-8501-a3afb9e31ced: OCR_LOW_QUALITY (exit 4) em 641 ms; caminho: ocr → abort
-(exit 4)

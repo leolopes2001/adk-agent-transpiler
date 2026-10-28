@@ -31,7 +31,7 @@ pytestmark = pytest.mark.unit
 
 IMAGES = Path(__file__).resolve().parents[2] / "data" / "images"
 # Lines as Tesseract reads samples/pedido_medico_ficticio.png; personal data
-# is the one printed by scripts/make_sample_images.py.
+# is the fictional one printed on the sample.
 SAMPLE_LINES = [
     ("Laboratório Exemplo (fictício)", 0.96),
     ("Rua Imaginária, 100 — Belo Horizonte/MG", 0.94),

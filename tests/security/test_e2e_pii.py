@@ -1,14 +1,13 @@
-"""No personal data in anything the Compose stack writes, nor in evidence/.
+"""No personal data in anything the Compose stack writes.
 
 The three samples run through the containers (FakeLlm as the model). Then the
-logs of every container, the agent's output, the database and the files in
-evidence/ are searched for the personal data printed on the samples, with and
-without masks, and for the generic high-precision patterns (CPF with valid
-check digits, CNS, e-mail, phone).
+logs of every container, the agent's output and the database are searched for
+the personal data printed on the samples, with and without masks, and for the
+generic high-precision patterns (CPF with valid check digits, CNS, e-mail,
+phone).
 """
 
 import base64
-from pathlib import Path
 
 import pytest
 
@@ -18,7 +17,7 @@ from lab_common.pii.redactor import detect_all
 
 pytestmark = pytest.mark.security
 
-# Printed on the samples by scripts/make_sample_images.py (all fictional).
+# Printed on the samples (all fictional).
 PII_VALUES = [
     "Maria",
     "MARIA",
@@ -39,8 +38,6 @@ RUNS = [
     ("pedido_ambiguo.png", "pedido_ambiguo.json"),
     ("pedido_injecao.png", "pedido_medico_ficticio.json"),
 ]
-EVIDENCE = REPO_ROOT / "evidence"
-TEXT_SUFFIXES = {".json", ".jsonl", ".txt", ".md", ".log", ".py", ".diff", ".xml", ".csv"}
 
 
 def _leaks(text: str) -> list[str]:
@@ -111,21 +108,3 @@ def test_the_image_never_reaches_logs_output_or_database(
         encoded = base64.b64encode((REPO_ROOT / "samples" / image).read_bytes()).decode()
         assert encoded[:64] not in text
         assert encoded[-64:] not in text
-
-
-def _evidence_files() -> list[Path]:
-    return sorted(
-        path for path in EVIDENCE.rglob("*") if path.is_file() and path.suffix in TEXT_SUFFIXES
-    )
-
-
-def test_no_personal_data_in_the_evidence_folder() -> None:
-    files = _evidence_files()
-
-    assert files, "evidence/ has no text files to check"
-    leaks = {
-        str(path.relative_to(REPO_ROOT)): found
-        for path in files
-        if (found := _leaks(path.read_text("utf-8", errors="replace")))
-    }
-    assert leaks == {}

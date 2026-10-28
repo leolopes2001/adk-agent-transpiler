@@ -1,13 +1,12 @@
-# Allowlist: the images are built from the project metadata, the sources and the
-# API entrypoint only. Everything else (.env, .git, .venv, tests, generated/,
-# evidence/, local caches) stays out of the build context.
+# Allowlist: the images are built from the project metadata and the sources
+# only. Everything else (.env, .git, .venv, tests, generated/, evidence/, local
+# caches) stays out of the build context.
 *
 !pyproject.toml
 !uv.lock
 !README.md
 !alembic.ini
 !src/
-!scripts/api-entrypoint.sh
 
 **/__pycache__
 **/*.py[cod]

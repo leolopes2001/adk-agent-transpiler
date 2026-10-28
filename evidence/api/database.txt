@@ -1,4 +1,0 @@
-$ psql -At -c "SELECT a.id, a.patient_ref, a.source_document_sha256, a.requested_by, string_agg(e.code, ',' ORDER BY e.code) FROM appointments a JOIN appointment_exams e ON e.appointment_id = a.id GROUP BY a.id ORDER BY a.id"
-id | patient_ref | source_document_sha256 | requested_by | exams
-apt_01M5ZM29C8EJSVMNKBF475NSMX | pt_XATXFGTRSNYLFC6HSPN3ENWUAC | 77767581de31154c66267960126e7dc263745c47136271288e14886250069ff1 | exam_scheduling_agent | LAB-10001,LAB-10012,LAB-10016,LAB-10037,LAB-10043,LAB-10044,LAB-10079
-apt_01M5ZM2X2S2Q8BP1C7G22DPS72 | pt_XATXFGTRSNYLFC6HSPN3ENWUAC | 0fc0b32e2b6fa3bed6bae05a263622f1e0f763860921f126b361e3406510451a | exam_scheduling_agent | LAB-10001

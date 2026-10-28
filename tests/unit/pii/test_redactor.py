@@ -15,7 +15,7 @@ from lab_common.pii.redactor import resolve_overlaps
 
 pytestmark = pytest.mark.unit
 
-# Personal data printed on the sample images (scripts/make_sample_images.py).
+# Personal data printed on the sample images (all fictional).
 SAMPLE_VALUES = [
     "Maria Fictícia da Silva",
     "202.393.613-69",

@@ -1,4 +1,0 @@
-# Spec alterada sem regenerar (accept_threshold 0.85 -> 0.95 numa cópia em /tmp)
-$ lab-agent run --image /app/inputs/samples/pedido_medico_ficticio.png --spec /tmp/spec.json --non-interactive
-lab-agent: generated code is out of date with the spec; run lab-transpile
-(exit 7)

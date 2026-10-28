@@ -44,7 +44,7 @@ EXPECTED = json.loads(
 TOKEN = "integration-token-" + "x" * 32
 SECRET = "integration-secret-" + "y" * 32
 MIN_FUZZY_SCORE = 85
-# Personal data printed on the samples by scripts/make_sample_images.py.
+# Personal data printed on the samples (all fictional).
 PII_VALUES = [
     "Maria",
     "Fictícia da Silva",

@@ -1,7 +1,7 @@
 """Calibrate the confidence gate thresholds on the RAG evaluation set.
 
     uv run python scripts/calibrate_rag.py --eval tests/data/rag_eval.jsonl \
-        --out evidence/rag_calibration.md
+        --out rag_calibration.md
 
 Every query of the evaluation set is searched once (top 5) with the real
 catalog and scorer. Then every combination of the grid

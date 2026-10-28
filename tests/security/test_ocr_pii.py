@@ -46,7 +46,7 @@ BOMB = REPO_ROOT / "tests" / "data" / "images" / "decompression_bomb.png"
 TOKEN = "security-token-" + "x" * 32
 SECRET = "security-secret-" + "y" * 32
 CPF = "202.393.613-69"
-# Personal data printed on the samples by scripts/make_sample_images.py.
+# Personal data printed on the samples (all fictional).
 PII_VALUES = [
     "Maria",
     "MARIA",

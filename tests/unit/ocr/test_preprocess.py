@@ -19,9 +19,9 @@ from ocr_mcp.preprocess import (
 pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-FONT = REPO_ROOT / "scripts" / "fonts" / "DejaVuSans.ttf"
+FONT = REPO_ROOT / "tests" / "fixtures" / "fonts" / "DejaVuSans.ttf"
 SAMPLE = REPO_ROOT / "samples" / "pedido_medico_ficticio.png"
-# scripts/make_sample_images.py rotates the sample by this much.
+# The sample is printed rotated by this much.
 SAMPLE_ROTATION = 1.5
 
 

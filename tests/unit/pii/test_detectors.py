@@ -24,7 +24,7 @@ from lab_common.pii.types import inside_hex_token
 pytestmark = pytest.mark.unit
 
 CASES_PATH = Path(__file__).resolve().parents[2] / "data" / "pii_cases.jsonl"
-# The CPF printed on the sample images (scripts/make_sample_images.py, fixed seed).
+# The fictional CPF printed on the sample images.
 SAMPLE_CPF = "202.393.613-69"
 MIN_SCORE = 0.5
 

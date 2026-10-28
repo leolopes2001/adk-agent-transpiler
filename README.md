@@ -48,25 +48,23 @@ flowchart LR
 
 ## Requisitos do desafio
 
-A lista completa de evidências, com a origem de cada arquivo, está em [`evidence/README.md`](evidence/README.md).
+As capturas de tela estão na seção [Evidências](#evidências).
 
 | Requisito | Onde está | Evidência |
 |---|---|---|
-| Transpilador JSON → Python ADK | [`src/transpiler/`](src/transpiler/) | [`evidence/transpiler/generate.txt`](evidence/transpiler/generate.txt), [`exam_scheduling_agent.agent.py.txt`](evidence/transpiler/exam_scheduling_agent.agent.py.txt) |
+| Transpilador JSON → Python ADK | [`src/transpiler/`](src/transpiler/) | [`tests/golden/`](tests/golden/), [captura](#evidências) |
 | Código gerado instancia agentes só com Google ADK | template [`agent.py.j2`](src/transpiler/codegen/templates/agent.py.j2), allowlist de imports em [`ast_rules.py`](src/transpiler/validation/ast_rules.py) | [`tests/golden/`](tests/golden/) |
-| Validação da spec com mensagens claras | [`src/transpiler/semantic/`](src/transpiler/semantic/), [`errors.py`](src/transpiler/errors.py) | [`evidence/transpiler/validate-errors.txt`](evidence/transpiler/validate-errors.txt) |
-| Specs diferentes geram código diferente | [`specs/`](specs/) | [`evidence/transpiler/diff-generated.diff`](evidence/transpiler/diff-generated.diff) |
-| Código gerado executável | [`src/agent_runtime/`](src/agent_runtime/) | [`evidence/runs/index.md`](evidence/runs/index.md), [`evidence/cli/07-spec-alterada.txt`](evidence/cli/07-spec-alterada.txt) |
-| OCR como servidor MCP via SSE | [`src/ocr_mcp/`](src/ocr_mcp/) | [`evidence/logs/compose.log`](evidence/logs/compose.log) (`ocr_request`, `ocr_done`), [`evidence/cli/05-ilegivel.txt`](evidence/cli/05-ilegivel.txt) |
-| RAG como servidor MCP via SSE, ≥ 100 exames | [`src/rag_mcp/`](src/rag_mcp/), [`data/exams_catalog.json`](data/exams_catalog.json) (120 exames) | `catalog_loaded` em [`evidence/logs/compose.log`](evidence/logs/compose.log), [`evidence/rag_calibration.md`](evidence/rag_calibration.md) |
-| API FastAPI com Swagger fiel ao contrato | [`src/scheduler_api/`](src/scheduler_api/) | [`evidence/openapi.json`](evidence/openapi.json), [`evidence/api/appointment.json`](evidence/api/appointment.json), [capturas](#evidências) |
-| PII mascarada antes do LLM e da persistência | [`src/lab_common/pii/`](src/lab_common/pii/), [`src/ocr_mcp/server.py`](src/ocr_mcp/server.py) | [`evidence/api/database.txt`](evidence/api/database.txt), [`tests/security/test_e2e_pii.py`](tests/security/test_e2e_pii.py) |
-| Somente Docker + `docker-compose.yml` | [`docker-compose.yml`](docker-compose.yml), [`docker/`](docker/) | [`evidence/docker.md`](evidence/docker.md) |
+| Validação da spec com mensagens claras | [`src/transpiler/semantic/`](src/transpiler/semantic/), [`errors.py`](src/transpiler/errors.py) | [`tests/data/specs/invalid/`](tests/data/specs/invalid/), [captura](#evidências) |
+| Specs diferentes geram código diferente | [`specs/`](specs/) | [`tests/golden/`](tests/golden/) (um pacote por spec) |
+| Código gerado executável | [`src/agent_runtime/`](src/agent_runtime/) | [`tests/e2e/`](tests/e2e/), [capturas](#evidências) |
+| OCR como servidor MCP via SSE | [`src/ocr_mcp/`](src/ocr_mcp/) | [`tests/integration/ocr/`](tests/integration/ocr/) |
+| RAG como servidor MCP via SSE, ≥ 100 exames | [`src/rag_mcp/`](src/rag_mcp/), [`data/exams_catalog.json`](data/exams_catalog.json) (120 exames) | [`tests/integration/rag/`](tests/integration/rag/), [`scripts/calibrate_rag.py`](scripts/calibrate_rag.py) |
+| API FastAPI com Swagger fiel ao contrato | [`src/scheduler_api/`](src/scheduler_api/) | [`tests/unit/api/test_openapi.py`](tests/unit/api/test_openapi.py), [capturas](#evidências) |
+| PII mascarada antes do LLM e da persistência | [`src/lab_common/pii/`](src/lab_common/pii/), [`src/ocr_mcp/server.py`](src/ocr_mcp/server.py) | [`tests/security/test_e2e_pii.py`](tests/security/test_e2e_pii.py) |
+| Somente Docker + `docker-compose.yml` | [`docker-compose.yml`](docker-compose.yml), [`docker/`](docker/) | [captura](#evidências) |
 | JSON de exemplo e imagem de teste | [`specs/`](specs/), [`samples/`](samples/) | [`samples/expected/`](samples/expected/) |
-| Testes | [`tests/`](tests/) | [`evidence/coverage.txt`](evidence/coverage.txt) |
+| Testes | [`tests/`](tests/) | [captura](#evidências) |
 | Transparência no uso de IA | [seção neste README](#transparência-no-uso-de-ia) | — |
-
-Cenários do agente com saída versionada: [fluxo feliz](evidence/cli/01-feliz.txt), [replay idempotente](evidence/cli/02-replay.txt), [prompt injection](evidence/cli/03-injection.txt), [pedido ambíguo](evidence/cli/04-ambiguo.txt), [imagem ilegível](evidence/cli/05-ilegivel.txt), [spec alternativa](evidence/cli/06-spec-alternativa.txt), [spec alterada sem regenerar](evidence/cli/07-spec-alterada.txt).
 
 ## Quickstart
 
@@ -163,7 +161,7 @@ São 13 *kinds* de nó registrados em [`registry.py`](src/transpiler/registry.py
 
 ### Validação
 
-Todos os erros de uma execução são acumulados e mostrados juntos, com código, JSON Pointer, nó e dica. Exit codes: 0 ok, 1 E/S ou uso, 2 schema, 3 semântica, 4 geração. Uma spec com mais de 32 níveis de aninhamento é erro de schema (exit 2), antes de qualquer outra verificação. Exemplo real ([`evidence/transpiler/validate-errors.txt`](evidence/transpiler/validate-errors.txt)), com a spec principal alterada para usar uma tool fora da allowlist, um serviço não declarado e uma aresta que pula o gate:
+Todos os erros de uma execução são acumulados e mostrados juntos, com código, JSON Pointer, nó e dica. Exit codes: 0 ok, 1 E/S ou uso, 2 schema, 3 semântica, 4 geração. Uma spec com mais de 32 níveis de aninhamento é erro de schema (exit 2), antes de qualquer outra verificação. Exemplo real, com a spec principal alterada para usar uma tool fora da allowlist, um serviço não declarado e uma aresta que pula o gate:
 
 ```text
 ✖ E_TOOL_NOT_ALLOWED    /workflow/nodes/0/tool  (node "ocr", kind ocr_extract)
@@ -194,7 +192,7 @@ O corpus de specs inválidas tem um arquivo por código de erro, em [`tests/data
 | [`exam_scheduling_agent.json`](specs/exam_scheduling_agent.json) | Fluxo completo: OCR, guard, extração híbrida, RAG, gate, revisão humana, agendamento | `Agent` com Gemini, `JoinNode`, `Workflow` aninhado, `human_review`, `schedule`, `App` com `ResumabilityConfig` |
 | [`exam_lookup_only.json`](specs/examples/exam_lookup_only.json) | Só identifica os exames: OCR, guard, extração léxica, RAG, gate, apresentação | Sem `Agent`, sem `JoinNode`, sem serviço HTTP, sem revisão nem agendamento; imports mínimos |
 
-O diff entre os dois `agent.py` gerados está em [`evidence/transpiler/diff-generated.diff`](evidence/transpiler/diff-generated.diff). Os dois pacotes são versionados como golden files em [`tests/golden/`](tests/golden/) e comparados byte a byte com a saída do transpilador.
+Os dois pacotes são versionados como golden files em [`tests/golden/`](tests/golden/) e comparados byte a byte com a saída do transpilador.
 
 Se a spec mudar e o código não for regenerado, a CLI do agente compara o sha256 do manifesto e sai com exit 7.
 
@@ -281,7 +279,7 @@ Quando a execução falha (injeção bloqueada, OCR ilegível, nenhum exame enco
 
 **Revisão humana.** Quando o gate manda itens para revisão e a execução é interativa (o padrão; o serviço `agent` do compose tem TTY), a CLI explica antes quantos itens precisam de revisão e que 0 significa não agendar (na dúvida, 0). Cada item mostra, separados, o que foi lido no pedido, a interpretação da IA e as opções do catálogo com código e similaridade. Com `pedido_ambiguo.png`, a pergunta é entre `T4 livre — LAB-10044` e `T4 total — LAB-10045`, ou nenhum. A resposta volta ao fluxo pelo resume do `RequestInput`, e só os códigos escolhidos são agendados; um item cuja escolha já foi incluída por outra linha continua no resultado, como não agendado.
 
-**Saída JSON.** `--output json` imprime `run_id`, `outcome`, `exit_code`, o caminho percorrido no grafo, tempos por nó, retries, contagens de PII mascarada, severidade de injection, cada exame com menção, código, score e status, e o agendamento (`scheduled` ou `replayed`). Exemplos em [`evidence/runs/`](evidence/runs/).
+**Saída JSON.** `--output json` imprime `run_id`, `outcome`, `exit_code`, o caminho percorrido no grafo, tempos por nó, retries, contagens de PII mascarada, severidade de injection, cada exame com menção, código, score e status, e o agendamento (`scheduled` ou `replayed`).
 
 **Sem chave do Gemini.** O modelo fake existe só para testes: `AGENT_LLM_BACKEND=fake` é recusado se `APP_ENV` não for `test`. O jeito mais simples de ver o fluxo completo sem chave é a suíte E2E (`uv run pytest -m "e2e and not llm" tests/e2e`), que sobe o compose com o override [`docker-compose.e2e.yml`](docker-compose.e2e.yml) e o fake.
 
@@ -331,7 +329,7 @@ Abra **http://localhost:18888**. É o [Aspire Dashboard](https://aspire.dev/dash
 | Logs | Processador do structlog redige valores e remove chaves proibidas em todos os serviços. Os logs das bibliotecas `mcp`, `uvicorn` e `google_adk` perdem o payload. |
 | API | O contrato não tem campo para dados pessoais; campos extras são rejeitados com 422. |
 
-Como é provado: [`tests/security/test_e2e_pii.py`](tests/security/test_e2e_pii.py) procura os valores pessoais das amostras e os padrões genéricos nos logs de todos os containers, na saída da CLI, no `pg_dump` do banco, no base64 da imagem e na pasta `evidence/`. [`test_runtime_pii.py`](tests/security/test_runtime_pii.py) faz o mesmo nas requisições ao LLM e nos eventos e no estado da sessão ADK.
+Como é provado: [`tests/security/test_e2e_pii.py`](tests/security/test_e2e_pii.py) procura os valores pessoais das amostras e os padrões genéricos nos logs de todos os containers, na saída da CLI, no `pg_dump` do banco e no base64 da imagem. [`test_runtime_pii.py`](tests/security/test_runtime_pii.py) faz o mesmo nas requisições ao LLM e nos eventos e no estado da sessão ADK.
 
 **Prompt injection.** O texto do OCR é tratado como dado:
 
@@ -341,7 +339,7 @@ Como é provado: [`tests/security/test_e2e_pii.py`](tests/security/test_e2e_pii.
 - cada exame do LLM precisa citar um trecho que exista no texto (grounding). Isso prova que o trecho existe, não que o nome devolvido corresponde a ele; por isso o RAG resolve também o trecho, e o nome aceito pelo gate só continua aceito quando o trecho aponta para o mesmo código, com score de pelo menos o limiar de revisão e sem empate pela margem (o trecho não precisa chegar ao limiar de aceite, para que um erro de OCR não trave o fluxo). Se divergirem ou se o trecho for ambíguo ("T4"), o item vai para revisão;
 - os códigos vêm só do catálogo, pelo RAG.
 
-Essas camadas reduzem o efeito de uma injeção que passe pelo `guard`, mas não o anulam. O modelo ainda pode omitir exames: a extração léxica em paralelo recupera os que estão escritos como no catálogo, não todos. Pode também dar a um trecho o nome de outro exame: a conferência pelo trecho manda esse item para revisão em vez de aceitá-lo. O que ele não consegue é criar um código fora do catálogo, chamar tools ou chegar ao agendamento sem passar pelo gate. Com `pedido_injecao.png`, o fluxo para em `ocr → guard → abort`, sem chamar o LLM nem a API ([`evidence/cli/03-injection.txt`](evidence/cli/03-injection.txt)).
+Essas camadas reduzem o efeito de uma injeção que passe pelo `guard`, mas não o anulam. O modelo ainda pode omitir exames: a extração léxica em paralelo recupera os que estão escritos como no catálogo, não todos. Pode também dar a um trecho o nome de outro exame: a conferência pelo trecho manda esse item para revisão em vez de aceitá-lo. O que ele não consegue é criar um código fora do catálogo, chamar tools ou chegar ao agendamento sem passar pelo gate. Com `pedido_injecao.png`, o fluxo para em `ocr → guard → abort`, sem chamar o LLM nem a API.
 
 **Autenticação.** A API exige `X-API-Key`, e os MCPs exigem bearer token. Os dois segredos têm pelo menos 32 caracteres e são comparados em tempo constante. Cada container recebe só os segredos que usa: `GOOGLE_API_KEY` só no agente, `PII_HMAC_SECRET` só no OCR.
 
@@ -350,7 +348,6 @@ Essas camadas reduzem o efeito de uma injeção que passe pelo `guard`, mas não
 - **Redes:** todos os serviços estão na rede `internal` `backend`, sem internet. Só o agente entra na `egress`, para falar com o Gemini. A API entra na `edge` apenas para publicar a porta, e essa rede está sem NAT de saída.
 - **Portas:** só `127.0.0.1:8000` é publicada. OCR, RAG e Postgres não têm porta no host.
 - **Containers:** raiz read-only, `/tmp` em memória, `cap_drop: ALL`, `no-new-privileges`, UID 10001 e imagens sem binários setuid. O Postgres usa a imagem oficial, com 5 capabilities.
-- **Verificação:** [`scripts/check_isolation.sh`](scripts/check_isolation.sh) confere tudo isso com a stack no ar (ferramenta de desenvolvimento e CI, em bash).
 
 **Exceção: `export-generated` roda como root.** O `./generated` do host pertence ao usuário do host, ou a root quando o Docker cria a pasta, e o UID 10001 não consegue gravar nele. Por isso esse container, e só ele, roda como root, restrito a:
 
@@ -376,7 +373,7 @@ Ele copia o código gerado e passa a posse dos arquivos para o dono de `./specs`
 | [0008](docs/adr/0008-ocr-local-tesseract.md) | OCR local com Tesseract em vez de LLM multimodal (a imagem tem PII) |
 | [0009](docs/adr/0009-adk-api-contract.md) | Contrato com a API do `google-adk` 2.13.0, fixado em testes |
 
-Thresholds do gate (0,85 / 0,60 / margem 0,05): calibrados em 105 consultas rotuladas escritas para este projeto, com 100% de precisão nos aceitos e nenhum negativo aceito nesse conjunto ([`evidence/rag_calibration.md`](evidence/rag_calibration.md)). É um conjunto pequeno; fora dele, a proteção vem da revisão humana para casos ambíguos.
+Thresholds do gate (0,85 / 0,60 / margem 0,05): calibrados em 105 consultas rotuladas escritas para este projeto, com 100% de precisão nos aceitos e nenhum negativo aceito nesse conjunto ([`scripts/calibrate_rag.py`](scripts/calibrate_rag.py) refaz a calibração). É um conjunto pequeno; fora dele, a proteção vem da revisão humana para casos ambíguos.
 
 ## Testes
 
@@ -398,12 +395,11 @@ uv run pytest -m "(integration or security) and not e2e"                   # Doc
 uv run pytest -m "e2e and not llm" tests/e2e tests/security/test_e2e_pii.py
 COMPOSE_PROFILES=observability uv run pytest -m "e2e and not llm" tests/e2e   # com o Aspire no ar
 uv run pytest -m "e2e and llm" tests/e2e                                   # Gemini real
-bash scripts/check_isolation.sh                                            # com a stack no ar
 ```
 
 O pre-commit roda ruff, ruff format, mypy (strict em `transpiler`, `lab_common` e `agent_runtime`) e import-linter.
 
-**Cobertura atual: 98%** em todos os testes menos os E2E (2185 testes, [`evidence/coverage.txt`](evidence/coverage.txt)). O check de desenvolvimento roda 1857 testes, e a suíte E2E, 18. O CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) roda qualidade, unit/contract, integração/segurança e E2E; o job com Gemini real é manual.
+**Cobertura atual: 98%** em todos os testes menos os E2E (2185 testes). O check de desenvolvimento roda 1857 testes, e a suíte E2E, 18. O CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) roda qualidade, unit/contract, integração/segurança e E2E; o job com Gemini real é manual.
 
 ## Limitações e próximos passos
 
@@ -429,37 +425,45 @@ Próximos passos para produção:
 
 ## Evidências
 
-Capturas tiradas à mão; a preparação está em [`evidence/screenshots/README.md`](evidence/screenshots/README.md).
+Capturas tiradas à mão, com a stack do [Quickstart](#quickstart) no ar.
+
+**Transpilador**
+
+![Geração das duas specs](evidence/transpiler/01-generate.png)
+
+![Spec inválida com os erros acumulados](evidence/transpiler/02-validate-errors.png)
+
+**Agente (CLI)**
+
+![Fluxo feliz](evidence/cli/01-feliz.png)
+
+![Replay idempotente](evidence/cli/02-replay.png)
+
+![Revisão humana do pedido ambíguo](evidence/cli/03-revisao.png)
+
+![Prompt injection bloqueado](evidence/cli/04-injection.png)
+
+![Spec alternativa](evidence/cli/05-spec-alternativa.png)
 
 **Swagger**
 
-![Endpoints e botão Authorize](evidence/screenshots/swagger-01-endpoints.png)
+![Endpoints e botão Authorize](evidence/swagger/01-endpoints.png)
 
-![Diálogo Authorize com X-API-Key](evidence/screenshots/swagger-02-authorize.png)
+![Diálogo Authorize com X-API-Key](evidence/swagger/02-authorize.png)
 
-![POST com o exemplo e Idempotency-Key](evidence/screenshots/swagger-03-post-example.png)
+![POST com o exemplo e Idempotency-Key](evidence/swagger/03-post-example.png)
 
-![Resposta 201](evidence/screenshots/swagger-04-post-201.png)
+![Resposta 201](evidence/swagger/04-post-201.png)
 
-![Replay com 200 e Idempotent-Replayed](evidence/screenshots/swagger-05-replay-200.png)
+![Replay com 200 e Idempotent-Replayed](evidence/swagger/05-replay-200.png)
 
-![Mesma chave com outro corpo: 409](evidence/screenshots/swagger-06-conflict-409.png)
+![Mesma chave com outro corpo: 409](evidence/swagger/06-conflict-409.png)
 
-![Código desconhecido: 422](evidence/screenshots/swagger-07-unknown-code-422.png)
+**Docker e testes**
 
-**CLI**
+![Serviços do Compose no ar](evidence/docker/01-ps.png)
 
-![Transpile e execução do fluxo feliz](evidence/screenshots/cli-01-run.png)
-
-![Revisão humana do pedido ambíguo](evidence/screenshots/cli-02-review.png)
-
-**Logs e traces (opcional)**
-
-![Lista de traces no Aspire](evidence/screenshots/obs-01-traces.png)
-
-![Trace de uma execução](evidence/screenshots/obs-02-trace.png)
-
-![Logs filtrados pelo run_id](evidence/screenshots/obs-03-logs-run-id.png)
+![Cobertura dos testes](evidence/tests/01-coverage.png)
 
 ## Transparência no uso de IA
 
