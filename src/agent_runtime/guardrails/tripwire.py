@@ -6,8 +6,8 @@ from google.adk.models import LlmRequest, LlmResponse
 from google.genai import types
 
 from lab_common import logging as lab_logging
-from lab_common.pii import PiiEngineError, high_precision_detectors
-from lab_common.pii.redactor import detect_all
+from pii_guard import PiiEngineError, high_precision_detectors
+from pii_guard.redactor import detect_all
 
 # ADK does not fail the agent on the blocking response (ADR-0009): reconcile fails the run on it.
 TRIPWIRE_STATE_KEY = "run.pii_tripwire"

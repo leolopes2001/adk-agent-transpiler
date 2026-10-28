@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from lab_common.pii import (
+from pii_guard import (
     CpfDetector,
     PiiEngineError,
     PiiEntity,
@@ -11,7 +11,7 @@ from lab_common.pii import (
     default_detectors,
     high_precision_detectors,
 )
-from lab_common.pii.redactor import resolve_overlaps
+from pii_guard.redactor import resolve_overlaps
 
 pytestmark = pytest.mark.unit
 

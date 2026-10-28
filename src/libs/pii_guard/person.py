@@ -3,8 +3,8 @@ from collections.abc import Iterable
 from functools import cache
 from importlib import resources
 
-from lab_common.pii.types import PiiEntity, PiiSpan
-from lab_common.text import tokens
+from pii_guard.text import tokens
+from pii_guard.types import PiiEntity, PiiSpan
 
 SINGLE_WORD_SCORE = 0.6
 FULL_NAME_SCORE = 0.85

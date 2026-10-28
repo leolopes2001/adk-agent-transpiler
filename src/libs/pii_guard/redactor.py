@@ -3,7 +3,7 @@ from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from lab_common.pii.types import PiiDetector, PiiEntity, PiiSpan
+from pii_guard.types import PiiDetector, PiiEntity, PiiSpan
 
 DEFAULT_MIN_SCORE = 0.5
 

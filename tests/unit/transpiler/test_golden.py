@@ -3,8 +3,8 @@
 When a change to the transpiler is intended, regenerate them and review the diff
 of the golden files as part of the change:
 
-    uv run lab-transpile generate specs/exam_scheduling_agent.json --out tests/golden/
-    uv run lab-transpile generate specs/examples/exam_lookup_only.json --out tests/golden/
+    uv run lab-transpile generate agent_specs/exam_scheduling_agent.json --out tests/golden/
+    uv run lab-transpile generate agent_specs/examples/exam_lookup_only.json --out tests/golden/
 """
 
 import json
@@ -24,8 +24,8 @@ pytestmark = pytest.mark.unit
 ROOT = Path(__file__).parents[3]
 GOLDEN = ROOT / "tests" / "golden"
 SPECS = {
-    "exam_scheduling_agent": Path("specs/exam_scheduling_agent.json"),
-    "exam_lookup_only": Path("specs/examples/exam_lookup_only.json"),
+    "exam_scheduling_agent": Path("agent_specs/exam_scheduling_agent.json"),
+    "exam_lookup_only": Path("agent_specs/examples/exam_lookup_only.json"),
 }
 FILES = ("agent.py", "__init__.py", MANIFEST_NAME)
 REGENERATE = "regenerate tests/golden (see this module's docstring) and review the diff"
@@ -85,8 +85,8 @@ def test_golden_header_and_manifest(name: str, at_root: Path) -> None:
 
 
 def test_threshold_change_touches_only_its_literal(tmp_path: Path) -> None:
-    shutil.copytree(ROOT / "specs", tmp_path / "specs")
-    spec_path = tmp_path / "specs" / "exam_scheduling_agent.json"
+    shutil.copytree(ROOT / "agent_specs", tmp_path / "agent_specs")
+    spec_path = tmp_path / "agent_specs" / "exam_scheduling_agent.json"
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     gate = next(n for n in spec["workflow"]["nodes"] if n["id"] == "gate")
     gate["params"]["accept_threshold"] = 0.9
@@ -107,12 +107,12 @@ def test_threshold_change_touches_only_its_literal(tmp_path: Path) -> None:
 
 
 def test_instruction_change_touches_only_the_instruction(tmp_path: Path) -> None:
-    shutil.copytree(ROOT / "specs", tmp_path / "specs")
-    instruction = tmp_path / "specs" / "instructions" / "exam_extractor.md"
+    shutil.copytree(ROOT / "agent_specs", tmp_path / "agent_specs")
+    instruction = tmp_path / "agent_specs" / "instructions" / "exam_extractor.md"
     instruction.write_text(
         instruction.read_text(encoding="utf-8") + "6. Regra nova.\n", encoding="utf-8"
     )
-    spec_path = tmp_path / "specs" / "exam_scheduling_agent.json"
+    spec_path = tmp_path / "agent_specs" / "exam_scheduling_agent.json"
 
     changed = render(compile_spec(spec_path).program, spec_name=spec_path.name).agent_py
     golden = (GOLDEN / "exam_scheduling_agent" / "agent.py").read_text(encoding="utf-8")

@@ -1,6 +1,6 @@
 import re
 
-from lab_common.pii.types import PiiEntity, RegexDetector
+from pii_guard.types import PiiEntity, RegexDetector
 
 _PATTERN = re.compile(
     r"(?<![\w.+-])[\w.%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?"

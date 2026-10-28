@@ -1,6 +1,6 @@
 import re
 
-from lab_common.pii.types import PiiEntity, RegexDetector
+from pii_guard.types import PiiEntity, RegexDetector
 
 _MONTHS = (
     r"(?:janeiro|fevereiro|março|marco|abril|maio|junho|julho|agosto|setembro|outubro"

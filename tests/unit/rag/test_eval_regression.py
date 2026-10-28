@@ -25,7 +25,7 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EVAL_PATH = REPO_ROOT / "tests" / "data" / "rag_eval.jsonl"
 CATALOG_PATH = REPO_ROOT / "data" / "exams_catalog.json"
-SPEC_PATH = REPO_ROOT / "specs" / "exam_scheduling_agent.json"
+SPEC_PATH = REPO_ROOT / "agent_specs" / "exam_scheduling_agent.json"
 KINDS = {"exact", "alias", "typo", "ocr_noise", "abbrev", "ambiguous", "negative"}
 MIN_PRECISION_AT_1 = 0.95
 # The sample order as the OCR server returns it (see samples/expected).

@@ -41,7 +41,7 @@ pytestmark = pytest.mark.unit
 ROOT = Path(__file__).resolve().parents[3]
 GOLDEN = ROOT / "tests" / "golden"
 AGENT_DIR = GOLDEN / "exam_scheduling_agent"
-SPEC = ROOT / "specs" / "exam_scheduling_agent.json"
+SPEC = ROOT / "agent_specs" / "exam_scheduling_agent.json"
 SAMPLE = "samples/pedido_medico_ficticio.png"
 FIXTURES = ROOT / "tests" / "fixtures" / "fake_llm"
 RUN_ID = "2f3b5fd6-2866-4383-9a4e-6d1f0b8c7a11"
@@ -503,12 +503,12 @@ def test_log_level(env_level: str | None, verbose: bool, expected: str) -> None:
             "lab-agent: a imagem está fora da pasta permitida (INPUT_ROOT). Coloque o arquivo",
         ),
         (
-            ["--image", SAMPLE, "--spec", "specs/examples/exam_lookup_only.json"],
+            ["--image", SAMPLE, "--spec", "agent_specs/examples/exam_lookup_only.json"],
             7,
             "lab-agent: o código gerado está desatualizado em relação à spec. Rode lab-transpile",
         ),
         (
-            ["--image", SAMPLE, "--spec", "specs/none.json"],
+            ["--image", SAMPLE, "--spec", "agent_specs/none.json"],
             8,
             "lab-agent: arquivo da spec (--spec) não encontrado. Confira o caminho.",
         ),
@@ -606,7 +606,7 @@ def test_every_outcome_has_an_exit_code() -> None:
     assert set(EXIT_BY_OUTCOME) == set(outcomes)
 
 
-LOOKUP_SPEC = ROOT / "specs" / "examples" / "exam_lookup_only.json"
+LOOKUP_SPEC = ROOT / "agent_specs" / "examples" / "exam_lookup_only.json"
 OCR, IA, CATALOG, SCHEDULE = (
     "Lendo o pedido (OCR)",
     "Interpretando o pedido com a IA",

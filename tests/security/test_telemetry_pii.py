@@ -27,8 +27,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from lab_common.pii import high_precision_detectors
-from lab_common.pii.redactor import detect_all
+from pii_guard import high_precision_detectors
+from pii_guard.redactor import detect_all
 from runtime_stack import FAKE_LLM_FIXTURES, REPO_ROOT, SAMPLE_PII, SPEC, AgentRun, Stack, run_agent
 from telemetry_capture import Exported
 

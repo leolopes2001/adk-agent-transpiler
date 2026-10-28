@@ -1,6 +1,6 @@
 import re
 
-from lab_common.pii.types import PiiEntity, RegexDetector, only_digits
+from pii_guard.types import PiiEntity, RegexDetector, only_digits
 
 CNS_LENGTH = 15
 # Definitive (1, 2) and provisional (7, 8, 9) cards share the same mod-11 check.

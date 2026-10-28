@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from lab_common.pii import PersonDetector, PiiEntity, PiiRedactor, default_detectors
+from pii_guard import PersonDetector, PiiEntity, PiiRedactor, default_detectors
 
 pytestmark = pytest.mark.unit
 

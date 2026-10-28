@@ -6,8 +6,8 @@ from typing import Any, TextIO
 import structlog
 from structlog.typing import EventDict, Processor, WrappedLogger
 
-from lab_common.pii import PiiDetector, high_precision_detectors
-from lab_common.pii.redactor import detect_all
+from pii_guard import PiiDetector, high_precision_detectors
+from pii_guard.redactor import detect_all
 
 _LEVEL_NAMES = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 

@@ -17,8 +17,8 @@ from typing import Any
 
 import pytest
 
-from lab_common.pii import high_precision_detectors
-from lab_common.pii.redactor import detect_all
+from pii_guard import high_precision_detectors
+from pii_guard.redactor import detect_all
 from runtime_stack import REPO_ROOT, SAMPLE_PII, AgentRun, Stack, run_agent
 
 pytestmark = pytest.mark.security

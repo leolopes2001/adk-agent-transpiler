@@ -385,7 +385,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True, help="Markdown report to write")
     parser.add_argument("--catalog", type=Path, default=REPO_ROOT / "data" / "exams_catalog.json")
     parser.add_argument(
-        "--spec", type=Path, default=REPO_ROOT / "specs" / "exam_scheduling_agent.json"
+        "--spec", type=Path, default=REPO_ROOT / "agent_specs" / "exam_scheduling_agent.json"
     )
     parser.add_argument("--accept-step", type=float, default=0.05)
     parser.add_argument("--review-step", type=float, default=0.05)

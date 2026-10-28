@@ -14,8 +14,8 @@ from agent_runtime.nodes.untrusted_text_guard import (
 )
 from agent_runtime.schemas import GuardedDocument, InjectionReport, RunFailure
 from lab_common.contracts.ocr import OcrResult
-from lab_common.pii import PiiRedactor, default_detectors
-from lab_common.pii.types import PiiSpan
+from pii_guard import PiiRedactor, default_detectors
+from pii_guard.types import PiiSpan
 
 pytestmark = pytest.mark.unit
 

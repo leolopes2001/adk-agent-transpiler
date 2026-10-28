@@ -172,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--spec",
-        default="specs/exam_scheduling_agent.json",
+        default="agent_specs/exam_scheduling_agent.json",
         type=Path,
         metavar="ARQUIVO",
         help="spec do pacote (padrão: %(default)s)",

@@ -27,11 +27,11 @@ from mcp.client.sse import sse_client
 from mcp.types import CallToolResult, TextContent
 
 from lab_common import logging as lab_logging
-from lab_common.pii import PiiRedactor, PiiSpan, default_detectors
 from ocr_mcp.engine import TesseractEngine
 from ocr_mcp.logs import configure_logging
 from ocr_mcp.server import OcrService, build_app, build_server
 from ocr_mcp.settings import OcrSettings
+from pii_guard import PiiRedactor, PiiSpan, default_detectors
 
 pytestmark = pytest.mark.security
 

@@ -303,6 +303,8 @@ class Policies(_Model):
 
 
 class AgentSpec(_Model):
+    # Points editors at the JSON Schema; codegen ignores it.
+    json_schema: str | None = Field(default=None, alias="$schema")
     spec_version: Literal["1.0"]
     agent: AgentInfo
     models: Annotated[dict[Identifier, ModelSpec], Field(max_length=32)] = {}

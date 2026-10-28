@@ -76,7 +76,7 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "src/libs", "src/services", "tests"]
 # Golden files are transpiler output; test_golden checks that they stay ruff-formatted.
 extend-exclude = ["tests/golden"]
 # Also applies the exclusion to files pre-commit passes explicitly.
@@ -90,11 +90,19 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "BLE", "SIM", "RUF", "PL", "PT", "
 "tests/**" = ["S101", "PLR2004"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["lab_common", "transpiler", "agent_runtime", "ocr_mcp", "rag_mcp", "scheduler_api"]
+known-first-party = [
+    "pii_guard",
+    "lab_common",
+    "transpiler",
+    "agent_runtime",
+    "ocr_mcp",
+    "rag_mcp",
+    "scheduler_api",
+]
 
 [tool.mypy]
 python_version = "3.12"
-mypy_path = "src"
+mypy_path = "src, src/libs, src/services"
 explicit_package_bases = true
 warn_unused_configs = true
 warn_redundant_casts = true
@@ -104,7 +112,7 @@ check_untyped_defs = true
 
 # Equivalent of --strict, which mypy only accepts globally.
 [[tool.mypy.overrides]]
-module = ["lab_common.*", "transpiler.*", "agent_runtime.*"]
+module = ["pii_guard.*", "lab_common.*", "transpiler.*", "agent_runtime.*"]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_calls = true
@@ -131,9 +139,17 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-# A directory, not package names: with package names coverage matches on the
+# Directories, not package names: with package names coverage matches on the
 # module name, and alembic loads migrations/env.py as a module named "env_py".
-source = ["src"]
+source = [
+    "src/transpiler",
+    "src/agent_runtime",
+    "src/libs/pii_guard",
+    "src/libs/lab_common",
+    "src/services/ocr_mcp",
+    "src/services/rag_mcp",
+    "src/services/scheduler_api",
+]
 
 [tool.coverage.report]
 show_missing = true
@@ -148,11 +164,19 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = [
-    "src/lab_common",
+only-include = [
     "src/transpiler",
     "src/agent_runtime",
-    "src/ocr_mcp",
-    "src/rag_mcp",
-    "src/scheduler_api",
+    "src/libs/pii_guard",
+    "src/libs/lab_common",
+    "src/services/ocr_mcp",
+    "src/services/rag_mcp",
+    "src/services/scheduler_api",
 ]
+
+# libs/ and services/ only group the sources: each package installs under its own name.
+[tool.hatch.build.targets.wheel.sources]
+"src/transpiler" = "transpiler"
+"src/agent_runtime" = "agent_runtime"
+"src/libs" = ""
+"src/services" = ""

@@ -40,7 +40,7 @@ Depois disso, outras camadas verificam de forma independente:
 - O operador nunca vê o nome do paciente na saída; a correlação é feita pelo
   `patient_ref`.
 - O segredo do HMAC passa a ser crítico e fica restrito ao servidor OCR.
-- Implementação: `lab_common.pii` (detectores e redator), `ocr_mcp.server`
+- Implementação: `pii_guard` (detectores e redator), `ocr_mcp.server`
   e `ocr_mcp.identity` (mascaramento e `patient_ref`), `lab_common.logging`,
   `agent_runtime.nodes.untrusted_text_guard` e
   `agent_runtime.guardrails.tripwire`.

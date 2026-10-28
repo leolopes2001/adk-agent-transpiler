@@ -11,8 +11,8 @@ from agent_runtime.schemas import GuardedDocument, InjectionReport, OcrDocument,
 from lab_common import logging as lab_logging
 from lab_common import telemetry as lab_telemetry
 from lab_common.contracts.ocr import OcrLine
-from lab_common.pii import PiiEngineError, PiiRedactor, default_detectors
 from lab_common.text import sanitize
+from pii_guard import PiiEngineError, PiiRedactor, default_detectors
 
 BLOCKED_MESSAGE = (
     "O pedido tem conteúdo suspeito e precisa de revisão manual antes de qualquer agendamento."

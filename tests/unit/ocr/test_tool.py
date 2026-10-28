@@ -20,11 +20,11 @@ from opentelemetry.trace import SpanKind, StatusCode
 
 from lab_common import logging as lab_logging
 from lab_common.contracts.ocr import OcrResult
-from lab_common.pii import PiiRedactor, PiiSpan, default_detectors
 from ocr_mcp.engine import RecognizedLine
 from ocr_mcp.errors import ErrorCode, OcrError
 from ocr_mcp.server import OcrService, build_server
 from ocr_mcp.settings import OcrSettings
+from pii_guard import PiiRedactor, PiiSpan, default_detectors
 from telemetry_capture import Exported
 
 pytestmark = pytest.mark.unit
@@ -265,7 +265,7 @@ class TestFailClosed:
             name = "sticky"
 
             def detect(self, text: str) -> list[PiiSpan]:
-                from lab_common.pii import PiiEntity  # noqa: PLC0415
+                from pii_guard import PiiEntity  # noqa: PLC0415
 
                 return [PiiSpan(PiiEntity.PERSON, 0, 1, 1.0, "sticky")] if text else []
 

@@ -2,16 +2,16 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+from pii_guard.text import STOPWORDS, _search_words, tokens
+
+# STOPWORDS and tokens moved to pii_guard; re-exported so existing imports keep working.
+__all__ = ["STOPWORDS", "SanitizedText", "normalize_for_search", "sanitize", "tokens"]
+
 # Hangul fillers render as blank but are letters (Lo), so the category check misses them.
 _INVISIBLE_LETTERS = frozenset("\u115f\u1160\u3164\uffa0")
 _KEPT_CONTROLS = frozenset("\n\t")
 _HORIZONTAL_SPACE = re.compile(r"[^\S\n]+")
 _BLANK_LINES = re.compile(r"\n{3,}")
-_NON_WORD = re.compile(r"[\W_]+")
-
-STOPWORDS = frozenset(
-    {"de", "da", "do", "das", "dos", "e", "em", "para", "com", "o", "a", "exame", "dosagem"}
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,10 +42,6 @@ def sanitize(text: str, max_chars: int) -> SanitizedText:
         truncated=truncated,
         removed_chars=removed + removed_after_nfkc,
     )
-
-
-def tokens(text: str) -> list[str]:
-    return [t for t in _search_words(text) if t not in STOPWORDS]
 
 
 def normalize_for_search(text: str) -> str:
@@ -79,14 +75,3 @@ def _is_removable(char: str) -> bool:
 def _strip_removable(text: str) -> tuple[str, int]:
     kept = [c for c in text if not _is_removable(c)]
     return "".join(kept), len(text) - len(kept)
-
-
-def _strip_accents(text: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", text)
-    return "".join(c for c in decomposed if not unicodedata.category(c).startswith("M"))
-
-
-def _search_words(text: str) -> list[str]:
-    # Case folding can add combining marks (U+0130 -> "i" + U+0307), so accents go twice.
-    folded = _strip_accents(_strip_accents(text).casefold())
-    return _NON_WORD.sub(" ", folded).split()

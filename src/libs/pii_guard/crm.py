@@ -1,6 +1,6 @@
 import re
 
-from lab_common.pii.types import PiiEntity, RegexDetector
+from pii_guard.types import PiiEntity, RegexDetector
 
 _PATTERN = re.compile(
     r"\b(?P<value>(?i:CRM)[^\S\n]*[-/:]?[^\S\n]*(?:[A-Z]{2}[^\S\n]*[-/:]?[^\S\n]*)?"

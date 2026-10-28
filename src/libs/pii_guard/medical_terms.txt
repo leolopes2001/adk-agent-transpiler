@@ -1,5 +1,5 @@
 # Tokens that never form a person name on their own (see person.py).
-# Matched after lab_common.text.tokens(): lowercase, no accents, no stopwords.
+# Matched after pii_guard.text.tokens(): lowercase, no accents, no stopwords.
 #
 # Clinical vocabulary that follows labels such as "Paciente" in orders.
 acompanhamento

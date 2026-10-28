@@ -47,7 +47,7 @@ from scheduler_api.settings import Settings
 from transpiler.pipeline import generate
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SPEC = REPO_ROOT / "specs" / "exam_scheduling_agent.json"
+SPEC = REPO_ROOT / "agent_specs" / "exam_scheduling_agent.json"
 CATALOG = REPO_ROOT / "data" / "exams_catalog.json"
 FAKE_LLM_FIXTURES = REPO_ROOT / "tests" / "fixtures" / "fake_llm"
 SAMPLES = ("pedido_medico_ficticio.png", "pedido_injecao.png", "pedido_ambiguo.png")

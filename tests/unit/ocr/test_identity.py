@@ -5,8 +5,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from lab_common.contracts.ocr import PATIENT_REF_PATTERN
-from lab_common.pii import PiiEntity, PiiRedactor, default_detectors
 from ocr_mcp.identity import find_patient_ref, normalize_identifier, patient_ref
+from pii_guard import PiiEntity, PiiRedactor, default_detectors
 from scheduler_api.schemas import PATIENT_REF_PATTERN as API_PATIENT_REF_PATTERN
 
 pytestmark = pytest.mark.unit

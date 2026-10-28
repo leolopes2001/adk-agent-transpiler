@@ -1,6 +1,6 @@
 import re
 
-from lab_common.pii.types import PiiEntity, RegexDetector
+from pii_guard.types import PiiEntity, RegexDetector
 
 _STREET_TYPE = r"(?:Rua|R\.|Av\.?|Avenida|Travessa|Tv\.|Alameda|Al\.|Rodovia|Estrada|Praça)"
 _LABELS = "|".join(entity.placeholder_label for entity in PiiEntity)

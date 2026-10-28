@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from lab_common.pii import PersonDetector
-from lab_common.pii.person import medical_terms
 from lab_common.text import tokens
+from pii_guard import PersonDetector
+from pii_guard.person import medical_terms
 
 pytestmark = pytest.mark.unit
 

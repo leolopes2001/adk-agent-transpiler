@@ -45,6 +45,8 @@ docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_fict
 |---|---|
 | Revisão humana | `docker compose run --rm agent run --image /app/inputs/samples/pedido_ambiguo.png` |
 | Prompt injection | `docker compose run --rm agent run --image /app/inputs/samples/pedido_injecao.png` |
+| Gerar a spec alternativa | `docker compose run --rm transpile /app/agent_specs/examples/exam_lookup_only.json` |
+| Rodar a spec alternativa | `docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png --agent-dir /app/generated/exam_lookup_only --spec /app/agent_specs/examples/exam_lookup_only.json` |
 | Ver o código gerado | `docker compose run --rm export-generated` |
 | Swagger | http://localhost:8000/docs (Authorize com `SCHEDULER_API_KEY`) |
 | Desligar tudo | `docker compose --profile "*" down -v` |
@@ -74,12 +76,14 @@ flowchart LR
 
 | Pasta | O que é |
 |---|---|
-| `src/transpiler` | Spec JSON → código ADK |
-| `src/agent_runtime` | Nós do workflow e CLI |
-| `src/ocr_mcp` | Servidor de OCR |
-| `src/rag_mcp` | Servidor de busca no catálogo |
-| `src/scheduler_api` | API de agendamento |
-| `src/lab_common` | PII, regra do gate e utilitários |
+| [`src/transpiler`](src/transpiler) | Spec JSON → código ADK |
+| [`src/agent_runtime`](src/agent_runtime) | Nós do workflow e CLI |
+| [`src/services/ocr_mcp`](src/services/ocr_mcp) | Servidor de OCR |
+| [`src/services/rag_mcp`](src/services/rag_mcp) | Servidor de busca no catálogo |
+| [`src/services/scheduler_api`](src/services/scheduler_api) | API de agendamento |
+| [`src/libs/pii_guard`](src/libs/pii_guard) | Detecção e mascaramento de PII |
+| [`src/libs/lab_common`](src/libs/lab_common) | Regra do gate e utilitários |
+| [`agent_specs`](agent_specs) | Specs dos agentes e o JSON Schema ([`agent_spec.schema.json`](agent_specs/agent_spec.schema.json)) |
 
 ## Transpilador
 
@@ -93,8 +97,8 @@ JSON → validação → representação interna → geração (Jinja2) → vali
 
 | Spec | Gera |
 |---|---|
-| `specs/exam_scheduling_agent.json` | Fluxo completo, com LLM, revisão e agendamento |
-| `specs/examples/exam_lookup_only.json` | Só identifica os exames, sem LLM nem agendamento |
+| [`agent_specs/exam_scheduling_agent.json`](agent_specs/exam_scheduling_agent.json) | Fluxo completo, com LLM, revisão e agendamento |
+| [`agent_specs/examples/exam_lookup_only.json`](agent_specs/examples/exam_lookup_only.json) | Só identifica os exames, sem LLM nem agendamento |
 
 ## API
 

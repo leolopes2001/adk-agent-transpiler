@@ -131,7 +131,7 @@ services:
       GENERATED_ROOT: /app/generated
       OTEL_EXPORTER_OTLP_ENDPOINT: *otlp-endpoint
     volumes:
-      - ./specs:/app/specs:ro
+      - ./agent_specs:/app/agent_specs:ro
       - ./samples:/app/inputs/samples:ro
       - generated:/app/generated
     networks: [backend, egress]
@@ -149,9 +149,9 @@ services:
     profiles: [tools]
     network_mode: none
     entrypoint: [lab-transpile, generate, --out, /app/generated]
-    command: [/app/specs/exam_scheduling_agent.json]
+    command: [/app/agent_specs/exam_scheduling_agent.json]
     volumes:
-      - ./specs:/app/specs:ro
+      - ./agent_specs:/app/agent_specs:ro
       - generated:/app/generated
 
   export-generated:
@@ -163,14 +163,14 @@ services:
     user: "0:0"
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
     volumes:
-      - ./specs:/app/specs:ro
+      - ./agent_specs:/app/agent_specs:ro
       - generated:/app/generated:ro
       - ./generated:/export
     entrypoint:
       - sh
       - -euc
       - |
-        owner=$$(stat -c %u:%g /app/specs)
+        owner=$$(stat -c %u:%g /app/agent_specs)
         exported=0
         for dir in /app/generated/*/; do
           [ -d "$$dir" ] || continue

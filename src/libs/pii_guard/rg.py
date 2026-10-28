@@ -1,6 +1,6 @@
 import re
 
-from lab_common.pii.types import PiiEntity, RegexDetector
+from pii_guard.types import PiiEntity, RegexDetector
 
 # Only next to a label: an RG alone has no fixed format and collides with other numbers.
 _PATTERN = re.compile(

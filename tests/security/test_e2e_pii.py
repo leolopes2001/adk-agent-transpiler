@@ -12,8 +12,8 @@ import base64
 import pytest
 
 from e2e.helpers import FAKE_LLM_FIXTURES, REPO_ROOT, SAMPLES, AgentRun, ComposeStack
-from lab_common.pii import high_precision_detectors
-from lab_common.pii.redactor import detect_all
+from pii_guard import high_precision_detectors
+from pii_guard.redactor import detect_all
 
 pytestmark = pytest.mark.security
 

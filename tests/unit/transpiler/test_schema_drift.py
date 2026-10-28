@@ -9,8 +9,8 @@ from transpiler.spec.schema_export import agent_spec_schema, render_schema
 
 pytestmark = pytest.mark.unit
 
-SCHEMA_FILE = Path(__file__).parents[3] / "schemas" / "agent-spec.schema.json"
-REGENERATE = "uv run python -m transpiler.spec.schema_export > schemas/agent-spec.schema.json"
+SCHEMA_FILE = Path(__file__).parents[3] / "agent_specs" / "agent_spec.schema.json"
+REGENERATE = "uv run lab-transpile schema > agent_specs/agent_spec.schema.json"
 
 
 def test_versioned_schema_matches_models() -> None:

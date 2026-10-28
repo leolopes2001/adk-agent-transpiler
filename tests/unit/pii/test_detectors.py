@@ -7,7 +7,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from lab_common.pii import (
+from pii_guard import (
     CnsDetector,
     CpfDetector,
     PhoneDetector,
@@ -18,8 +18,8 @@ from lab_common.pii import (
     is_valid_cns,
     is_valid_cpf,
 )
-from lab_common.pii.redactor import detect_all
-from lab_common.pii.types import inside_hex_token
+from pii_guard.redactor import detect_all
+from pii_guard.types import inside_hex_token
 
 pytestmark = pytest.mark.unit
 

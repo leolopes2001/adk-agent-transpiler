@@ -12,7 +12,7 @@ from transpiler.spec.schema_export import render_schema
 pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).parents[3]
-SPECS = ROOT / "specs"
+SPECS = ROOT / "agent_specs"
 INVALID = ROOT / "tests" / "data" / "specs" / "invalid"
 
 type Capture = pytest.CaptureFixture[str]
@@ -21,7 +21,7 @@ type Capture = pytest.CaptureFixture[str]
 @pytest.fixture
 def workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A project-like directory with the main spec; the CWD is the allowed output root."""
-    shutil.copytree(SPECS, tmp_path / "specs")
+    shutil.copytree(SPECS, tmp_path / "agent_specs")
     monkeypatch.chdir(tmp_path)
     return tmp_path
 
@@ -101,7 +101,7 @@ def test_schema_command(capsys: Capture) -> None:
 
 
 def test_generate(workdir: Path, capsys: Capture) -> None:
-    code = main(["generate", "specs/exam_scheduling_agent.json", "--out", "generated/"])
+    code = main(["generate", "agent_specs/exam_scheduling_agent.json", "--out", "generated/"])
 
     package = workdir / "generated" / "exam_scheduling_agent"
     assert code == 0
@@ -111,7 +111,7 @@ def test_generate(workdir: Path, capsys: Capture) -> None:
         "agent.py",
     ]
     manifest = json.loads((package / "_manifest.json").read_text(encoding="utf-8"))
-    assert manifest["spec_path"] == "specs/exam_scheduling_agent.json"
+    assert manifest["spec_path"] == "agent_specs/exam_scheduling_agent.json"
     assert manifest["adk_requirement"].startswith("google-adk==")
     assert set(manifest["instructions"]) == {"exam_extractor"}
     assert "extraction" in manifest["node_names"]
@@ -122,7 +122,7 @@ def test_generate(workdir: Path, capsys: Capture) -> None:
 
 
 def test_generate_json(workdir: Path, capsys: Capture) -> None:
-    code = main(["generate", "specs/exam_scheduling_agent.json", "--format", "json"])
+    code = main(["generate", "agent_specs/exam_scheduling_agent.json", "--format", "json"])
 
     document = json.loads(capsys.readouterr().out)
     assert code == 0
@@ -131,15 +131,15 @@ def test_generate_json(workdir: Path, capsys: Capture) -> None:
 
 
 def test_generate_invalid_writes_nothing(workdir: Path, capsys: Capture) -> None:
-    shutil.copy(INVALID / "E_ROUTE_NOT_COVERED.json", workdir / "specs" / "bad.json")
+    shutil.copy(INVALID / "E_ROUTE_NOT_COVERED.json", workdir / "agent_specs" / "bad.json")
 
-    assert main(["generate", "specs/bad.json", "--out", "generated"]) == 3
+    assert main(["generate", "agent_specs/bad.json", "--out", "generated"]) == 3
     assert not (workdir / "generated").exists()
     assert "Nenhum arquivo foi gerado." in capsys.readouterr().err
 
 
 def test_generate_out_must_stay_in_project(workdir: Path, capsys: Capture) -> None:
-    code = main(["generate", "specs/exam_scheduling_agent.json", "--out", "../elsewhere"])
+    code = main(["generate", "agent_specs/exam_scheduling_agent.json", "--out", "../elsewhere"])
 
     assert code == 1
     assert "E_OUTPUT" in capsys.readouterr().err
@@ -147,7 +147,7 @@ def test_generate_out_must_stay_in_project(workdir: Path, capsys: Capture) -> No
 
 
 def _edited_main_spec(workdir: Path, edit: Callable[[dict[str, Any]], None]) -> Path:
-    path = workdir / "specs" / "exam_scheduling_agent.json"
+    path = workdir / "agent_specs" / "exam_scheduling_agent.json"
     spec = json.loads(path.read_text(encoding="utf-8"))
     edit(spec)
     path.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")

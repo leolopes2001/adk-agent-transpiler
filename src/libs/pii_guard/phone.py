@@ -1,6 +1,6 @@
 import re
 
-from lab_common.pii.types import PiiEntity, RegexDetector, only_digits
+from pii_guard.types import PiiEntity, RegexDetector, only_digits
 
 _MIN_DIGITS_WITH_AREA_CODE = 10
 _WITH_AREA_CODE_SCORE = 0.9

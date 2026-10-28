@@ -11,7 +11,7 @@ pytestmark = pytest.mark.unit
 
 MANIFEST_ARGS = {
     "transpiler_version": "0.1.0",
-    "spec_path": "specs/a.json",
+    "spec_path": "agent_specs/a.json",
     "spec_sha256": "a" * 64,
     "ir_digest": "b" * 64,
     "instructions": {"z_agent": "c" * 64, "a_agent": "d" * 64},

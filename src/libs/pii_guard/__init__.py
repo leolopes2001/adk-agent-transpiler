@@ -1,16 +1,16 @@
-from lab_common.pii.address import AddressDetector
-from lab_common.pii.birth_date import BirthDateDetector
-from lab_common.pii.cep import CepDetector
-from lab_common.pii.cns import CnsDetector, is_valid_cns
-from lab_common.pii.cpf import CpfDetector, is_valid_cpf
-from lab_common.pii.crm import CrmDetector
-from lab_common.pii.email import EmailDetector
-from lab_common.pii.health_card import HealthCardDetector
-from lab_common.pii.person import PersonDetector
-from lab_common.pii.phone import PhoneDetector
-from lab_common.pii.redactor import PiiEngineError, PiiRedactor, RedactionResult
-from lab_common.pii.rg import RgDetector
-from lab_common.pii.types import PiiDetector, PiiEntity, PiiSpan
+from pii_guard.address import AddressDetector
+from pii_guard.birth_date import BirthDateDetector
+from pii_guard.cep import CepDetector
+from pii_guard.cns import CnsDetector, is_valid_cns
+from pii_guard.cpf import CpfDetector, is_valid_cpf
+from pii_guard.crm import CrmDetector
+from pii_guard.email import EmailDetector
+from pii_guard.health_card import HealthCardDetector
+from pii_guard.person import PersonDetector
+from pii_guard.phone import PhoneDetector
+from pii_guard.redactor import PiiEngineError, PiiRedactor, RedactionResult
+from pii_guard.rg import RgDetector
+from pii_guard.types import PiiDetector, PiiEntity, PiiSpan
 
 __all__ = [
     "AddressDetector",

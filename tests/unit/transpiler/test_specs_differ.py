@@ -10,7 +10,7 @@ from transpiler.pipeline import compile_spec
 
 pytestmark = pytest.mark.unit
 
-SPECS = Path(__file__).parents[3] / "specs"
+SPECS = Path(__file__).parents[3] / "agent_specs"
 MAIN = SPECS / "exam_scheduling_agent.json"
 LOOKUP = SPECS / "examples" / "exam_lookup_only.json"
 

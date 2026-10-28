@@ -3,9 +3,9 @@ import hashlib
 import hmac
 from collections.abc import Sequence
 
-from lab_common.pii import PiiEntity, PiiSpan, is_valid_cns, is_valid_cpf
-from lab_common.pii.types import only_digits
 from lab_common.text import tokens
+from pii_guard import PiiEntity, PiiSpan, is_valid_cns, is_valid_cpf
+from pii_guard.types import only_digits
 
 REF_PREFIX = "pt_"
 REF_LENGTH = 26

@@ -1,6 +1,6 @@
 import re
 
-from lab_common.pii.types import PiiEntity, RegexDetector
+from pii_guard.types import PiiEntity, RegexDetector
 
 _PATTERN = re.compile(
     r"(?P<label>(?i:\bCEP)[^\S\n]*[:.\-]?[^\S\n]*)?"

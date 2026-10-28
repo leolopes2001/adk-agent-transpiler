@@ -1,4 +1,5 @@
 {
+  "$schema": "../agent_spec.schema.json",
   "spec_version": "1.0",
   "agent": {
     "name": "exam_lookup_only",

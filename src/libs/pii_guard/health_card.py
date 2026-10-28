@@ -1,6 +1,6 @@
 import re
 
-from lab_common.pii.types import PiiEntity, RegexDetector, only_digits
+from pii_guard.types import PiiEntity, RegexDetector, only_digits
 
 MIN_DIGITS = 5
 

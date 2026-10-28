@@ -1,5 +1,6 @@
 [importlinter]
 root_packages =
+    pii_guard
     lab_common
     transpiler
     agent_runtime
@@ -8,8 +9,21 @@ root_packages =
     scheduler_api
 include_external_packages = True
 
+[importlinter:contract:pii-guard-standalone]
+name = pii_guard imports no other project package
+type = forbidden
+source_modules =
+    pii_guard
+forbidden_modules =
+    lab_common
+    transpiler
+    agent_runtime
+    ocr_mcp
+    rag_mcp
+    scheduler_api
+
 [importlinter:contract:common-is-leaf]
-name = lab_common depends on no other project package
+name = lab_common depends on no other project package but pii_guard
 type = forbidden
 source_modules =
     lab_common
@@ -69,6 +83,7 @@ type = forbidden
 source_modules =
     scheduler_api
 forbidden_modules =
+    pii_guard
     lab_common
     transpiler
     agent_runtime
@@ -79,6 +94,7 @@ forbidden_modules =
 name = no project package imports scheduler_api
 type = forbidden
 source_modules =
+    pii_guard
     lab_common
     transpiler
     agent_runtime
