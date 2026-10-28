@@ -37,8 +37,8 @@ cp .env.example .env
 # preencha GOOGLE_API_KEY no .env
 
 docker compose up -d --build --wait
-docker compose run --rm transpile
-docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png
+docker compose run --rm transpile /app/agent_specs/exam_scheduling_agent.json
+docker compose run --rm agent run --agent exam_scheduling_agent --image /app/inputs/samples/pedido_medico_ficticio.png
 ```
 
 | Cenário | Comando |
@@ -46,10 +46,37 @@ docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_fict
 | Revisão humana | `docker compose run --rm agent run --image /app/inputs/samples/pedido_ambiguo.png` |
 | Prompt injection | `docker compose run --rm agent run --image /app/inputs/samples/pedido_injecao.png` |
 | Gerar a spec alternativa | `docker compose run --rm transpile /app/agent_specs/examples/exam_lookup_only.json` |
-| Rodar a spec alternativa | `docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png --agent-dir /app/generated/exam_lookup_only --spec /app/agent_specs/examples/exam_lookup_only.json` |
+| Rodar a spec alternativa | `docker compose run --rm agent run --agent exam_lookup_only --image /app/inputs/samples/pedido_medico_ficticio.png` |
 | Ver o código gerado | `docker compose run --rm export-generated` |
 | Swagger | http://localhost:8000/docs (Authorize com `SCHEDULER_API_KEY`) |
 | Desligar tudo | `docker compose --profile "*" down -v` |
+
+### Escolher o agente
+
+O transpilador gera um agente por spec. Para gerar e rodar cada um:
+
+```bash
+# Agente principal
+docker compose run --rm transpile /app/agent_specs/exam_scheduling_agent.json
+docker compose run --rm agent run --agent exam_scheduling_agent --image /app/inputs/samples/pedido_medico_ficticio.png
+
+# Agente alternativo
+docker compose run --rm transpile /app/agent_specs/examples/exam_lookup_only.json
+docker compose run --rm agent run --agent exam_lookup_only --image /app/inputs/samples/pedido_medico_ficticio.png
+
+# Listar os agentes gerados
+docker compose run --rm agent list
+```
+
+Sem `--agent`, roda o agente principal (`exam_scheduling_agent`).
+
+O código gerado fica num volume do Docker, não na pasta do projeto. Para copiá-lo para `./generated/`:
+
+```bash
+docker compose run --rm export-generated
+```
+
+Ele fica no volume porque, dentro do container, o transpilador roda com um usuário sem privilégios. Se gravasse direto na pasta do projeto, no Linux daria erro de permissão ou deixaria arquivos que só se apagam com `sudo`.
 
 ## Arquitetura
 
@@ -109,8 +136,18 @@ JSON → validação → representação interna → geração (Jinja2) → vali
 
 | Spec | Gera |
 |---|---|
-| [`agent_specs/exam_scheduling_agent.json`](agent_specs/exam_scheduling_agent.json) | Fluxo completo, com LLM, revisão e agendamento |
-| [`agent_specs/examples/exam_lookup_only.json`](agent_specs/examples/exam_lookup_only.json) | Só identifica os exames, sem LLM nem agendamento |
+| [`exam_scheduling_agent.json`](agent_specs/exam_scheduling_agent.json) | Fluxo completo: LLM, revisão humana e agendamento |
+| [`examples/exam_lookup_only.json`](agent_specs/examples/exam_lookup_only.json) | Só identifica os exames, sem LLM nem agendamento |
+| [`examples/exam_validation_errors.json`](agent_specs/examples/exam_validation_errors.json) | Spec inválida de propósito, para ver os erros |
+
+```bash
+# Gerar outro agente e rodá-lo pelo nome
+docker compose run --rm transpile /app/agent_specs/examples/exam_lookup_only.json
+docker compose run --rm agent run --agent exam_lookup_only --image /app/inputs/samples/pedido_medico_ficticio.png
+
+# Ver os erros de uma spec inválida, sem gerar nada
+docker compose run --rm --entrypoint lab-transpile transpile validate /app/agent_specs/examples/exam_validation_errors.json
+```
 
 ## API
 
