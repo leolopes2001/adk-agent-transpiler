@@ -38,6 +38,7 @@ flowchart LR
 - [Transpilador](#transpilador)
 - [Servidores MCP](#servidores-mcp)
 - [Executando o agente](#executando-o-agente)
+- [Observabilidade (opcional)](#observabilidade-opcional)
 - [Segurança](#segurança)
 - [Decisões de arquitetura](#decisões-de-arquitetura)
 - [Testes](#testes)
@@ -284,6 +285,46 @@ Quando a execução falha (injeção bloqueada, OCR ilegível, nenhum exame enco
 
 **Sem chave do Gemini.** O modelo fake existe só para testes: `AGENT_LLM_BACKEND=fake` é recusado se `APP_ENV` não for `test`. O jeito mais simples de ver o fluxo completo sem chave é a suíte E2E (`uv run pytest -m "e2e and not llm" tests/e2e`), que sobe o compose com o override [`docker-compose.e2e.yml`](docker-compose.e2e.yml) e o fake.
 
+## Observabilidade (opcional)
+
+Logs e traces de todos os serviços numa única URL, para acompanhar uma execução de ponta a ponta. É opcional: sem o profile `observability`, nada é exportado, nenhum serviço espera pelo container e o comportamento é o mesmo de antes.
+
+```bash
+docker compose --profile observability up -d --build --wait
+docker compose run --rm transpile
+docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png
+```
+
+Abra **http://localhost:3000**. O Grafana ([grafana/otel-lgtm](https://github.com/grafana/docker-otel-lgtm): coletor OpenTelemetry, Loki e Tempo num container) só escuta no loopback e abre sem login, como Viewer anônimo. O formulário de login e a autenticação básica estão desligados, então nenhuma conta consegue entrar; o Viewer pode usar o Explore, mas não altera o dashboard. Os dados ficam em memória e somem quando o container para. Datasources e dashboard são arquivos versionados em [`observability/grafana/`](observability/grafana/); nada é configurado à mão.
+
+O dashboard **Lab Exam Agent** é a página inicial:
+
+| Painel | O que mostra |
+|---|---|
+| `run_id` (variável no topo) | As execuções do agente no período |
+| Últimas execuções | `run_id`, resultado, exit code e duração de cada execução, a mais recente primeiro; clicar no `run_id` seleciona a execução |
+| Erros por serviço | Registros `error`/`critical` de cada serviço no período |
+| Trace da execução | O trace da execução selecionada; clicar no Trace ID abre a linha do tempo com cada nó do workflow, a chamada ao Gemini (`generate_content`), as chamadas MCP (no agente e no servidor) e o `POST /v1/appointments` (no agente e na API), com tempos |
+| Duração por nó | A duração de cada nó da execução selecionada (o nó do LLM aparece como `invoke_agent exam_extractor`) |
+| Logs da execução | As linhas JSON dos quatro serviços para aquele `run_id`, em ordem, cada uma prefixada pelo serviço |
+
+**Achar uma execução.** O `run_id` aparece no fim da saída da CLI (`Execução <run_id>`). Escolha-o na variável `run_id` ou clique nele em *Últimas execuções*. Com `--run-id <uuid>` você escolhe o valor antes de rodar.
+
+**Do log ao trace, e de volta.** Nos logs, abra uma linha: o campo `Trace` tem o link **Abrir o trace**, que abre o trace daquela linha. No trace, o ícone de logs de um span mostra os logs de todos os serviços daquele trace.
+
+**Como funciona.** Todos os serviços recebem `OTEL_EXPORTER_OTLP_ENDPOINT=http://observability:4318`, mas só exportam se o coletor aceitar conexão nesse endereço quando o processo inicia. Sem o profile, o nome não resolve na rede `backend` e a checagem falha na hora. Com o profile, a API e os servidores MCP sobem depois do coletor (dependência opcional, ignorada sem o profile). O agente abre um span `lab-agent run` com o `run_id`; o ADK cria os spans do workflow, de cada nó e da chamada ao modelo. O contexto vai para o OCR e o RAG como `traceparent` no `_meta` da requisição MCP, e para a API no header `traceparent`, então cada execução é um único trace. Os logs saem pelo mesmo caminho do stderr: a linha exportada para o Loki é a mesma linha JSON, já redigida, com o `trace_id` e o `span_id` do span em que foi escrita. No modo normal, o terminal da CLI continua mostrando só erros, mas o Loki recebe a partir de INFO.
+
+**Nenhum dado pessoal é exportado.**
+- Spans só levam ids, nomes, contagens, códigos de exame, status HTTP, durações e códigos de erro. Antes de sair do processo, cada span passa por uma allowlist de atributos ([`lab_common/telemetry.py`](src/lab_common/telemetry.py)): o que não estiver nela é descartado, eventos ficam só com o tipo da exceção e a descrição de status é removida.
+- A captura de conteúdo do ADK e do google-genai é desligada explicitamente (`ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS=false`, `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=false`). A telemetria nativa do FastAPI, que grava o path bruto, fica desligada; a API registra só o template da rota.
+- Os logs são exportados depois do processador de redação de PII. O logger OpenTelemetry é privado, então eventos `gen_ai.*` de bibliotecas nunca saem do processo.
+- [`tests/security/test_telemetry_pii.py`](tests/security/test_telemetry_pii.py) roda o fluxo com exportadores em memória e procura, em cada span e log exportado, os dados pessoais das amostras, a imagem em base64, o prompt, a resposta do modelo, o texto do documento e o `patient_ref`. Também roda a CLI contra um coletor falso: sem a variável, ele não recebe nada; com ela, os bytes OTLP brutos também são verificados.
+
+**Limitações.**
+- Cada processo decide se exporta ao iniciar. Se a stack já estava no ar sem o profile, recrie-a com `docker compose --profile observability up -d --build --wait --force-recreate`.
+- A busca do Tempo leva de 10 a 30 segundos para indexar um trace novo; até lá, *Trace da execução* e *Duração por nó* ficam vazios. Os logs aparecem antes.
+- Com o gateway alternativo `AGENT_MCP_GATEWAY=adk`, o `McpToolset` do ADK não permite definir o `_meta`. Os spans do OCR e do RAG começam então traces próprios, ainda com o `run_id` como atributo e nos logs.
+
 ## Segurança
 
 **PII.** O texto bruto do OCR só existe dentro do processo `ocr-mcp`:
@@ -362,6 +403,7 @@ uv sync --all-extras --group dev && uv run pre-commit install
 uv run pre-commit run --all-files && uv run pytest -m "unit or contract"   # check de desenvolvimento
 uv run pytest -m "(integration or security) and not e2e"                   # Docker e Tesseract
 uv run pytest -m "e2e and not llm" tests/e2e tests/security/test_e2e_pii.py
+COMPOSE_PROFILES=observability uv run pytest -m "e2e and not llm" tests/e2e   # com o Grafana no ar
 uv run pytest -m "e2e and llm" tests/e2e                                   # Gemini real
 bash scripts/check_isolation.sh                                            # com a stack no ar
 ```
@@ -389,7 +431,7 @@ Próximos passos para produção:
 - NER como detector de PII adicional;
 - fila para o OCR, com limite de concorrência por worker;
 - migração como job separado do deploy;
-- tracing (OpenTelemetry) além dos logs correlacionados por `run_id`;
+- exportar a telemetria para um backend gerenciado, com retenção e controle de acesso (o profile `observability` é só para demonstração local);
 - LGPD: política de retenção e expurgo das chaves de idempotência, e base legal e DPO definidos.
 
 ## Evidências
@@ -417,6 +459,14 @@ Capturas tiradas à mão; a preparação está em [`evidence/screenshots/README.
 ![Transpile e execução do fluxo feliz](evidence/screenshots/cli-01-run.png)
 
 ![Revisão humana do pedido ambíguo](evidence/screenshots/cli-02-review.png)
+
+**Observabilidade**
+
+![Dashboard Lab Exam Agent com uma execução](evidence/screenshots/obs-01-dashboard.png)
+
+![Trace de uma execução no Tempo](evidence/screenshots/obs-02-trace.png)
+
+![Do log ao trace](evidence/screenshots/obs-03-log-to-trace.png)
 
 ## Transparência no uso de IA
 
