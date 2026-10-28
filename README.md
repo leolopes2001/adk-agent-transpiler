@@ -74,16 +74,28 @@ flowchart LR
 - **OCR e RAG são servidores MCP via SSE**, chamados por nós de código, nunca pelo LLM.
 - **Workflow em grafo (ADK 2):** sequencial, com fan-out/join paralelo e human-in-the-loop. Equivale a `SequentialAgent` + `ParallelAgent` do ADK 1.
 
-| Pasta | O que é |
-|---|---|
-| [`src/transpiler`](src/transpiler) | Spec JSON → código ADK |
-| [`src/agent_runtime`](src/agent_runtime) | Nós do workflow e CLI |
-| [`src/services/ocr_mcp`](src/services/ocr_mcp) | Servidor de OCR |
-| [`src/services/rag_mcp`](src/services/rag_mcp) | Servidor de busca no catálogo |
-| [`src/services/scheduler_api`](src/services/scheduler_api) | API de agendamento |
-| [`src/libs/pii_guard`](src/libs/pii_guard) | Detecção e mascaramento de PII |
-| [`src/libs/lab_common`](src/libs/lab_common) | Regra do gate e utilitários |
-| [`agent_specs`](agent_specs) | Specs dos agentes e o JSON Schema ([`agent_spec.schema.json`](agent_specs/agent_spec.schema.json)) |
+### Estrutura de pastas
+
+```text
+.github/workflows/       CI: lint, tipos, testes e E2E
+src/
+├── transpiler/          spec JSON → validação → geração do agente ADK
+├── agent_runtime/       nós do workflow, guardrails e CLI
+├── libs/
+│   ├── pii_guard/       detecção e mascaramento de dados pessoais
+│   └── lab_common/      regra do gate, contratos, logs
+└── services/
+    ├── ocr_mcp/         servidor MCP de OCR
+    ├── rag_mcp/         servidor MCP de busca no catálogo
+    └── scheduler_api/   API de agendamento (FastAPI)
+agent_specs/             specs dos agentes e o schema do formato
+data/                    catálogo de exames
+samples/                 imagens de pedidos fictícios
+tests/                   unit, contract, integration, security, e2e
+docs/                    ADRs
+docker/                  Dockerfiles
+evidence/                prints e logs de execução
+```
 
 ## Transpilador
 
