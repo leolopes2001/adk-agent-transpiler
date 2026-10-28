@@ -1,0 +1,9 @@
+{
+  "exams": [
+    {"name": "Hemograma completo", "evidence": "HEMOGRAMA COMPLETO"},
+    {"name": "Glicemia de jejum", "evidence": "GLICEMIA DE JEJUM"},
+    {"name": "TSH", "evidence": "15H"},
+    {"name": "Ferritina", "evidence": "FERRLTINA"},
+    {"name": "T4 livre", "evidence": "4. T4 livre"}
+  ]
+}

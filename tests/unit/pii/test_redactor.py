@@ -126,8 +126,8 @@ class TestPlaceholders:
         )
 
     def test_formatting_does_not_change_the_placeholder(self, redactor: PiiRedactor) -> None:
-        result = redactor.redact("CPF 202.393.613-69, confirmar CPF 20239361369")
-        assert result.text == "CPF [CPF_1], confirmar CPF [CPF_1]"
+        result = redactor.redact("Documento 202.393.613-69, confirmar CPF 20239361369")
+        assert result.text == "Documento [CPF_1], confirmar CPF [CPF_1]"
         assert result.counts == {PiiEntity.CPF: 2}
 
     def test_indexes_are_per_entity_in_order_of_appearance(self, redactor: PiiRedactor) -> None:

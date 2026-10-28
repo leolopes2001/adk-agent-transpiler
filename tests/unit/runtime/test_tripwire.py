@@ -46,6 +46,10 @@ def test_pii_tripwire_blocks_valid_cpf() -> None:
         ("CNS 100 0000 0000 0007", "CNS"),
         ("contato: maria.ficticia@example.com", "EMAIL"),
         ("Telefone: (31) 99876-5432", "PHONE"),
+        ("CPF 529.982.247-26", "CPF"),
+        ("CPE: 23.456. 89-09", "CPF"),
+        ("JELEFoNE: UM) I0000- 60", "PHONE"),
+        ("DATA DE NAStIMENTO- O! /O! (1990", "BIRTH_DATE"),
     ],
 )
 def test_blocks_each_high_precision_entity(text: str, entity: str) -> None:
@@ -67,7 +71,8 @@ def test_blocks_each_high_precision_entity(text: str, entity: str) -> None:
     [
         "Paciente: [PESSOA_1]\nCPF: [CPF_1]\nTelefone: [TELEFONE_1]\nE-mail: [EMAIL_1]",
         "1. Hemograma completo\n2. Glicemia de jejum\n3. TSH\n4. T4 livre",
-        "CPF 529.982.247-26",
+        "documento 529.982.247-26",
+        "DATA DE NAStIMENTO- [DATA_NASC_1]\nJELEFoNE: [TELEFONE_1]",
         "Belo Horizonte, 20/10/2026",
         "documento 2f3b5fd6-2866-4383-9a4e-6d1f0b8c7a11",
     ],

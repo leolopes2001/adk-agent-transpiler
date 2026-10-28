@@ -6,15 +6,16 @@ from google.adk.models import LlmRequest, LlmResponse
 from google.genai import types
 
 from lab_common import logging as lab_logging
-from pii_guard import PiiEngineError, high_precision_detectors
+from pii_guard import LabeledFieldDetector, PiiEngineError, high_precision_detectors
 from pii_guard.redactor import detect_all
 
 # ADK does not fail the agent on the blocking response (ADR-0009): reconcile fails the run on it.
 TRIPWIRE_STATE_KEY = "run.pii_tripwire"
 ERROR_CODE = "PII_TRIPWIRE"
 
-# Valid CPF, CNS, e-mail and phone only: placeholders such as [CPF_1] never match.
-_DETECTORS = tuple(high_precision_detectors())
+# Valid CPF, CNS, e-mail and phone, plus any value after a personal-data label at the start
+# of a line, as the OCR server masks it; placeholders such as [CPF_1] never match.
+_DETECTORS = (*high_precision_detectors(), LabeledFieldDetector())
 
 log = lab_logging.get_logger(__name__)
 

@@ -34,6 +34,26 @@ EXPECTED_CODES = [exam["code"] for exam in EXPECTED["exams"]]
 HAPPY_IMAGE = f"{SAMPLES}/pedido_medico_ficticio.png"
 JSON_RUN = ("--output", "json", "--non-interactive")
 LLM_QUOTA_ERRORS = {"LLM_RESOURCE_EXHAUSTED", "LLM_429", "LLM_402"}
+HANDWRITTEN_IMAGE = f"{SAMPLES}/pedido_manuscrito.jpg"
+# Hemograma completo, Glicemia de jejum, TSH and Ferritina: the exams written on the photo.
+HANDWRITTEN_CODES = {"LAB-10001", "LAB-10012", "LAB-10043", "LAB-10109"}
+# The patient's data on the photo (fictional), whole and in pieces.
+HANDWRITTEN_PII = [
+    "João Paulo da Silva",
+    "JOÃO",
+    "SILVA",
+    "123.456.789-09",
+    "12345678909",
+    "123.456",
+    "456.789",
+    "789-09",
+    "(11) 90000-0000",
+    "(11)",
+    "90000-0000",
+    "90000",
+    "01/01/1990",
+    "01/01",
+]
 
 
 def _accepted_codes(run: AgentRun) -> list[str]:
@@ -157,6 +177,31 @@ def test_illegible_image_ends_with_low_quality(e2e_stack: ComposeStack) -> None:
     assert run.report is not None
     assert run.report["outcome"] == "OCR_LOW_QUALITY"
     assert run.report["path"] == ["ocr", "abort"]
+
+
+def test_handwritten_order_on_ruled_paper_is_read_without_personal_data(
+    e2e_stack: ComposeStack,
+) -> None:
+    runs = [
+        e2e_stack.run_agent(
+            HANDWRITTEN_IMAGE,
+            "--non-interactive",
+            *output,
+            env={"FAKE_LLM_FIXTURE": f"{FAKE_LLM_FIXTURES}/pedido_manuscrito.json"},
+        )
+        for output in (("--output", "json"), ("--output", "table"))
+    ]
+    report = runs[0].report
+
+    assert [run.exit_code for run in runs] == [0, 0], runs[0].stderr
+    assert report is not None
+    assert report["path"][:3] == ["ocr", "guard", "extraction"]
+    accepted = set(_accepted_codes(runs[0]))
+    assert accepted
+    # The fixture also names T4 livre, which the photo does not have.
+    assert accepted <= HANDWRITTEN_CODES
+    output = "".join(run.stdout + run.stderr for run in runs) + e2e_stack.logs()
+    assert [value for value in HANDWRITTEN_PII if value in output] == []
 
 
 def test_alternative_spec_looks_exams_up_without_scheduling(e2e_stack: ComposeStack) -> None:

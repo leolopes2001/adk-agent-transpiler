@@ -12,9 +12,12 @@ from ocr_mcp.preprocess import (
     deskew,
     estimate_skew,
     preprocess,
+    remove_ruled_lines,
     to_grayscale,
     upscale,
 )
+from ruled_page import MARGIN, WIDTH, line_rows, ruled_page
+from ruled_page import text_page as unruled_page
 
 pytestmark = pytest.mark.unit
 
@@ -121,6 +124,47 @@ def test_pipeline_does_not_modify_its_input() -> None:
     before = pixels.copy()
     preprocess(pixels)
     assert np.array_equal(pixels, before)
+
+
+class TestRuledLines:
+    def test_lines_are_removed_where_there_is_no_text(self) -> None:
+        result = remove_ruled_lines(binarize(ruled_page()))
+
+        for rows in line_rows():
+            # Right of every text row: only the ruled line was there.
+            assert (result[rows.start : rows.stop, WIDTH - 400 : WIDTH - MARGIN] == 255).all()
+
+    def test_strokes_crossing_a_line_stay_whole(self) -> None:
+        page = np.full((200, 1500), 255, dtype=np.uint8)
+        page[99:102, 20:1480] = 0
+        for x in range(100, 1400, 100):
+            page[60:140, x : x + 4] = 0
+
+        result = remove_ruled_lines(page)
+
+        assert (result[99:102, 1410:1480] == 255).all()
+        for x in range(100, 1400, 100):
+            assert (result[60:140, x : x + 4] == 0).all()
+
+    def test_letters_off_the_lines_are_untouched(self) -> None:
+        binary = binarize(ruled_page())
+        result = remove_ruled_lines(binary)
+
+        off_lines = np.ones(binary.shape, dtype=bool)
+        for rows in line_rows():
+            off_lines[rows.start : rows.stop] = False
+        assert np.count_nonzero(binary[off_lines] == 0) > 10_000
+        assert np.array_equal(result[off_lines], binary[off_lines])
+
+    def test_page_without_lines_is_unchanged(self) -> None:
+        binary = binarize(unruled_page())
+        assert np.array_equal(remove_ruled_lines(binary), binary)
+
+    def test_pipeline_removes_the_lines(self) -> None:
+        result = preprocess(ruled_page()).image
+
+        for rows in line_rows():
+            assert (result[rows.start : rows.stop, WIDTH - 400 : WIDTH - MARGIN] == 255).all()
 
 
 def test_cv2_rotation_sign_matches_pillow() -> None:

@@ -180,6 +180,8 @@ Mais de 2.000 testes, com 98% de cobertura.
 
 ![Spec alternativa](evidence/cli/05-spec-alternativa.png)
 
+Pedido manuscrito em papel pautado ([`samples/pedido_manuscrito.jpg`](samples/pedido_manuscrito.jpg)), com Gemini e `--non-interactive`: OCR com confiança média 0,68; Hemograma completo, Glicemia de jejum e Ferritina aceitos e agendados; TSH, lido como "15H", foi para revisão humana e ficou fora; 7 dados pessoais mascarados; exit 0.
+
 **Swagger**
 
 ![Endpoints e botão Authorize](evidence/swagger/01-endpoints.png)

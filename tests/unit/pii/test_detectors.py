@@ -10,6 +10,7 @@ from hypothesis import strategies as st
 from pii_guard import (
     CnsDetector,
     CpfDetector,
+    LabeledFieldDetector,
     PhoneDetector,
     PiiDetector,
     PiiEntity,
@@ -35,7 +36,10 @@ def load_cases() -> list[dict[str, Any]]:
 
 
 CASES = load_cases()
-DETECTORS: dict[PiiEntity, PiiDetector] = {d.entity: d for d in default_detectors()}
+# The labeled-field rule serves several entities; tests/unit/pii/test_labeled_field.py covers it.
+DETECTORS: dict[PiiEntity, PiiDetector] = {
+    d.entity: d for d in default_detectors() if not isinstance(d, LabeledFieldDetector)
+}
 
 
 def found(detector: PiiDetector, text: str) -> list[str]:
@@ -160,7 +164,8 @@ class TestHexTokens:
     )
     def test_real_values_next_to_letters_are_still_found(self, text: str, value: str) -> None:
         spans = detect_all(default_detectors(), text, min_score=MIN_SCORE)
-        assert value in [text[s.start : s.end] for s in spans]
+        start = text.index(value)
+        assert any(s.start <= start and start + len(value) <= s.end for s in spans)
 
     @pytest.mark.parametrize(
         ("text", "start", "end", "inside"),

@@ -6,6 +6,7 @@ from pii_guard.cpf import CpfDetector, is_valid_cpf
 from pii_guard.crm import CrmDetector
 from pii_guard.email import EmailDetector
 from pii_guard.health_card import HealthCardDetector
+from pii_guard.labeled_field import LabeledFieldDetector
 from pii_guard.person import PersonDetector
 from pii_guard.phone import PhoneDetector
 from pii_guard.redactor import PiiEngineError, PiiRedactor, RedactionResult
@@ -21,6 +22,7 @@ __all__ = [
     "CrmDetector",
     "EmailDetector",
     "HealthCardDetector",
+    "LabeledFieldDetector",
     "PersonDetector",
     "PhoneDetector",
     "PiiDetector",
@@ -50,6 +52,7 @@ def default_detectors() -> list[PiiDetector]:
         PersonDetector(),
         CrmDetector(),
         HealthCardDetector(),
+        LabeledFieldDetector(),
     ]
 
 

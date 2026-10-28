@@ -12,6 +12,10 @@ THRESHOLD_OFFSET = 15
 MAX_SKEW_DEGREES = 15.0
 INK_THRESHOLD = 128
 WHITE = 255
+LINE_MIN_WIDTH_FRACTION = 0.05
+"""A ruled line spans the page; no stroke of a letter is this long."""
+LINE_EDGE_PX = 2
+STROKE_BRIDGE_PX = 9
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,7 +34,7 @@ def preprocess(image: np.ndarray) -> PreprocessResult:
     angle = estimate_skew(binary)
 
     return PreprocessResult(
-        image=deskew(binary, angle),
+        image=remove_ruled_lines(deskew(binary, angle)),
         scale=scale,
         skew_degrees=angle,
         duration_ms=round((time.perf_counter() - started) * 1000),
@@ -95,3 +99,33 @@ def deskew(image: np.ndarray, angle: float) -> np.ndarray:
     return cv2.warpAffine(
         image, matrix, (width, height), flags=cv2.INTER_NEAREST, borderValue=WHITE
     )
+
+
+def remove_ruled_lines(binary: np.ndarray) -> np.ndarray:
+    """Notebook lines cut through the letters and halve Tesseract's confidence.
+
+    Runs after deskew, so the lines are horizontal enough for a one-pixel-high kernel.
+    """
+    ink = cv2.bitwise_not(binary)
+    width = max(1, round(binary.shape[1] * LINE_MIN_WIDTH_FRACTION))
+    lines = cv2.morphologyEx(ink, cv2.MORPH_OPEN, _kernel(width, 1))
+    if not lines.any():
+        return binary
+
+    kept = _drop_line_fragments(cv2.bitwise_and(ink, cv2.bitwise_not(lines)), lines)
+    # A stroke that crosses a line has ink above and below it: closing vertically rejoins it.
+    bridged = cv2.morphologyEx(kept, cv2.MORPH_CLOSE, _kernel(1, STROKE_BRIDGE_PX))
+    return cv2.bitwise_not(cv2.bitwise_or(kept, cv2.bitwise_and(bridged, lines)))
+
+
+def _drop_line_fragments(ink: np.ndarray, lines: np.ndarray) -> np.ndarray:
+    """Ragged edges of a line survive the opening; pieces of letters reach beyond the edge."""
+    band = cv2.dilate(lines, _kernel(1, 2 * LINE_EDGE_PX + 1))
+    _, labels = cv2.connectedComponents(ink, connectivity=8)
+    reaching_out = np.unique(labels[(ink > 0) & (band == 0)])
+    keep = np.isin(labels, reaching_out) & (labels > 0)
+    return np.where(keep, WHITE, 0).astype(np.uint8)
+
+
+def _kernel(width: int, height: int) -> np.ndarray:
+    return cv2.getStructuringElement(cv2.MORPH_RECT, (width, height))
