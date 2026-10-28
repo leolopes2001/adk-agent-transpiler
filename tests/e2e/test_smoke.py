@@ -2,6 +2,7 @@
 loopback only, no internet for the API, the generated code in the volume."""
 
 import json
+import os
 
 import pytest
 
@@ -10,6 +11,9 @@ from e2e.helpers import REPO_ROOT, ComposeStack
 pytestmark = pytest.mark.e2e
 
 SERVICES = {"postgres", "scheduler-api", "ocr-mcp", "rag-mcp"}
+# `COMPOSE_PROFILES=observability` (see helpers) adds the Grafana stack.
+if "observability" in os.environ.get("COMPOSE_PROFILES", "").split(","):
+    SERVICES |= {"observability"}
 PACKAGES = ("exam_scheduling_agent", "exam_lookup_only")
 
 
