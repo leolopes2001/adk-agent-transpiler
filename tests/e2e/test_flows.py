@@ -14,8 +14,6 @@ import pytest
 
 from e2e.helpers import (
     FAKE_LLM_FIXTURES,
-    LOOKUP_AGENT_DIR,
-    LOOKUP_SPEC,
     MAIN_SPEC,
     REPO_ROOT,
     SAMPLES,
@@ -210,8 +208,7 @@ def test_alternative_spec_looks_exams_up_without_scheduling(e2e_stack: ComposeSt
 
     run = e2e_stack.run_agent(
         HAPPY_IMAGE,
-        "--agent-dir", LOOKUP_AGENT_DIR,
-        "--spec", LOOKUP_SPEC,
+        "--agent", "exam_lookup_only",
         "--non-interactive",
         "--run-id", run_id,
     )  # fmt: skip
@@ -225,6 +222,15 @@ def test_alternative_spec_looks_exams_up_without_scheduling(e2e_stack: ComposeSt
     assert f"Execução {run_id}" in run.stdout
     assert _api_requests_of(e2e_stack, run_id) == []
     assert e2e_stack.count("appointments") == before
+
+
+def test_list_names_the_generated_agents(e2e_stack: ComposeStack) -> None:
+    result = e2e_stack.compose("run", "--rm", "-T", "agent", "list", check=False)
+
+    assert result.returncode == 0, result.stderr
+    names = [line.split()[0] for line in result.stdout.splitlines()]
+    assert {"exam_scheduling_agent", "exam_lookup_only"} <= set(names)
+    assert "desatualizado" not in result.stdout
 
 
 def test_spec_changed_without_regenerating_is_refused(e2e_stack: ComposeStack) -> None:

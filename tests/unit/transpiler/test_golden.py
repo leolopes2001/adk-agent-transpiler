@@ -81,6 +81,7 @@ def test_golden_header_and_manifest(name: str, at_root: Path) -> None:
     assert manifest["spec_sha256"] == compiled.loaded.sha256
     assert manifest["ir_digest"] == compiled.program.ir_digest
     assert manifest["spec_path"] == SPECS[name].as_posix()
+    assert manifest["description"] == compiled.loaded.spec.agent.description
     assert manifest["node_names"] == compiled.program.node_names()
 
 

@@ -28,7 +28,6 @@ EVIDENCE_DIR = REPO_ROOT / "evidence" / "e2e"
 
 MAIN_SPEC = "/app/agent_specs/exam_scheduling_agent.json"
 LOOKUP_SPEC = "/app/agent_specs/examples/exam_lookup_only.json"
-LOOKUP_AGENT_DIR = "/app/generated/exam_lookup_only"
 SAMPLES = "/app/inputs/samples"
 TEST_IMAGES = "/app/inputs/test-images"
 FAKE_LLM_FIXTURES = "/app/tests/fixtures/fake_llm"

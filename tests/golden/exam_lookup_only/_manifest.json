@@ -2,6 +2,7 @@
   "transpiler_version": "0.1.0",
   "spec_path": "agent_specs/examples/exam_lookup_only.json",
   "spec_sha256": "8b957c40fa6fe668f5f93fcb684ed15cc2beb4d43ba901626329dab1d820237b",
+  "description": "Consulta os exames de um pedido médico no catálogo, sem LLM e sem agendar.",
   "ir_digest": "27c57d068b42e931c7d5bffc4f08efc21d84d86f1acd73315e97039df81ebadc",
   "instructions": {},
   "adk_requirement": "google-adk==2.13.0",

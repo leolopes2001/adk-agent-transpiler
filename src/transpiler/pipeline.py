@@ -70,6 +70,7 @@ def _manifest(spec_path: Path, compiled: CompiledSpec, adk_version: str) -> str:
         transpiler_version=__version__,
         spec_path=_display_path(spec_path),
         spec_sha256=program.spec_sha256,
+        description=program.description,
         ir_digest=program.ir_digest,
         instructions={key: file.sha256 for key, file in compiled.instructions.items()},
         adk_requirement=f"google-adk=={adk_version}",

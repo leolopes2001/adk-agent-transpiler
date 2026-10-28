@@ -113,6 +113,8 @@ _ARGPARSE = (
     (r"unrecognized arguments: (.+)", r"argumentos não reconhecidos: \1"),
     (r"ambiguous option: (.+?) could match (.+)", r"opção ambígua: \1 pode ser \2"),
     (r"argument (.+?): not allowed with argument (.+)", r"argumento \1: não combina com \2"),
+    # An ArgumentTypeError of our own, already in Portuguese.
+    (r"argument (.+?): (.+)", r"argumento \1: \2"),
 )
 
 

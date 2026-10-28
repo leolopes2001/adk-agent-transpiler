@@ -10,9 +10,10 @@ import hashlib
 import json
 import logging
 import re
+import shutil
 import signal
 import sys
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from io import StringIO
 from pathlib import Path
@@ -322,7 +323,7 @@ async def test_dependency_failures_become_exit_codes(
 
 def test_main_prints_json_to_stdout(services: Services, capsys: pytest.CaptureFixture[str]) -> None:
     code = cli.main(
-        ["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive",
+        ["run", "--image", SAMPLE, "--non-interactive",
          "--output", "json", "--run-id", RUN_ID]
     )  # fmt: skip
 
@@ -335,7 +336,7 @@ def test_main_prints_json_to_stdout(services: Services, capsys: pytest.CaptureFi
 def test_main_prints_the_table_by_default(
     services: Services, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive"])
+    code = cli.main(["run", "--image", SAMPLE, "--non-interactive"])
 
     out = capsys.readouterr().out
     assert code == 0
@@ -353,9 +354,7 @@ def test_main_prints_the_table_by_default(
 def test_verbose_table_shows_scores_and_the_path(
     services: Services, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code = cli.main(
-        ["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive", "--verbose"]
-    )
+    code = cli.main(["run", "--image", SAMPLE, "--non-interactive", "--verbose"])
 
     out = capsys.readouterr().out
     assert code == 0
@@ -368,7 +367,7 @@ def test_dependency_failure_is_explained_on_stdout_in_table_mode(
 ) -> None:
     services.mcp.responses[("ocr", "extract_text")] = [PermanentError("MCP_UNAUTHORIZED")]
 
-    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive"])
+    code = cli.main(["run", "--image", SAMPLE, "--non-interactive"])
 
     captured = capsys.readouterr()
     assert code == 6
@@ -384,7 +383,7 @@ def test_dependency_failure_is_explained_on_stdout_in_table_mode(
 def test_table_mode_opens_with_a_welcome_header_on_stderr(
     services: Services, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive"])
+    code = cli.main(["run", "--image", SAMPLE, "--non-interactive"])
 
     captured = capsys.readouterr()
     assert code == 0
@@ -400,7 +399,7 @@ def test_json_mode_has_no_welcome_header(
     services: Services, capsys: pytest.CaptureFixture[str]
 ) -> None:
     code = cli.main(
-        ["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive",
+        ["run", "--image", SAMPLE, "--non-interactive",
          "--output", "json"]
     )  # fmt: skip
 
@@ -426,7 +425,7 @@ def _log_events(err: str) -> list[str]:
 def test_main_keeps_the_terminal_free_of_run_logs_by_default(
     services: Services, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive"])
+    code = cli.main(["run", "--image", SAMPLE, "--non-interactive"])
 
     captured = capsys.readouterr()
     assert code == 0
@@ -449,7 +448,7 @@ def test_verbose_or_log_level_shows_the_run_logs_and_keeps_json_stdout_clean(
         monkeypatch.setenv("LOG_LEVEL", log_level)
 
     code = cli.main(
-        ["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive",
+        ["run", "--image", SAMPLE, "--non-interactive",
          "--output", "json", *argv]
     )  # fmt: skip
 
@@ -517,15 +516,20 @@ def test_log_level(env_level: str | None, verbose: bool, expected: str) -> None:
             8,
             "lab-agent: --agent-dir precisa estar dentro de GENERATED_ROOT.",
         ),
+        (
+            ["--image", SAMPLE, "--agent", "nao_existe"],
+            8,
+            "lab-agent: o agente 'nao_existe' não existe em GENERATED_ROOT. "
+            "Agentes disponíveis: exam_lookup_only, exam_scheduling_agent.",
+        ),
     ],
 )
 def test_checks_before_the_run(
     env: None, capsys: pytest.CaptureFixture[str], argv: list[str], code: int, message: str
 ) -> None:
     _forget_package()
-    defaults = ["--agent-dir", str(AGENT_DIR)] if "--agent-dir" not in argv else []
 
-    assert cli.main(["run", *defaults, *argv, "--non-interactive"]) == code
+    assert cli.main(["run", *argv, "--non-interactive"]) == code
     assert message in capsys.readouterr().err
     _forget_package()
 
@@ -537,7 +541,7 @@ def test_missing_environment_is_listed(
     monkeypatch.delenv("RAG_MCP_URL")
     monkeypatch.delenv("SCHEDULER_API_KEY")
 
-    assert cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR)]) == 8
+    assert cli.main(["run", "--image", SAMPLE]) == 8
     assert (
         "lab-agent: faltam variáveis de ambiente: RAG_MCP_URL, SCHEDULER_API_KEY. "
         "Defina-as no .env (veja o .env.example) e rode de novo." in capsys.readouterr().err
@@ -551,7 +555,7 @@ def test_gemini_backend_requires_the_api_key(
     _forget_package()
     monkeypatch.delenv("AGENT_LLM_BACKEND")
 
-    assert cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR)]) == 8
+    assert cli.main(["run", "--image", SAMPLE]) == 8
     assert "GOOGLE_API_KEY" in capsys.readouterr().err
     _forget_package()
 
@@ -563,7 +567,7 @@ def test_fake_model_outside_test_is_refused(
     _forget_package()
     monkeypatch.setenv("APP_ENV", app_env)
 
-    assert cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR)]) == 8
+    assert cli.main(["run", "--image", SAMPLE]) == 8
     assert (
         "lab-agent: AGENT_LLM_BACKEND=fake só é aceito com APP_ENV=test. "
         "Remova AGENT_LLM_BACKEND" in capsys.readouterr().err
@@ -737,7 +741,7 @@ def test_off_a_terminal_the_cli_writes_no_escape_codes(
 ) -> None:
     monkeypatch.setenv("FORCE_COLOR", "1")
 
-    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR), "--non-interactive"])
+    code = cli.main(["run", "--image", SAMPLE, "--non-interactive"])
 
     captured = capsys.readouterr()
     assert code == 0
@@ -765,7 +769,19 @@ ENGLISH = re.compile(
         ),
         (["run", "--image"], "lab-agent run: erro: argumento --image: falta o valor"),
         (["run", "--image", SAMPLE, "--bogus"], "lab-agent: erro: argumentos não reconhecidos"),
-        (["foo"], "lab-agent: erro: argumento comando: opção inválida: 'foo' (escolha entre run)"),
+        (
+            ["foo"],
+            "lab-agent: erro: argumento comando: opção inválida: 'foo' (escolha entre run, list)",
+        ),
+        (
+            ["run", "--image", SAMPLE, "--agent", "../exam_lookup_only"],
+            "lab-agent run: erro: argumento --agent: o nome do agente precisa ser um "
+            "identificador (letras, números e _), sem barras nem '..'",
+        ),
+        (
+            ["run", "--image", SAMPLE, "--agent", "exam_lookup_only", "--spec", "x.json"],
+            "lab-agent run: erro: --agent não pode ser usado com --agent-dir nem --spec",
+        ),
     ],
 )
 def test_argument_errors_are_in_portuguese(
@@ -778,7 +794,7 @@ def test_argument_errors_are_in_portuguese(
     assert exit_info.value.code == 2
     assert err.startswith("uso: lab-agent")
     assert expected in err
-    assert not ENGLISH.search(err.replace("--output", "").replace("--image", ""))
+    assert not ENGLISH.search(re.sub(r"--[\w-]+", "", err))
 
 
 @pytest.mark.parametrize("argv", [["--help"], ["run", "--help"]])
@@ -802,12 +818,24 @@ def test_run_help_describes_every_option(capsys: pytest.CaptureFixture[str]) -> 
     out = " ".join(capsys.readouterr().out.split())
     for expected in (
         "--image IMAGEM PNG ou JPEG dentro de INPUT_ROOT",
+        "--agent NOME agente gerado em GENERATED_ROOT (padrão: exam_scheduling_agent)",
         "--non-interactive não pergunta nada",
         "--output {table,json} table (tabela para leitura) ou json",
         "--run-id UUID identifica a execução nos logs",
         "--verbose mostra a tabela técnica",
     ):
         assert expected in out
+    assert "--agent-dir" not in out
+    assert "--spec" not in out
+
+
+def test_main_help_lists_the_commands(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["--help"])
+
+    out = " ".join(capsys.readouterr().out.split())
+    assert "run processa a imagem de um pedido médico" in out
+    assert "list lista os agentes gerados" in out
 
 
 def test_ctrl_c_cancels_the_run_in_portuguese(
@@ -821,7 +849,7 @@ def test_ctrl_c_cancels_the_run_in_portuguese(
 
     monkeypatch.setattr(cli, "ask_review", interrupt)
 
-    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR)])
+    code = cli.main(["run", "--image", SAMPLE])
 
     captured = capsys.readouterr()
     assert code == 130
@@ -847,7 +875,7 @@ def test_closed_input_during_review_is_explained(
     monkeypatch.setenv("FAKE_LLM_FIXTURE", str(FIXTURES / "pedido_ambiguo.json"))
     monkeypatch.setattr(sys, "stdin", StringIO(""))
 
-    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR)])
+    code = cli.main(["run", "--image", SAMPLE])
 
     out = capsys.readouterr().out
     assert code == 2
@@ -899,3 +927,122 @@ def test_dependency_errors_name_the_service_and_what_to_do(
     assert message == what
     assert action in todo
     assert not ENGLISH.search(message)
+
+
+type Generate = Callable[..., Path]
+
+
+@pytest.fixture
+def generated(env: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generate:
+    """A GENERATED_ROOT with a copy of the golden lookup agent, its manifest changed."""
+
+    def make(**manifest: str) -> Path:
+        root = tmp_path / "generated"
+        package = shutil.copytree(GOLDEN / "exam_lookup_only", root / "exam_lookup_only")
+        path = package / cli.MANIFEST
+        path.write_text(json.dumps({**json.loads(path.read_text("utf-8")), **manifest}), "utf-8")
+        monkeypatch.setenv("GENERATED_ROOT", str(root))
+        return root
+
+    return make
+
+
+def test_list_shows_each_generated_agent(env: None, capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main(["list"]) == 0
+
+    lines = capsys.readouterr().out.splitlines()
+    assert [line.split()[0] for line in lines] == ["exam_lookup_only", "exam_scheduling_agent"]
+    assert lines[0] == (
+        "exam_lookup_only       "
+        "Consulta os exames de um pedido médico no catálogo, sem LLM e sem agendar."
+    )
+    assert lines[1].startswith("exam_scheduling_agent  Agenda exames a partir da imagem")
+    assert "desatualizado" not in "".join(lines)
+
+
+@pytest.mark.parametrize(
+    ("manifest", "mark"),
+    [
+        ({"spec_sha256": "0" * 64}, "(desatualizado em relação à spec)"),
+        ({"spec_path": "agent_specs/gone.json"}, "(spec de origem não encontrada)"),
+    ],
+)
+def test_list_marks_agents_out_of_date_with_their_spec(
+    generated: Generate,
+    capsys: pytest.CaptureFixture[str],
+    manifest: dict[str, str],
+    mark: str,
+) -> None:
+    generated(**manifest)
+
+    assert cli.main(["list"]) == 0
+    assert capsys.readouterr().out.rstrip().endswith(f"sem LLM e sem agendar. {mark}")
+
+
+@pytest.mark.parametrize("make_root", [True, False])
+def test_list_without_agents_says_to_transpile(
+    env: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_root: bool,
+) -> None:
+    root = tmp_path / "generated"
+    if make_root:
+        root.mkdir()
+    monkeypatch.setenv("GENERATED_ROOT", str(root))
+
+    assert cli.main(["list"]) == 0
+    assert capsys.readouterr().out == (
+        "Nenhum agente gerado em GENERATED_ROOT. "
+        "Gere um com lab-transpile (docker compose run --rm transpile).\n"
+    )
+
+
+def test_agent_name_finds_the_package_and_the_spec_of_its_manifest(env: None) -> None:
+    settings = AgentSettings.from_env()
+
+    assert cli.locate_agent("exam_lookup_only", settings) == (
+        GOLDEN / "exam_lookup_only",
+        ROOT / "agent_specs" / "examples" / "exam_lookup_only.json",
+    )
+
+
+def test_run_picks_the_agent_by_name(
+    services: Services, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = cli.main(
+        ["run", "--image", SAMPLE, "--agent", "exam_scheduling_agent", "--non-interactive",
+         "--output", "json"]
+    )  # fmt: skip
+
+    assert code == 0
+    assert json.loads(capsys.readouterr().out)["agent"] == "exam_scheduling_agent"
+
+
+@pytest.mark.parametrize(
+    ("manifest", "message"),
+    [
+        (
+            {"spec_sha256": "0" * 64},
+            "lab-agent: o código gerado está desatualizado em relação à spec. Rode lab-transpile",
+        ),
+        (
+            {"spec_path": "agent_specs/gone.json"},
+            "lab-agent: a spec de origem do agente 'exam_lookup_only' (agent_specs/gone.json) "
+            "não foi encontrada. Gere o pacote de novo com lab-transpile e rode outra vez.",
+        ),
+    ],
+)
+def test_run_by_name_refuses_code_out_of_date_with_its_spec(
+    generated: Generate,
+    capsys: pytest.CaptureFixture[str],
+    manifest: dict[str, str],
+    message: str,
+) -> None:
+    generated(**manifest)
+
+    code = cli.main(["run", "--image", SAMPLE, "--agent", "exam_lookup_only", "--non-interactive"])
+
+    assert code == 7
+    assert message in capsys.readouterr().err

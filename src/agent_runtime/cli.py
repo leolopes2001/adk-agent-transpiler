@@ -67,6 +67,12 @@ from lab_common.mcp_server import LibraryLogFilter
 SERVICE = "agent"
 USER_ID = "lab-agent"
 MANIFEST = "_manifest.json"
+DEFAULT_AGENT = "exam_scheduling_agent"
+DEFAULT_SPEC = Path("agent_specs/exam_scheduling_agent.json")
+NO_AGENTS = (
+    "Nenhum agente gerado em GENERATED_ROOT. "
+    "Gere um com lab-transpile (docker compose run --rm transpile)."
+)
 # Their log records may quote payloads, so LibraryLogFilter cuts their messages.
 LIBRARY_LOGGERS = ("google_adk", "google.adk", "google_genai", "google.genai", "mcp", "httpx")
 LLM_KEY_ENV = "GOOGLE_API_KEY"
@@ -121,6 +127,13 @@ class LoadedAgent:
     stages: tuple[tuple[str, str], ...] = ()
 
 
+@dataclass(frozen=True)
+class GeneratedAgent:
+    name: str
+    description: str
+    problem: str | None = None
+
+
 @dataclass
 class RunOutcome:
     exit_code: int
@@ -151,7 +164,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = ArgumentParser(prog=_PROG, description="Executa um agente gerado.")
+    parser = ArgumentParser(prog=_PROG, description="Lista e executa os agentes gerados.")
     commands = parser.add_subparsers(
         dest="command", required=True, title="comandos", metavar="comando"
     )
@@ -164,19 +177,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--image", required=True, metavar="IMAGEM", help="PNG ou JPEG dentro de INPUT_ROOT"
     )
     run.add_argument(
-        "--agent-dir",
-        default="generated/exam_scheduling_agent",
-        type=Path,
-        metavar="PASTA",
-        help="pacote gerado pelo lab-transpile (padrão: %(default)s)",
+        "--agent",
+        type=_agent_name,
+        metavar="NOME",
+        help=f"agente gerado em GENERATED_ROOT (padrão: {DEFAULT_AGENT}); veja lab-agent list",
     )
-    run.add_argument(
-        "--spec",
-        default="agent_specs/exam_scheduling_agent.json",
-        type=Path,
-        metavar="ARQUIVO",
-        help="spec do pacote (padrão: %(default)s)",
-    )
+    # The package and its spec by path, as before --agent; kept for old scripts.
+    run.add_argument("--agent-dir", type=Path, help=argparse.SUPPRESS)
+    run.add_argument("--spec", type=Path, help=argparse.SUPPRESS)
     run.add_argument(
         "--non-interactive",
         action="store_true",
@@ -196,6 +204,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="mostra a tabela técnica e os logs JSON da execução no stderr",
     )
+    run.set_defaults(parser=run)
+    commands.add_parser(
+        "list",
+        help="lista os agentes gerados",
+        description="Lista os agentes gerados em GENERATED_ROOT e marca os desatualizados.",
+    )
     return parser
 
 
@@ -213,6 +227,41 @@ def progress_stages(spec: object) -> tuple[tuple[str, str], ...]:
     return tuple(stage for stage in stages if stage is not None)
 
 
+def generated_agents(settings: AgentSettings) -> list[GeneratedAgent]:
+    root = settings.generated_root
+    if not root.is_dir():
+        return []
+
+    # The transpiler stages packages in dot folders, which are not identifiers.
+    return [
+        _generated_agent(path)
+        for path in sorted(root.iterdir())
+        if path.name.isidentifier() and (path / MANIFEST).is_file()
+    ]
+
+
+def locate_agent(name: str, settings: AgentSettings) -> tuple[Path, Path]:
+    """The package GENERATED_ROOT/<name> and the spec its manifest was generated from."""
+    agent_dir = settings.generated_root / name
+    if not (agent_dir / MANIFEST).is_file():
+        available = ", ".join(agent.name for agent in generated_agents(settings))
+        hint = f"Agentes disponíveis: {available}." if available else NO_AGENTS
+        raise CliError(EXIT_CONFIG, f"o agente {name!r} não existe em GENERATED_ROOT. {hint}")
+
+    spec_path = _read_manifest(agent_dir).get("spec_path")
+    if not isinstance(spec_path, str):
+        raise CliError(EXIT_STALE_CODE, f"o manifesto do agente {name!r} não diz a spec. {REBUILD}")
+
+    spec = Path.cwd() / spec_path
+    if not spec.is_file():
+        raise CliError(
+            EXIT_STALE_CODE,
+            f"a spec de origem do agente {name!r} ({spec_path}) não foi encontrada. {REBUILD}",
+        )
+
+    return agent_dir, spec
+
+
 def load_agent(agent_dir: Path, spec: Path, settings: AgentSettings) -> LoadedAgent:
     resolved = agent_dir.resolve()
     if not resolved.is_relative_to(settings.generated_root):
@@ -225,13 +274,7 @@ def load_agent(agent_dir: Path, spec: Path, settings: AgentSettings) -> LoadedAg
     if not spec.is_file():
         raise CliError(EXIT_CONFIG, "arquivo da spec (--spec) não encontrado. Confira o caminho.")
 
-    try:
-        manifest = json.loads((resolved / MANIFEST).read_text("utf-8"))
-    except (OSError, ValueError):
-        raise CliError(
-            EXIT_STALE_CODE, f"o código gerado não tem um manifesto legível. {REBUILD}"
-        ) from None
-
+    manifest = _read_manifest(resolved)
     spec_sha256 = _file_sha256(spec)
     try:
         spec_data = json.loads(spec.read_text("utf-8"))
@@ -343,9 +386,16 @@ def announcer(output: str | None, *, verbose: bool = False) -> Announce:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "list":
+        return _list_agents()
+
+    if args.agent is not None and (args.agent_dir is not None or args.spec is not None):
+        args.parser.error("--agent não pode ser usado com --agent-dir nem --spec")
+
     telemetry: lab_telemetry.Telemetry | None = None
     try:
         settings = AgentSettings.from_env()
+        agent_dir, spec = _agent_location(args, settings)
         run_id = _parse_run_id(args.run_id)
         telemetry = lab_telemetry.setup(SERVICE, instance_id=run_id)
         _configure_logging(
@@ -357,8 +407,8 @@ def main(argv: list[str] | None = None) -> int:
             outcome = asyncio.run(
                 execute(
                     image=args.image,
-                    agent_dir=args.agent_dir,
-                    spec=args.spec,
+                    agent_dir=agent_dir,
+                    spec=spec,
                     interactive=not args.non_interactive,
                     run_id=run_id,
                     settings=settings,
@@ -382,6 +432,71 @@ def main(argv: list[str] | None = None) -> int:
 
     _print_outcome(outcome, output=args.output, verbose=args.verbose)
     return outcome.exit_code
+
+
+def _list_agents() -> int:
+    try:
+        agents = generated_agents(AgentSettings.from_env())
+    except ConfigurationError as error:
+        _print_error(line(config_error(error.code, error.message)))
+        return EXIT_CONFIG
+
+    if not agents:
+        print(NO_AGENTS)
+        return 0
+
+    width = max(len(agent.name) for agent in agents)
+    for agent in agents:
+        problem = f" ({agent.problem})" if agent.problem else ""
+        print(f"{agent.name:<{width}}  {agent.description}{problem}")
+
+    return 0
+
+
+def _agent_name(value: str) -> str:
+    if not value.isidentifier():
+        raise argparse.ArgumentTypeError(
+            "o nome do agente precisa ser um identificador (letras, números e _), "
+            "sem barras nem '..'"
+        )
+
+    return value
+
+
+def _agent_location(args: argparse.Namespace, settings: AgentSettings) -> tuple[Path, Path]:
+    if args.agent_dir is None and args.spec is None:
+        return locate_agent(args.agent or DEFAULT_AGENT, settings)
+
+    return args.agent_dir or settings.generated_root / DEFAULT_AGENT, args.spec or DEFAULT_SPEC
+
+
+def _generated_agent(agent_dir: Path) -> GeneratedAgent:
+    try:
+        manifest = _read_manifest(agent_dir)
+    except CliError:
+        return GeneratedAgent(agent_dir.name, "", "manifesto ilegível")
+
+    description = str(manifest.get("description") or "")
+    spec_path = manifest.get("spec_path")
+    spec = Path.cwd() / spec_path if isinstance(spec_path, str) else None
+    if spec is None or not spec.is_file():
+        return GeneratedAgent(agent_dir.name, description, "spec de origem não encontrada")
+
+    if manifest.get("spec_sha256") != _file_sha256(spec):
+        return GeneratedAgent(agent_dir.name, description, "desatualizado em relação à spec")
+
+    return GeneratedAgent(agent_dir.name, description)
+
+
+def _read_manifest(agent_dir: Path) -> dict[str, Any]:
+    try:
+        manifest = json.loads((agent_dir / MANIFEST).read_text("utf-8"))
+    except (OSError, ValueError):
+        manifest = None
+    if not isinstance(manifest, dict):
+        raise CliError(EXIT_STALE_CODE, f"o código gerado não tem um manifesto legível. {REBUILD}")
+
+    return manifest
 
 
 def _parse_run_id(value: str | None) -> str:
