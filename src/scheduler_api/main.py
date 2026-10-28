@@ -58,8 +58,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()  # type: ignore[call-arg]  # fields come from the environment
-    configure_logging(settings.log_level)
-    setup_telemetry()
+    telemetry = setup_telemetry()
+    configure_logging(
+        settings.log_level, export=telemetry.log_export if telemetry is not None else None
+    )
 
     app = FastAPI(
         title="Lab Exam Scheduler API",

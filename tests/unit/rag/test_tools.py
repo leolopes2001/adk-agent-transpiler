@@ -356,7 +356,7 @@ class TestMain:
     @pytest.fixture
     def env(self, monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
         monkeypatch.setenv("MCP_AUTH_TOKEN", TOKEN)
-        monkeypatch.setattr(rag_main, "configure_logging", lambda level: None)
+        monkeypatch.setattr(rag_main, "configure_logging", lambda level, export=None: None)
         return monkeypatch
 
     def test_starts_uvicorn_with_the_loaded_catalog(

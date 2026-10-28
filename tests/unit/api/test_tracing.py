@@ -1,10 +1,15 @@
+import io
+import json
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from opentelemetry import trace
+from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk._logs.export import InMemoryLogRecordExporter, SimpleLogRecordProcessor
 from opentelemetry.trace import SpanKind, StatusCode
 
-from scheduler_api import telemetry
+from scheduler_api import log, telemetry
 from scheduler_api.settings import Settings
 from telemetry_capture import Exported
 
@@ -75,10 +80,31 @@ def test_server_errors_mark_the_span_failed(app: FastAPI, exported: Exported) ->
 
 def test_setup_installs_nothing_without_a_collector(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(telemetry.ENDPOINT_ENV, raising=False)
-    monkeypatch.setattr(telemetry, "_provider", None)
+    monkeypatch.setattr(telemetry, "_installed", None)
 
     def refuse(provider: object) -> None:
         raise AssertionError("a tracer provider was installed")
 
     monkeypatch.setattr(trace, "set_tracer_provider", refuse)
     assert telemetry.setup() is None
+
+
+def test_exported_log_lines_are_the_stderr_lines(
+    app: FastAPI, settings: Settings, exported: Exported
+) -> None:
+    provider = LoggerProvider()
+    logs = InMemoryLogRecordExporter()
+    provider.add_log_record_processor(SimpleLogRecordProcessor(logs))
+    stream = io.StringIO()
+    log.configure_logging("WARNING", stream=stream, export=telemetry.OtlpLogExport(provider))
+
+    with TestClient(app) as client:
+        client.get("/v1/exams/LAB-10001", headers=_headers(settings, **{"X-Request-ID": "req-2"}))
+
+    [request] = [
+        r.log_record for r in logs.get_finished_logs() if '"request"' in str(r.log_record.body)
+    ]
+    assert stream.getvalue() == ""
+    assert json.loads(str(request.body))["request_id"] == "req-2"
+    [span] = exported.spans()
+    assert (request.trace_id, request.span_id) == (span.context.trace_id, span.context.span_id)

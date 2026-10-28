@@ -10,10 +10,15 @@ removed so its records reach the JSON handler too.
 
 Request and response bodies are never logged; `_drop_forbidden_keys` removes
 them if a call ever passes one by mistake.
+
+`export` (see `scheduler_api.telemetry`) receives every rendered line with its
+record: what is exported is exactly what is written to stderr, from INFO up
+whatever the configured level.
 """
 
 import logging
 import sys
+from collections.abc import Callable
 from typing import TextIO
 
 import structlog
@@ -26,7 +31,35 @@ _FORBIDDEN_KEYS = frozenset({"body", "request_body", "response_body"})
 _DROPPED_KEYS = _FORBIDDEN_KEYS | {"color_message"}
 _UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
 
+type LogExport = Callable[[logging.LogRecord, str], None]
+"""Receives a record and its rendered JSON line."""
+
 _handler: logging.Handler | None = None
+
+
+class _JsonLinesHandler(logging.StreamHandler):
+    """Writes records at `stream_level` and up; hands records at INFO and up, with the
+    same rendered line, to `export`."""
+
+    def __init__(self, stream: TextIO, stream_level: int, export: LogExport | None) -> None:
+        super().__init__(stream)
+        self._stream_level = stream_level
+        self._export = export
+        self._export_level = min(stream_level, logging.INFO)
+        self.setLevel(self._export_level if export else stream_level)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            line = self.format(record)
+            if record.levelno >= self._stream_level:
+                self.stream.write(line + self.terminator)
+                self.flush()
+            if self._export is not None and record.levelno >= self._export_level:
+                self._export(record, line)
+        except RecursionError:
+            raise
+        except Exception:  # noqa: BLE001 - logging must never break the caller
+            self.handleError(record)
 
 
 def _add_service(logger: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
@@ -42,7 +75,9 @@ def _drop_forbidden_keys(
     return event_dict
 
 
-def configure_logging(level: str = "INFO", *, stream: TextIO | None = None) -> None:
+def configure_logging(
+    level: str = "INFO", *, stream: TextIO | None = None, export: LogExport | None = None
+) -> None:
     """Configure structlog and the stdlib root logger; calling it again replaces the setup."""
     global _handler  # noqa: PLW0603 - one handler per process, replaced on reconfigure
 
@@ -61,14 +96,16 @@ def configure_logging(level: str = "INFO", *, stream: TextIO | None = None) -> N
             structlog.processors.JSONRenderer(ensure_ascii=False),
         ],
     )
-    handler = logging.StreamHandler(stream or sys.stderr)
+    handler = _JsonLinesHandler(
+        stream or sys.stderr, logging.getLevelNamesMapping()[level.upper()], export
+    )
     handler.setFormatter(formatter)
 
     root = logging.getLogger()
     if _handler is not None:
         root.removeHandler(_handler)
     root.addHandler(handler)
-    root.setLevel(level.upper())
+    root.setLevel(handler.level)
     _handler = handler
     for name in _UVICORN_LOGGERS:
         uvicorn_logger = logging.getLogger(name)

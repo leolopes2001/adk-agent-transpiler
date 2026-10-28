@@ -11,8 +11,8 @@ from ocr_mcp.settings import OcrSettings
 
 def main() -> None:
     settings = OcrSettings()  # type: ignore[call-arg]  # fields come from the environment
-    configure_logging(settings.log_level)
-    telemetry.setup(SERVICE)
+    exporting = telemetry.setup(SERVICE)
+    configure_logging(settings.log_level, export=exporting.log_export if exporting else None)
     app = build_app(settings, TesseractEngine())
     # log_config=None keeps uvicorn's loggers on the root JSON handler (with PII
     # redaction); the access log is off because paths carry session ids only.

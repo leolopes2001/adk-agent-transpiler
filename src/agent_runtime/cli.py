@@ -20,7 +20,9 @@ every run event.
 With the `observability` profile up (see `lab_common.telemetry`) the run is
 also one trace: a `lab-agent run` span over ADK's workflow, node and model
 spans and the MCP and HTTP calls. Message content capture is turned off in
-ADK and google-genai before anything runs.
+ADK and google-genai before anything runs. The log lines are exported from
+INFO up, whatever the terminal shows, so the terminal stays as quiet as
+without the profile.
 
 Exit codes: 0 done, 2 invalid input, 3 blocked by the guard, 4 low OCR
 quality, 5 no exam resolved, 6 dependency failure or scheduling refused,
@@ -656,8 +658,11 @@ def log_level(settings: AgentSettings, *, verbose: bool) -> str:
     return settings.log_level or QUIET_LOG_LEVEL
 
 
-def _configure_logging(level: str) -> None:
-    lab_logging.configure(SERVICE, level, filters=[LibraryLogFilter(LIBRARY_LOGGERS)])
+def _configure_logging(level: str, export: lab_logging.LogExport | None = None) -> None:
+    """JSON logs at `level` on stderr; with `export` (observability), INFO and up exported too."""
+    lab_logging.configure(
+        SERVICE, level, filters=[LibraryLogFilter(LIBRARY_LOGGERS)], export=export
+    )
     # One INFO line per HTTP request (MCP keeps SSE streams busy) says nothing about the run.
     logging.getLogger("httpx").setLevel(max(logging.WARNING, logging.getLogger().level))
     # ADK warns about experimental features on every import; they are not run events.
@@ -710,10 +715,13 @@ def main(argv: list[str] | None = None) -> int:
     telemetry: lab_telemetry.Telemetry | None = None
     try:
         settings = AgentSettings.from_env()
-        _configure_logging(log_level(settings, verbose=args.verbose))
         run_id = _run_id(args.run_id)
-        structlog.contextvars.bind_contextvars(run_id=run_id)
         telemetry = lab_telemetry.setup(SERVICE, instance_id=run_id)
+        _configure_logging(
+            log_level(settings, verbose=args.verbose),
+            export=telemetry.log_export if telemetry is not None else None,
+        )
+        structlog.contextvars.bind_contextvars(run_id=run_id)
         with _interrupt_at_once():
             outcome = asyncio.run(
                 execute(

@@ -16,11 +16,17 @@ replaced with `[REDACTED:<TYPE>]` and long strings are truncated. It is a
 safety net; code must still log counts, hashes and codes, never document text.
 
 stderr is used so a CLI can keep stdout for its own output.
+
+`export` (see `lab_common.telemetry.LogExport`) receives every rendered line
+together with its record, after redaction: what is exported is exactly what
+is written to stderr. It has a level of its own, so a CLI that shows only
+errors can still export INFO; records below the stream level are rendered
+for the export only.
 """
 
 import logging
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, TextIO
 
 import structlog
@@ -35,6 +41,9 @@ FORBIDDEN_KEYS = frozenset({"raw_text", "text_raw", "image_base64", "image_bytes
 MAX_STRING_CHARS = 500
 _TRUNCATED = "…[truncated]"
 
+type LogExport = Callable[[logging.LogRecord, str], None]
+"""Receives a record and its rendered (redacted) JSON line."""
+
 _handler: logging.Handler | None = None
 
 
@@ -45,6 +54,37 @@ class _AddService:
     def __call__(self, logger: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
         event_dict["service"] = self._service
         return event_dict
+
+
+class _JsonLinesHandler(logging.StreamHandler):  # type: ignore[type-arg]
+    """Writes records at `stream_level` and up; hands records at `export_level` and up,
+    with the same rendered line, to `export`."""
+
+    def __init__(
+        self,
+        stream: TextIO,
+        stream_level: int,
+        export: LogExport | None = None,
+        export_level: int = logging.INFO,
+    ) -> None:
+        super().__init__(stream)
+        self._stream_level = stream_level
+        self._export = export
+        self._export_level = export_level
+        self.setLevel(min(stream_level, export_level) if export else stream_level)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            line = self.format(record)
+            if record.levelno >= self._stream_level:
+                self.stream.write(line + self.terminator)
+                self.flush()
+            if self._export is not None and record.levelno >= self._export_level:
+                self._export(record, line)
+        except RecursionError:
+            raise
+        except Exception:  # noqa: BLE001 - logging must never break the caller
+            self.handleError(record)
 
 
 class RedactPii:
@@ -104,6 +144,8 @@ def configure(  # noqa: PLR0913 - all but service and level are keyword-only opt
     stream: TextIO | None = None,
     redact_pii: bool = True,
     filters: Sequence[logging.Filter] = (),
+    export: LogExport | None = None,
+    export_level: str = "INFO",
 ) -> None:
     """Configure structlog and the stdlib root logger to emit JSON lines.
 
@@ -112,14 +154,18 @@ def configure(  # noqa: PLR0913 - all but service and level are keyword-only opt
     runs after them unless `redact_pii` is False, which is meant only for
     tests of the logging pipeline itself. `filters` are attached to the
     handler, so they see every stdlib record (with its logger name) before it
-    is formatted. Calling `configure` again replaces
-    the previous configuration.
+    is formatted. `export` receives the rendered lines of records at
+    `export_level` or above (or at `level`, if lower), whatever `level` the
+    stream shows. Calling `configure` again replaces the previous configuration.
     """
     global _handler  # noqa: PLW0603 - one handler per process, replaced on reconfigure
 
-    level_name = level.upper()
-    if level_name not in _LEVELS:
-        raise ValueError(f"unknown log level {level!r}; expected one of {sorted(_LEVELS)}")
+    level_name, export_level_name = level.upper(), export_level.upper()
+    for name in (level_name, export_level_name):
+        if name not in _LEVELS:
+            raise ValueError(f"unknown log level {name!r}; expected one of {sorted(_LEVELS)}")
+    stream_levelno = logging.getLevelNamesMapping()[level_name]
+    export_levelno = min(stream_levelno, logging.getLevelNamesMapping()[export_level_name])
 
     shared: list[Processor] = [
         structlog.contextvars.merge_contextvars,
@@ -140,7 +186,7 @@ def configure(  # noqa: PLR0913 - all but service and level are keyword-only opt
             structlog.processors.JSONRenderer(ensure_ascii=False),
         ],
     )
-    handler = logging.StreamHandler(stream or sys.stderr)
+    handler = _JsonLinesHandler(stream or sys.stderr, stream_levelno, export, export_levelno)
     handler.setFormatter(formatter)
     for log_filter in filters:
         handler.addFilter(log_filter)
@@ -149,7 +195,7 @@ def configure(  # noqa: PLR0913 - all but service and level are keyword-only opt
     if _handler is not None:
         root.removeHandler(_handler)
     root.addHandler(handler)
-    root.setLevel(level_name)
+    root.setLevel(handler.level)
     _handler = handler
 
     structlog.configure(

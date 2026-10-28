@@ -1,4 +1,4 @@
-"""Optional OpenTelemetry traces for the agent runtime and the MCP servers.
+"""Optional OpenTelemetry traces and logs for the agent runtime and the MCP servers.
 
 Export is off unless OTEL_EXPORTER_OTLP_ENDPOINT is set and a collector
 accepts a connection there when the process starts (`collector_endpoint`).
@@ -14,6 +14,14 @@ payloads that libraries such as ADK may record), event attributes are reduced
 to the exception type and status descriptions are removed, since an error
 message can quote its input.
 
+Logs are exported by `OtlpLogExport`, which `lab_common.logging` hands each
+rendered line after redaction: the body of every exported record is the
+exact JSON line written to stderr, its attributes are that line's top-level
+scalar fields and it carries the trace and span id of the span it was logged
+in. The logger provider is private to this export (never the global one), so
+log events emitted by libraries such as ADK's `gen_ai.*` events never leave
+the process; the SDK's own records are not exported either.
+
 Context crosses process boundaries as W3C `traceparent`: in the `_meta` of an
 MCP request (`trace_meta`, `context_from_meta`) and in HTTP headers. Baggage is
 never propagated.
@@ -22,6 +30,8 @@ Requires the `opentelemetry-sdk` and `opentelemetry-exporter-otlp-proto-http`
 packages, which the agent, OCR and RAG extras install.
 """
 
+import json
+import logging
 import os
 import socket
 from collections.abc import Iterator, Mapping, Sequence
@@ -32,6 +42,9 @@ from urllib.parse import urlsplit
 
 from opentelemetry import context as context_api
 from opentelemetry import trace
+from opentelemetry._logs import LogRecord, SeverityNumber
+from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor, LogRecordExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import Event, ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
@@ -42,6 +55,7 @@ from opentelemetry.util.types import AttributeValue
 __all__ = [
     "ALLOWED_ATTRIBUTES",
     "ENDPOINT_ENV",
+    "OtlpLogExport",
     "SafeSpanExporter",
     "Status",
     "StatusCode",
@@ -168,13 +182,68 @@ def safe_span(span: ReadableSpan) -> ReadableSpan:
     )
 
 
+_SEVERITY = {
+    "DEBUG": SeverityNumber.DEBUG,
+    "INFO": SeverityNumber.INFO,
+    "WARNING": SeverityNumber.WARN,
+    "ERROR": SeverityNumber.ERROR,
+    "CRITICAL": SeverityNumber.FATAL,
+}
+_NOT_EXPORTED_LOGGERS = ("opentelemetry",)
+"""The SDK logs its own export failures; exporting those would feed the failure."""
+
+
+class OtlpLogExport:
+    """`lab_common.logging.LogExport` that sends each rendered line as an OTLP log record."""
+
+    def __init__(self, provider: LoggerProvider) -> None:
+        self._logger = provider.get_logger("lab_common.logging")
+        self._closed = False
+
+    def __call__(self, record: logging.LogRecord, line: str) -> None:
+        if self._closed or record.name.startswith(_NOT_EXPORTED_LOGGERS):
+            return
+        self._logger.emit(
+            LogRecord(
+                timestamp=int(record.created * 1e9),
+                context=context_api.get_current(),
+                severity_text=record.levelname,
+                severity_number=_SEVERITY.get(record.levelname, SeverityNumber.UNSPECIFIED),
+                body=line,
+                attributes=_scalar_fields(line),
+            )
+        )
+
+    def close(self) -> None:
+        """Later records are not exported (the provider is being shut down)."""
+        self._closed = True
+
+
+def _scalar_fields(line: str) -> dict[str, AttributeValue]:
+    try:
+        fields = json.loads(line)
+    except ValueError:
+        return {}
+    if not isinstance(fields, dict):
+        return {}
+    return {
+        key: value
+        for key, value in fields.items()
+        if key != "ts" and isinstance(value, str | int | float | bool)
+    }
+
+
 @dataclass
 class Telemetry:
     """What `setup` installed; `shutdown` flushes and stops the exporters."""
 
     tracer_provider: TracerProvider
+    logger_provider: LoggerProvider
+    log_export: OtlpLogExport
 
     def shutdown(self) -> None:
+        self.log_export.close()
+        self.logger_provider.shutdown()
         self.tracer_provider.shutdown()
 
 
@@ -187,26 +256,39 @@ def resource(service: str, instance_id: str | None = None) -> Resource:
 
 
 def setup(
-    service: str, *, instance_id: str | None = None, span_exporter: SpanExporter | None = None
+    service: str,
+    *,
+    instance_id: str | None = None,
+    span_exporter: SpanExporter | None = None,
+    log_exporter: LogRecordExporter | None = None,
 ) -> Telemetry | None:
-    """Install the global tracer provider; None (nothing installed) when export is off.
+    """Install the global tracer provider and a log export; None (nothing) when export is off.
 
-    Without `span_exporter`, spans go to the collector at OTEL_EXPORTER_OTLP_ENDPOINT,
-    if one is there. Tests pass an in-memory exporter.
+    Without exporters, spans and logs go to the collector at
+    OTEL_EXPORTER_OTLP_ENDPOINT, if one is there. Tests pass in-memory exporters.
+    Pass `Telemetry.log_export` to `lab_common.logging.configure(export=...)`.
     """
-    if span_exporter is None:
+    if span_exporter is None or log_exporter is None:
         endpoint = collector_endpoint()
         if endpoint is None:
             return None
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # noqa: PLC0415 - only when exporting
+        # Only when exporting: the exporters pull in protobuf and requests.
+        from opentelemetry.exporter.otlp.proto.http._log_exporter import (  # noqa: PLC0415
+            OTLPLogExporter,
+        )
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # noqa: PLC0415
             OTLPSpanExporter,
         )
 
-        span_exporter = OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces")
-    provider = TracerProvider(resource=resource(service, instance_id))
-    provider.add_span_processor(BatchSpanProcessor(SafeSpanExporter(span_exporter)))
-    trace.set_tracer_provider(provider)
-    return Telemetry(provider)
+        span_exporter = span_exporter or OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces")
+        log_exporter = log_exporter or OTLPLogExporter(endpoint=f"{endpoint}/v1/logs")
+    service_resource = resource(service, instance_id)
+    tracer_provider = TracerProvider(resource=service_resource)
+    tracer_provider.add_span_processor(BatchSpanProcessor(SafeSpanExporter(span_exporter)))
+    trace.set_tracer_provider(tracer_provider)
+    logger_provider = LoggerProvider(resource=service_resource)
+    logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+    return Telemetry(tracer_provider, logger_provider, OtlpLogExport(logger_provider))
 
 
 def tracer(name: str) -> trace.Tracer:

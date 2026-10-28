@@ -20,8 +20,8 @@ log = lab_logging.get_logger(__name__)
 
 def main() -> None:
     settings = RagSettings()  # type: ignore[call-arg]  # fields come from the environment
-    configure_logging(settings.log_level)
-    telemetry.setup(SERVICE)
+    exporting = telemetry.setup(SERVICE)
+    configure_logging(settings.log_level, export=exporting.log_export if exporting else None)
     try:
         catalog = load_catalog(settings.catalog_path)
     except CatalogError as error:
