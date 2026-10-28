@@ -34,6 +34,7 @@ import json
 import logging
 import os
 import socket
+import time
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -76,7 +77,9 @@ __all__ = [
 
 ENDPOINT_ENV = "OTEL_EXPORTER_OTLP_ENDPOINT"
 PROBE_TIMEOUT_S = 0.5
-"""How long the start-up check waits for the collector; an unknown name fails at once."""
+"""How long one connection attempt to the collector may take."""
+STARTUP_WAIT_S = 10.0
+"""How long to wait for a collector whose name resolves (it may still be starting)."""
 
 ATTRIBUTE_PREFIX = "lab."
 """Attributes this project sets: `lab.run_id`, `lab.node`, `lab.route`, counts, codes."""
@@ -111,21 +114,31 @@ ALLOWED_EVENT_ATTRIBUTES = frozenset({"exception.type"})
 _PROPAGATOR = TraceContextTextMapPropagator()
 
 
-def collector_endpoint() -> str | None:
-    """OTEL_EXPORTER_OTLP_ENDPOINT when a collector listens there, else None."""
+def collector_endpoint(wait_s: float = STARTUP_WAIT_S) -> str | None:
+    """OTEL_EXPORTER_OTLP_ENDPOINT when a collector listens there, else None.
+
+    A name that does not resolve (no `observability` profile) is off at once. A
+    name that resolves belongs to a collector that may still be starting, so the
+    port is tried for up to `wait_s` seconds.
+    """
     endpoint = os.environ.get(ENDPOINT_ENV, "").strip()
-    if not endpoint:
-        return None
     url = urlsplit(endpoint)
-    if url.hostname is None:
+    if not endpoint or url.hostname is None:
         return None
     port = url.port or (443 if url.scheme == "https" else 80)
     try:
-        with socket.create_connection((url.hostname, port), timeout=PROBE_TIMEOUT_S):
-            pass
+        socket.getaddrinfo(url.hostname, port)
     except OSError:
         return None
-    return endpoint.rstrip("/")
+    deadline = time.monotonic() + wait_s
+    while True:
+        try:
+            with socket.create_connection((url.hostname, port), timeout=PROBE_TIMEOUT_S):
+                return endpoint.rstrip("/")
+        except OSError:
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.25)
 
 
 def allowed(key: str) -> bool:

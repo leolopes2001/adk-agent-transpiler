@@ -32,7 +32,7 @@ Use apenas os exemplos do próprio Swagger. Eles usam um `patient_ref` pseudôni
 | `cli-01-run.png` | O terminal com `docker compose run --rm transpile` e `docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png`: a tabela de exames e a linha "Agendamento: solicitação registrada". |
 | `cli-02-review.png` | `docker compose run --rm agent run --image /app/inputs/samples/pedido_ambiguo.png`: a revisão humana com as opções de T4. |
 
-## Observabilidade
+## Logs e traces (opcional)
 
 Suba a stack com o profile `observability` e rode o fluxo feliz:
 
@@ -42,17 +42,15 @@ docker compose run --rm transpile
 docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png
 ```
 
-Abra `http://localhost:3000` e espere uns 30 segundos para o Tempo indexar o trace. Anote o `run_id` da última linha da CLI (`Execução <run_id>`).
+Abra `http://localhost:18888` e anote o `run_id` da última linha da CLI (`Execução <run_id>`).
 
 | Arquivo | O que mostrar |
 |---|---|
-| `obs-01-dashboard.png` | O dashboard **Lab Exam Agent** com a execução selecionada na variável `run_id`: *Últimas execuções* com resultado e exit code, *Duração por nó* com as barras e o começo de *Logs da execução* com linhas de `agent`, `ocr-mcp`, `rag-mcp` e `scheduler-api`. |
-| `obs-02-trace.png` | O trace aberto pelo Trace ID de *Trace da execução*: a árvore com `lab-agent run`, os `invoke_node`, `generate_content`, `mcp ocr.extract_text` com o `tools/call extract_text` do `ocr-mcp` dentro, e o `POST /v1/appointments` com o span da `scheduler-api`. |
-| `obs-03-log-to-trace.png` | Em *Logs da execução*, uma linha aberta (por exemplo `ocr_result`) com o campo `Trace` e o link **Abrir o trace** em destaque, ou a tela dividida que ele abre. |
+| `obs-01-traces.png` | A página *Traces* com o trace `lab-agent run` da execução, com o recurso `agent-<run_id>`, os quatro serviços na coluna de recursos e a duração. |
+| `obs-02-trace.png` | Esse trace aberto: a linha do tempo com `lab-agent run`, os `invoke_node`, `generate_content`, `mcp ocr.extract_text` com o `tools/call extract_text` do `ocr-mcp` dentro, e o `POST /v1/appointments` com o span da `scheduler-api`. |
+| `obs-03-logs-run-id.png` | A página *Structured logs* com o recurso em "(All)" e o `run_id` no filtro: linhas de `agent`, `ocr-mcp`, `rag-mcp` e `scheduler-api`, e a coluna *Trace* com o link para o trace. |
 
-Opcional: `obs-04-trace-to-logs.png`, com o painel de logs aberto a partir do ícone de logs de um span do trace.
-
-As capturas mostram só ids, códigos de exame, contagens e tempos. Mesmo assim, confira antes de salvar que nenhuma linha de log expandida mostra algo além disso.
+As capturas mostram só ids, códigos de exame, contagens e tempos. Mesmo assim, confira antes de salvar que nenhum detalhe de log aberto mostra algo além disso.
 
 ## Depois
 

@@ -1,4 +1,5 @@
 import socket
+import threading
 from collections.abc import Iterator
 
 import pytest
@@ -34,12 +35,26 @@ class TestCollectorEndpoint:
 
     def test_name_that_does_not_resolve_is_off(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # What every service sees without the `observability` profile.
-        monkeypatch.setenv(telemetry.ENDPOINT_ENV, "http://observability.invalid:4318")
+        monkeypatch.setenv(telemetry.ENDPOINT_ENV, "http://observability.invalid:18890")
         assert telemetry.collector_endpoint() is None
 
     def test_nothing_listening_is_off(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(telemetry.ENDPOINT_ENV, f"http://127.0.0.1:{_closed_port()}")
-        assert telemetry.collector_endpoint() is None
+        assert telemetry.collector_endpoint(wait_s=0) is None
+
+    def test_waits_for_a_collector_that_is_still_starting(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        port = _closed_port()
+        monkeypatch.setenv(telemetry.ENDPOINT_ENV, f"http://127.0.0.1:{port}")
+        with socket.socket() as server:
+            server.bind(("127.0.0.1", port))
+            starting = threading.Timer(0.5, server.listen)
+            starting.start()
+            try:
+                assert telemetry.collector_endpoint(wait_s=5) == f"http://127.0.0.1:{port}"
+            finally:
+                starting.cancel()
 
     def test_listening_collector_is_on(
         self, monkeypatch: pytest.MonkeyPatch, listening_port: int

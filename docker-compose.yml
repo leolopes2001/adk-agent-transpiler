@@ -6,7 +6,7 @@
 #   docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png
 #   docker compose --profile "*" down -v      # also removes the agent/tool network and volume
 #
-# Optional logs and traces in Grafana (http://localhost:3000), see README:
+# Optional logs and traces in the Aspire Dashboard (http://localhost:18888), see README:
 #   docker compose --profile observability up -d --build --wait
 #
 # Networks: `backend` is internal (no internet) and holds every service; only the
@@ -17,8 +17,9 @@
 # Every service is given the collector's OTLP endpoint (OTEL_EXPORTER_OTLP_ENDPOINT)
 # but exports only if the collector answers there when the process starts: without
 # the `observability` profile the name does not resolve on `backend`, so nothing is
-# exported and nothing waits for it. The servers start after the collector when the
-# profile is on (an optional dependency, ignored when it is off).
+# exported and nothing waits for it. With the profile on, the servers start after the
+# collector (an optional dependency, ignored when it is off) and give it a few seconds
+# to listen.
 
 name: lab-agent
 
@@ -30,11 +31,14 @@ x-hardening: &hardening
   security_opt: ["no-new-privileges:true"]
   cap_drop: [ALL]
 
-x-otlp-endpoint: &otlp-endpoint http://observability:4318
+# OTLP over HTTP/protobuf, the Aspire Dashboard's OTLP/HTTP port.
+x-otlp-endpoint: &otlp-endpoint http://observability:18890
 
 # The servers start after the collector, when the `observability` profile is on.
+# The dashboard image has no shell for a health check, so "started" is all that is
+# known; the services wait for the port themselves (lab_common.telemetry).
 x-after-collector: &after-collector
-  condition: service_healthy
+  condition: service_started
   required: false
 
 services:
@@ -139,54 +143,26 @@ services:
       timeout: 3s
       retries: 20
 
-  # Optional (profile `observability`): Grafana with Loki (logs), Tempo (traces) and
-  # an OpenTelemetry collector in one container, for local demos only. Data lives in
-  # memory and is lost when the container stops. Grafana is published on the loopback
-  # interface only and opens without a login as a read-only Viewer (Explore included);
-  # the login form and basic auth are off, so no account can sign in at all.
-  # No internet access: `edge` has no IP masquerading.
+  # Optional (profile `observability`): the Aspire Dashboard, one small container that
+  # receives OTLP and shows logs and traces, for local demos only. Data lives in
+  # memory and is lost when the container stops. The UI is published on the loopback
+  # interface only and opens without a login (unsecured mode); OTLP/HTTP (18890) is
+  # not published, so only the project's containers can send telemetry. The gRPC and
+  # MCP endpoints are turned off. No internet access: `edge` has no IP masquerading.
   observability:
     <<: *hardening
-    image: grafana/otel-lgtm:0.36.0@sha256:57c04cbd8e7022f32bb84c4ac005d79baf8b08e2c5be44facf11f5f1f9944ba2
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:13.6.0@sha256:064b50d557fcaffd10f06bf79ba4069bd50994a84034f1a0fc35c165500482d7
     profiles: [observability]
-    # The image starts as root but needs no privilege: every component writes
-    # only to /data, /tmp and /var/tempo, all in memory.
-    user: "10001:10001"
-    tmpfs:
-      - /tmp:size=64m,uid=10001,gid=10001
-      - /data:size=1g,uid=10001,gid=10001
-      - /var/tempo:size=64m,uid=10001,gid=10001
+    # The image already runs as an unprivileged user (UID 1654).
     environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
-      GF_AUTH_DISABLE_LOGIN_FORM: "true"
-      GF_AUTH_BASIC_ENABLED: "false"
-      # Lets a Viewer open Explore (log -> trace links); dashboards stay read-only.
-      GF_USERS_VIEWERS_CAN_EDIT: "true"
-      GF_ANALYTICS_REPORTING_ENABLED: "false"
-      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
-      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
-      GF_PLUGINS_PREINSTALL_DISABLED: "true"
-      GF_NEWS_NEWS_FEED_ENABLED: "false"
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /otel-lgtm/lab-dashboards/lab-exam-agent.json
-    # Everything Grafana shows is versioned in observability/grafana: the datasources
-    # (replacing the image's, with the log <-> trace links) and the dashboard.
-    volumes:
-      - ./observability/grafana/provisioning/datasources/datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/grafana-datasources.yaml:ro
-      - ./observability/grafana/provisioning/dashboards/lab-exam-agent.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/lab-exam-agent.yaml:ro
-      - ./observability/grafana/dashboards:/otel-lgtm/lab-dashboards:ro
-    ports: ["127.0.0.1:3000:3000"]
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+      DOTNET_DASHBOARD_OTLP_ENDPOINT_URL: ""
+      DOTNET_DASHBOARD_MCP_ENDPOINT_URL: ""
+    ports: ["127.0.0.1:18888:18888"]
     networks: [backend, edge]
     deploy:
       resources:
-        limits: { memory: 3g }
-    healthcheck:
-      # run-all.sh writes it once Grafana, Loki, Tempo and the collector are ready.
-      test: ["CMD-SHELL", "test -f /tmp/ready"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-      start_period: 10s
+        limits: { memory: 256m }
 
   # A CLI, not a long-running service: `docker compose run --rm agent ...`.
   # The `cli` profile keeps it out of `docker compose up`.

@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import socket
+import time
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -44,6 +45,8 @@ from scheduler_api.log import SERVICE
 
 ENDPOINT_ENV = "OTEL_EXPORTER_OTLP_ENDPOINT"
 PROBE_TIMEOUT_S = 0.5
+STARTUP_WAIT_S = 10.0
+"""How long to wait for a collector whose name resolves (it may still be starting)."""
 _HEALTH_PREFIX = "/health/"
 _PROPAGATOR = TraceContextTextMapPropagator()
 
@@ -102,19 +105,31 @@ class Telemetry:
 _installed: Telemetry | None = None
 
 
-def collector_endpoint() -> str | None:
-    """OTEL_EXPORTER_OTLP_ENDPOINT when a collector listens there, else None."""
+def collector_endpoint(wait_s: float = STARTUP_WAIT_S) -> str | None:
+    """OTEL_EXPORTER_OTLP_ENDPOINT when a collector listens there, else None.
+
+    A name that does not resolve (no `observability` profile) is off at once. A
+    name that resolves belongs to a collector that may still be starting, so the
+    port is tried for up to `wait_s` seconds.
+    """
     endpoint = os.environ.get(ENDPOINT_ENV, "").strip()
     url = urlsplit(endpoint)
     if not endpoint or url.hostname is None:
         return None
     port = url.port or (443 if url.scheme == "https" else 80)
     try:
-        with socket.create_connection((url.hostname, port), timeout=PROBE_TIMEOUT_S):
-            pass
+        socket.getaddrinfo(url.hostname, port)
     except OSError:
         return None
-    return endpoint.rstrip("/")
+    deadline = time.monotonic() + wait_s
+    while True:
+        try:
+            with socket.create_connection((url.hostname, port), timeout=PROBE_TIMEOUT_S):
+                return endpoint.rstrip("/")
+        except OSError:
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.25)
 
 
 def setup(

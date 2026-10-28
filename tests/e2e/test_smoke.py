@@ -3,6 +3,7 @@ loopback only, no internet for the API, the generated code in the volume."""
 
 import json
 import os
+import urllib.request
 
 import pytest
 
@@ -11,9 +12,8 @@ from e2e.helpers import REPO_ROOT, ComposeStack
 pytestmark = pytest.mark.e2e
 
 SERVICES = {"postgres", "scheduler-api", "ocr-mcp", "rag-mcp"}
-# `COMPOSE_PROFILES=observability` (see helpers) adds the Grafana stack.
-if "observability" in os.environ.get("COMPOSE_PROFILES", "").split(","):
-    SERVICES |= {"observability"}
+# `COMPOSE_PROFILES=observability` (see helpers) adds the Aspire Dashboard.
+OBSERVABILITY = "observability" in os.environ.get("COMPOSE_PROFILES", "").split(",")
 PACKAGES = ("exam_scheduling_agent", "exam_lookup_only")
 
 
@@ -22,7 +22,24 @@ def test_every_service_is_healthy(e2e_stack: ComposeStack) -> None:
     containers = [json.loads(line) for line in output.splitlines() if line.strip()]
 
     health = {c["Service"]: (c["State"], c["Health"]) for c in containers}
-    assert health == dict.fromkeys(SERVICES, ("running", "healthy"))
+    expected = dict.fromkeys(SERVICES, ("running", "healthy"))
+    if OBSERVABILITY:
+        # The dashboard image has no shell for a health check; the next test checks it.
+        expected["observability"] = ("running", "")
+    assert health == expected
+
+
+@pytest.mark.skipif(not OBSERVABILITY, reason="needs COMPOSE_PROFILES=observability")
+def test_dashboard_is_published_on_loopback_and_answers(e2e_stack: ComposeStack) -> None:
+    published = e2e_stack.compose("port", "observability", "18888").stdout.strip()
+    host, _, _ = published.rpartition(":")
+
+    with urllib.request.urlopen(f"http://{published}/api/telemetry/resources", timeout=5) as r:
+        resources = json.load(r)
+
+    assert host == "127.0.0.1"
+    # The servers exported at start-up, so the dashboard already knows them.
+    assert {"ocr-mcp", "rag-mcp", "scheduler-api"} <= {res["name"] for res in resources}
 
 
 def test_api_is_published_on_loopback_and_answers(e2e_stack: ComposeStack) -> None:

@@ -288,7 +288,8 @@ def test_with_the_endpoint_only_safe_bytes_reach_the_collector(
 def test_without_a_collector_listening_nothing_is_attempted(stack: Stack) -> None:
     # What every service sees without the `observability` profile: the name does not resolve.
     result = _cli(
-        stack, {"LOG_LEVEL": "", "OTEL_EXPORTER_OTLP_ENDPOINT": "http://observability.invalid:4318"}
+        stack,
+        {"LOG_LEVEL": "", "OTEL_EXPORTER_OTLP_ENDPOINT": "http://observability.invalid:18890"},
     )
 
     assert result.returncode == 0, result.stderr
