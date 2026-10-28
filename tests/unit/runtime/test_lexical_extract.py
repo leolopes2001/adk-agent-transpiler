@@ -12,6 +12,8 @@ from lab_common.contracts.rag import MAX_BATCH_QUERIES
 
 pytestmark = pytest.mark.unit
 
+RUN_ID = "0b6f2c2e-4a8e-4f4c-9a51-3f0f2b8f8e11"
+
 SAMPLE = "\n".join(
     [
         "Laboratório Exemplo (fictício)",
@@ -111,7 +113,9 @@ async def test_keeps_segments_whose_best_match_reaches_min_score() -> None:
     deps.use(mcp=fake)
     node = lexical_extract(name="lexical_extract", deps=deps, server="rag", tool="batch_search")
 
-    run = await run_node(node, _guarded("1. Hemograma completo\nTSH; PCR\nCPF: [CPF_1]"))
+    run = await run_node(
+        node, _guarded("1. Hemograma completo\nTSH; PCR\nCPF: [CPF_1]"), state={"run.id": RUN_ID}
+    )
 
     mentions = ExamMentions.model_validate(run.output).items
     assert [(m.text, m.source, m.evidence) for m in mentions] == [
@@ -119,7 +123,8 @@ async def test_keeps_segments_whose_best_match_reaches_min_score() -> None:
         ("TSH", "lexical", "TSH"),
     ]
     [(_, _, args)] = fake.calls
-    assert args == {"queries": ["Hemograma completo", "TSH", "PCR"], "top_k": 1}
+    assert args["queries"] == ["Hemograma completo", "TSH", "PCR"]
+    assert (args["top_k"], args["request_id"]) == (1, RUN_ID)
 
 
 async def test_unlisted_state_abbreviation_never_reaches_the_catalog() -> None:
@@ -153,9 +158,10 @@ async def test_batch_search_chunks_by_the_server_limit() -> None:
     fake.script("rag", "batch_search", _scored({}))
     queries = [f"exame {i}" for i in range(MAX_BATCH_QUERIES + 5)]
 
-    result = await batch_search(fake, "rag", "batch_search", queries, top_k=1)
+    result = await batch_search(fake, "rag", "batch_search", queries, top_k=1, request_id=RUN_ID)
 
     assert [len(args["queries"]) for _, _, args in fake.calls] == [MAX_BATCH_QUERIES, 5]
+    assert {args["request_id"] for _, _, args in fake.calls} == {RUN_ID}
     assert [r.query for r in result.results] == queries
 
 
@@ -168,9 +174,9 @@ async def test_invalid_search_results_are_permanent(body: dict[str, Any]) -> Non
     fake.script("rag", "batch_search", body)
 
     with pytest.raises(PermanentError, match="RAG_INVALID_RESULT"):
-        await batch_search(fake, "rag", "batch_search", ["TSH"], top_k=1)
+        await batch_search(fake, "rag", "batch_search", ["TSH"], top_k=1, request_id=RUN_ID)
 
 
 async def test_batch_search_needs_a_query() -> None:
     with pytest.raises(ValueError, match="at least one"):
-        await batch_search(FakeMcp(), "rag", "batch_search", [], top_k=1)
+        await batch_search(FakeMcp(), "rag", "batch_search", [], top_k=1, request_id=RUN_ID)

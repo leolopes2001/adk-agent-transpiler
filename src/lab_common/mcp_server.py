@@ -1,4 +1,5 @@
-"""Pieces shared by the MCP servers (OCR and RAG): bearer auth and log scrubbing.
+"""Pieces shared by the MCP servers (OCR and RAG): bearer auth, log scrubbing and
+the request id the logs are correlated by.
 
 `BearerAuthMiddleware` wraps a server's whole ASGI app: every path except the
 public ones (`/health`) requires `Authorization: Bearer <token>`, so both
@@ -24,6 +25,7 @@ import importlib.util
 import json
 import logging
 import os
+import uuid
 from collections.abc import Awaitable, Callable, MutableMapping, Sequence
 from typing import Any
 
@@ -44,6 +46,15 @@ _UNAUTHORIZED_BODY = json.dumps(
 ).encode()
 
 log = lab_logging.get_logger(__name__)
+
+
+def logged_request_id(value: object) -> str | None:
+    """`value` if it is a UUID (the agent sends its run id), else None: it is client input."""
+    try:
+        uuid.UUID(str(value))
+    except ValueError:
+        return None
+    return str(value) if isinstance(value, str) else None
 
 
 class BearerAuthMiddleware:

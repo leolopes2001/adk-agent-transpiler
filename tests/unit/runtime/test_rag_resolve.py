@@ -11,6 +11,8 @@ from agent_runtime.schemas import ExamMention, ExamMentions, ResolvedExams
 
 pytestmark = pytest.mark.unit
 
+RUN_ID = "0b6f2c2e-4a8e-4f4c-9a51-3f0f2b8f8e11"
+
 
 def _deps(fake: FakeMcp) -> RuntimeDeps:
     deps = RuntimeDeps.lazy()
@@ -34,10 +36,10 @@ async def test_one_call_for_all_mentions_with_candidates_kept_in_order() -> None
     fake.script("rag", "batch_search", respond)
     node = rag_resolve(name="resolve", deps=_deps(fake), server="rag", tool="batch_search", top_k=3)
 
-    run = await run_node(node, _mentions("T4", "Ressonância"))
+    run = await run_node(node, _mentions("T4", "Ressonância"), state={"run.id": RUN_ID})
 
     [(_, _, args)] = fake.calls
-    assert args == {"queries": ["T4", "Ressonância"], "top_k": 3}
+    assert args == {"queries": ["T4", "Ressonância"], "top_k": 3, "request_id": RUN_ID}
     items = ResolvedExams.model_validate(run.output).items
     assert [item.mention.text for item in items] == ["T4", "Ressonância"]
     assert [c.code for c in items[0].candidates] == ["LAB-10044", "LAB-10045"]

@@ -248,6 +248,17 @@ class TestLogs:
         assert record["service"] == "rag-mcp"
         assert isinstance(record["duration_ms"], int)
 
+    async def test_logs_under_the_callers_request_id(
+        self, mcp: FastMCP, log_stream: io.StringIO
+    ) -> None:
+        run_id = "0b6f2c2e-4a8e-4f4c-9a51-3f0f2b8f8e11"
+        await call(mcp, "batch_search", {"queries": ["TSH"], "request_id": run_id})
+        await call(mcp, "search_exams", {"query": "TSH", "request_id": "Hemograma completo"})
+
+        records = [json.loads(line) for line in log_stream.getvalue().splitlines()]
+        assert [r["request_id"] for r in records] == [run_id, None]
+        assert "Hemograma" not in log_stream.getvalue()
+
     async def test_rejections_log_the_code_only(
         self, mcp: FastMCP, log_stream: io.StringIO
     ) -> None:

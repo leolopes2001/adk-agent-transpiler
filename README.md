@@ -228,7 +228,7 @@ lab-agent run --image <png|jpeg> [--non-interactive] [--output table|json]
 | `--non-interactive` | desligado | Itens que pedem revisão são rejeitados (`needs_human_review`) em vez de perguntar |
 | `--output` | o `format` da spec | `table` (rich) ou `json` (relatório completo no stdout) |
 | `--agent-dir` / `--spec` | spec principal | Pacote gerado e spec correspondente; usados para a spec alternativa |
-| `--run-id` | UUID novo | Correlaciona os logs; a API recebe o mesmo valor como `X-Request-ID` |
+| `--run-id` | UUID novo | Correlaciona os logs; os servidores OCR e RAG o recebem como `request_id` e a API como `X-Request-ID` |
 | `--verbose` | desligado | Mostra no stderr os logs JSON da execução (nível INFO); `LOG_LEVEL=INFO` tem o mesmo efeito |
 
 Exit codes:

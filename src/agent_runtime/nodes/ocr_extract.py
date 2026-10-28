@@ -8,7 +8,6 @@ already computed by the server) and the state gets hashes and counts.
 import base64
 import hashlib
 import json
-import uuid
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -19,7 +18,7 @@ from pydantic import Field, ValidationError
 
 from agent_runtime.bootstrap import RuntimeDeps, input_root
 from agent_runtime.errors import InvalidInputError, PermanentError, PermanentToolError
-from agent_runtime.nodes._common import Params, function_node, routed
+from agent_runtime.nodes._common import Params, function_node, request_id, routed
 from agent_runtime.schemas import OcrDocument, RunFailure, RunInput
 from lab_common import logging as lab_logging
 from lab_common.contracts.ocr import OcrErrorCode, OcrResult
@@ -92,14 +91,6 @@ def parse_run_input(node_input: object) -> RunInput:
         raise InvalidInputError("INVALID_RUN_INPUT", "expected {'image_path': str}") from None
 
 
-def _request_id(ctx: Context) -> str:
-    value = ctx.state.get("run.id")
-    try:
-        return str(uuid.UUID(str(value)))
-    except ValueError:
-        return str(uuid.uuid4())
-
-
 def _validate_result(body: object, sha256: str) -> OcrResult:
     try:
         result = OcrResult.model_validate(body)
@@ -132,7 +123,7 @@ def ocr_extract(  # noqa: PLR0913 - one keyword per node param
         sha256 = hashlib.sha256(image).hexdigest()
         args = {
             "image_base64": base64.b64encode(image).decode("ascii"),
-            "request_id": _request_id(ctx),
+            "request_id": request_id(ctx),
         }
         del image
         try:

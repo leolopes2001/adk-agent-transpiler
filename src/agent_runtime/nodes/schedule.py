@@ -12,7 +12,6 @@ the same image and result all map to one appointment.
 """
 
 import hashlib
-import uuid
 from typing import Any
 
 from google.adk import Context, Event
@@ -21,7 +20,7 @@ from google.adk.workflow import FunctionNode, RetryConfig
 from agent_runtime.bootstrap import RuntimeDeps
 from agent_runtime.errors import PermanentError
 from agent_runtime.gateways.scheduler import AppointmentRequest, SchedulerRejected
-from agent_runtime.nodes._common import function_node, parse_input
+from agent_runtime.nodes._common import function_node, parse_input, request_id
 from agent_runtime.schemas import Candidate, GateDecision, ScheduleOutcome
 from lab_common import logging as lab_logging
 
@@ -39,13 +38,6 @@ def accepted_exams(decision: GateDecision) -> list[Candidate]:
     """Accepted candidates, one per code, sorted by code."""
     by_code = {item.selected.code: item.selected for item in decision.items if item.selected}
     return [by_code[code] for code in sorted(by_code)]
-
-
-def _request_id(ctx: Context) -> str:
-    try:
-        return str(uuid.UUID(str(ctx.state.get("run.id"))))
-    except ValueError:
-        return str(uuid.uuid4())
 
 
 def _outcome(decision: GateDecision, status: str, **fields: Any) -> ScheduleOutcome:
@@ -103,7 +95,7 @@ def schedule(
         key = idempotency_key(document_sha256, patient_ref, [exam.code for exam in exams])
         try:
             result = await deps.scheduler(service).create_appointment(
-                request, idempotency_key=key, request_id=_request_id(ctx)
+                request, idempotency_key=key, request_id=request_id(ctx)
             )
         except SchedulerRejected as error:
             return _outcome(decision, "failed", reason=error.title)

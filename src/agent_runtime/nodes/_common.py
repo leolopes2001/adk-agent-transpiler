@@ -1,6 +1,7 @@
 """Pieces every node factory shares."""
 
 import re
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -47,6 +48,17 @@ def function_node(
         timeout=timeout,
         rerun_on_resume=rerun_on_resume,
     )
+
+
+def request_id(ctx: Context) -> str:
+    """Id the servers log a call under: the run id the CLI put in the session.
+
+    A fresh UUID when the session has none (a node run on its own).
+    """
+    try:
+        return str(uuid.UUID(str(ctx.state.get("run.id"))))
+    except ValueError:
+        return str(uuid.uuid4())
 
 
 def routed(output: BaseModel, route: str) -> Event:

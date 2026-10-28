@@ -16,7 +16,7 @@ from google.adk.workflow import FunctionNode, RetryConfig
 from pydantic import Field
 
 from agent_runtime.bootstrap import RuntimeDeps
-from agent_runtime.nodes._common import Params, function_node, parse_input
+from agent_runtime.nodes._common import Params, function_node, parse_input, request_id
 from agent_runtime.nodes.lexical_extract import batch_search
 from agent_runtime.schemas import ExamMention, ExamMentions, ResolvedExam, ResolvedExams
 from lab_common import logging as lab_logging
@@ -53,7 +53,12 @@ def rag_resolve(  # noqa: PLR0913 - one keyword per node param
         if mentions:
             evidences = [m.evidence for m in mentions if _named_by_model(m)]
             result = await batch_search(
-                deps.mcp, server, tool, [m.text for m in mentions] + evidences, params.top_k
+                deps.mcp,
+                server,
+                tool,
+                [m.text for m in mentions] + evidences,
+                params.top_k,
+                request_id=request_id(ctx),
             )
             catalog_sha256 = result.catalog_sha256
             by_evidence = iter(result.results[len(mentions) :])

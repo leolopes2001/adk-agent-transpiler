@@ -11,7 +11,8 @@ Errors are tool results with `isError: true` and a JSON body
 `{code, message, retryable}` (`RagToolError`), built here instead of raised so
 FastMCP does not prefix the message. Arguments are checked here as well, so a
 range error has the same shape as any other error. Logs carry counts and
-timings only, never the mentions.
+timings only, never the mentions, under the caller's `request_id` (the agent
+sends its run id) when it is a UUID.
 """
 
 import json
@@ -21,6 +22,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+import structlog
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent
 from pydantic import BaseModel
@@ -39,7 +41,7 @@ from lab_common.contracts.rag import (
     RagToolError,
     SearchResult,
 )
-from lab_common.mcp_server import BearerAuthMiddleware
+from lab_common.mcp_server import BearerAuthMiddleware, logged_request_id
 from rag_mcp.catalog import Catalog
 from rag_mcp.logs import SERVICE, configure_logging
 from rag_mcp.scoring import ExamSearcher
@@ -140,17 +142,21 @@ def _json(data: dict[str, Any], *, is_error: bool = False) -> CallToolResult:
 
 
 def _run[R: BaseModel](
-    tool: str, call: Callable[[], R], summarize: Callable[[R], dict[str, int]]
+    tool: str,
+    call: Callable[[], R],
+    summarize: Callable[[R], dict[str, int]],
+    request_id: object = None,
 ) -> CallToolResult:
     started = time.perf_counter()
-    try:
-        result = call()
-    except RagError as error:
-        log.warning(
-            "rag_rejected", tool=tool, error_code=error.code.value, duration_ms=_ms(started)
-        )
-        return _json(error.as_dict(), is_error=True)
-    log.info("rag_done", tool=tool, duration_ms=_ms(started), **summarize(result))
+    with structlog.contextvars.bound_contextvars(request_id=logged_request_id(request_id)):
+        try:
+            result = call()
+        except RagError as error:
+            log.warning(
+                "rag_rejected", tool=tool, error_code=error.code.value, duration_ms=_ms(started)
+            )
+            return _json(error.as_dict(), is_error=True)
+        log.info("rag_done", tool=tool, duration_ms=_ms(started), **summarize(result))
     return _json(result.model_dump(mode="json"))
 
 
@@ -191,16 +197,30 @@ def build_server(service: RagService, settings: RagSettings) -> FastMCP:
         return json.dumps(info)
 
     @mcp.tool(name="search_exams", description=SEARCH_DESCRIPTION, structured_output=False)
-    def search_exams(query: str, top_k: int = DEFAULT_TOP_K) -> CallToolResult:
-        return _run("search_exams", lambda: service.search_exams(query, top_k), _search_counts)
+    def search_exams(
+        query: str, top_k: int = DEFAULT_TOP_K, request_id: str | None = None
+    ) -> CallToolResult:
+        return _run(
+            "search_exams",
+            lambda: service.search_exams(query, top_k),
+            _search_counts,
+            request_id,
+        )
 
     @mcp.tool(
         name="batch_search",
         description=BATCH_DESCRIPTION.format(max_batch=service.max_batch),
         structured_output=False,
     )
-    def batch_search(queries: list[str], top_k: int = DEFAULT_TOP_K) -> CallToolResult:
-        return _run("batch_search", lambda: service.batch_search(queries, top_k), _batch_counts)
+    def batch_search(
+        queries: list[str], top_k: int = DEFAULT_TOP_K, request_id: str | None = None
+    ) -> CallToolResult:
+        return _run(
+            "batch_search",
+            lambda: service.batch_search(queries, top_k),
+            _batch_counts,
+            request_id,
+        )
 
     @mcp.tool(name="get_exam", description=GET_EXAM_DESCRIPTION, structured_output=False)
     def get_exam(code: str) -> CallToolResult:

@@ -28,6 +28,7 @@ from agent_runtime.nodes._common import (
     Params,
     function_node,
     parse_input,
+    request_id,
     search_form,
     strip_list_marker,
 )
@@ -103,15 +104,25 @@ def segments(text: str, max_lines: int) -> list[str]:
     return found
 
 
-async def batch_search(
-    mcp: McpGateway, server: str, tool: str, queries: list[str], top_k: int
+async def batch_search(  # noqa: PLR0913 - the tool's arguments plus where to send them
+    mcp: McpGateway,
+    server: str,
+    tool: str,
+    queries: list[str],
+    top_k: int,
+    *,
+    request_id: str,
 ) -> BatchSearchResult:
-    """One `batch_search` result for all `queries`, in order (chunked by the batch limit)."""
+    """One `batch_search` result for all `queries`, in order (chunked by the batch limit).
+
+    `request_id` (the run id) is what the server logs the calls under.
+    """
     results = []
     contract = None
     for start in range(0, len(queries), MAX_BATCH_QUERIES):
         chunk = queries[start : start + MAX_BATCH_QUERIES]
-        body = await mcp.call(server, tool, {"queries": chunk, "top_k": top_k})
+        args = {"queries": chunk, "top_k": top_k, "request_id": request_id}
+        body = await mcp.call(server, tool, args)
         try:
             contract = BatchSearchResult.model_validate(body)
         except ValidationError:
@@ -143,7 +154,9 @@ def lexical_extract(  # noqa: PLR0913 - one keyword per node param
         candidates = segments(document.text, params.max_lines)
         mentions: list[ExamMention] = []
         if candidates:
-            result = await batch_search(deps.mcp, server, tool, candidates, top_k=1)
+            result = await batch_search(
+                deps.mcp, server, tool, candidates, top_k=1, request_id=request_id(ctx)
+            )
             mentions = [
                 ExamMention(text=segment, source="lexical", evidence=segment)
                 for segment, found in zip(candidates, result.results, strict=True)
