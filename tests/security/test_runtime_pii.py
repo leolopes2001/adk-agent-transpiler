@@ -19,33 +19,11 @@ import pytest
 
 from lab_common.pii import high_precision_detectors
 from lab_common.pii.redactor import detect_all
-from runtime_stack import REPO_ROOT, AgentRun, Stack, run_agent
+from runtime_stack import REPO_ROOT, SAMPLE_PII, AgentRun, Stack, run_agent
 
 pytestmark = pytest.mark.security
 
-# Printed on the samples by scripts/make_sample_images.py (all fictional).
-PII_VALUES = [
-    "Maria",
-    "MARIA",
-    "Fictícia da Silva",
-    "202.393.613-69",
-    "20239361369",
-    "14/03/1985",
-    "(31) 90000-0000",
-    "90000-0000",
-    "0000 1111 2222 3333",
-    "João Exemplo",
-    "CRM-MG 000000",
-    "Rua Imaginária",
-    # tests/data/images/nomes_sem_capitalizacao.png (audit F01).
-    "maria",
-    "fictícia da silva",
-    "joana",
-    "FICCIONAL",
-    "teixeira",
-    "beatriz",
-    "Inventada",
-]
+PII_VALUES = SAMPLE_PII
 UNCAPITALIZED = "nomes_sem_capitalizacao.png"
 RUNS = [
     ("samples/pedido_medico_ficticio.png", "pedido_medico_ficticio.json"),

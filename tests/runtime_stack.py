@@ -56,6 +56,30 @@ MCP_TOKEN = "stack-mcp-token-" + "x" * 32
 HMAC_SECRET = "stack-hmac-secret-" + "y" * 32
 API_KEY = "stack-api-key-" + "z" * 32
 POSTGRES_IMAGE = "postgres:16-alpine"
+SAMPLE_PII = (
+    # Printed on the samples by scripts/make_sample_images.py (all fictional).
+    "Maria",
+    "MARIA",
+    "Fictícia da Silva",
+    "202.393.613-69",
+    "20239361369",
+    "14/03/1985",
+    "(31) 90000-0000",
+    "90000-0000",
+    "0000 1111 2222 3333",
+    "João Exemplo",
+    "CRM-MG 000000",
+    "Rua Imaginária",
+    # tests/data/images/nomes_sem_capitalizacao.png (audit F01).
+    "maria",
+    "fictícia da silva",
+    "joana",
+    "FICCIONAL",
+    "teixeira",
+    "beatriz",
+    "Inventada",
+)
+"""Personal data printed on the images the PII tests run."""
 
 
 def serve(app: ASGIApp) -> Iterator[str]:
@@ -203,8 +227,12 @@ async def run_agent(  # noqa: PLR0913 - the CLI options
     fixture: str = "pedido_medico_ficticio.json",
     interactive: bool = False,
     review: cli.ReviewPrompt | None = None,
+    log_export: lab_logging.LogExport | None = None,
 ) -> AgentRun:
-    """`lab-agent run` in process against the stack, with logs and sessions captured."""
+    """`lab-agent run` in process against the stack, with logs and sessions captured.
+
+    `log_export` receives the log lines as with the `observability` profile on.
+    """
     for name, value in {**stack.env, "FAKE_LLM_FIXTURE": str(FAKE_LLM_FIXTURES / fixture)}.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(cli, "InMemorySessionService", _RecordingSessions)
@@ -215,7 +243,11 @@ async def run_agent(  # noqa: PLR0913 - the CLI options
     root = logging.getLogger()
     handlers, level = list(root.handlers), root.level
     lab_logging.configure(
-        "agent", "INFO", stream=logs, filters=[LibraryLogFilter(cli.LIBRARY_LOGGERS)]
+        "agent",
+        "INFO",
+        stream=logs,
+        filters=[LibraryLogFilter(cli.LIBRARY_LOGGERS)],
+        export=log_export,
     )
     try:
         outcome = await cli.execute(
