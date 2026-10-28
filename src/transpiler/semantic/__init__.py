@@ -1,8 +1,4 @@
-"""Semantic pass: rules that need the whole spec (graph, references, types, security).
-
-Every check runs, even after others fail, and the diagnostics are returned
-together; each check is written to tolerate graphs the others reject.
-"""
+"""Every check runs even when others fail, so each must tolerate graphs the others reject."""
 
 from collections.abc import Callable
 from pathlib import Path

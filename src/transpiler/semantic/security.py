@@ -1,9 +1,4 @@
-"""Security rules that the graph shape must guarantee, independent of runtime behavior.
-
-Guard and gate placement is checked by removal: drop every guardian node and
-see whether the protected node is still reachable from START. Subworkflows are
-inlined first so a path cannot hide inside a nested graph.
-"""
+"""Guards are checked by removal on the inlined program, so a nested graph cannot hide a path."""
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -13,10 +8,12 @@ from transpiler.registry import NodeKind
 from transpiler.semantic.context import GraphView, SemanticContext, node_diagnostic
 from transpiler.spec.models import START, LlmExtractNode, NodeSpec, SubworkflowNode
 
+_DETERMINISTIC_TOOLS_HINT = "chamadas MCP pertencem a nós determinísticos (ADR-0004)"
+
 
 @dataclass
 class _FlatGraph:
-    """The program with subworkflows inlined; node keys are `parent/child` paths."""
+    """Node keys are `parent/child` paths through the inlined subworkflows."""
 
     owners: dict[str, tuple[GraphView, NodeSpec]] = field(default_factory=dict)
     successors: dict[str, set[str]] = field(default_factory=dict)
@@ -34,9 +31,20 @@ class _FlatGraph:
             key = stack.pop()
             if key in seen:
                 continue
+
             seen.add(key)
             stack.extend(k for k in self.successors.get(key, ()) if allowed(k))
+
         return seen
+
+
+def check(ctx: SemanticContext) -> list[Diagnostic]:
+    return [
+        *_guard_and_gate(ctx),
+        *_agent_tools(ctx),
+        *_llm_input_trust(ctx),
+        *_pii_policy(ctx),
+    ]
 
 
 def _flatten(ctx: SemanticContext) -> _FlatGraph:
@@ -45,7 +53,7 @@ def _flatten(ctx: SemanticContext) -> _FlatGraph:
     def expand(
         graph: GraphView, prefix: str, stack: tuple[str, ...]
     ) -> tuple[list[str], list[str]]:
-        """Adds the graph to `flat`; returns its entry and exit node keys."""
+        """Returns the keys the graph is entered through and the keys it is left from."""
         entries: dict[str, list[str]] = {}
         exits: dict[str, list[str]] = {}
         for node_id, node in graph.nodes.items():
@@ -56,21 +64,25 @@ def _flatten(ctx: SemanticContext) -> _FlatGraph:
             else:
                 flat.owners[key] = (graph, node)
                 entries[node_id] = exits[node_id] = [key]
+
         start: list[str] = []
         for edge in graph.known_edges():
             targets = entries[edge.target]
             if edge.source == START:
                 start.extend(targets)
                 continue
+
             for source in exits[edge.source]:
                 for target in targets:
                     flat.add_edge(source, target)
+
         sinks = [key for node_id in graph.sinks() for key in exits[node_id]]
         return start, sinks
 
     start, _ = expand(ctx.root, "", ())
     for target in start:
         flat.add_edge(START, target)
+
     return flat
 
 
@@ -112,20 +124,21 @@ def _agent_tools(ctx: SemanticContext) -> Iterator[Diagnostic]:
     for name, agent in ctx.spec.llm_agents.items():
         if not agent.tools:
             continue
+
         pointer = json_pointer(("llm_agents", name, "tools"))
         if agent.input_trust == "untrusted":
             yield Diagnostic(
                 code=Code.E_UNTRUSTED_AGENT_HAS_TOOLS,
                 message=f'o agente "{name}" recebe dado não confiável e não pode ter tools',
                 pointer=pointer,
-                hint="chamadas MCP pertencem a nós determinísticos (ADR-0004)",
+                hint=_DETERMINISTIC_TOOLS_HINT,
             )
         else:
             yield Diagnostic(
                 code=Code.E_AGENT_TOOLS_UNSUPPORTED,
                 message=f'tools em agentes não são suportadas pelo gerador (agente "{name}")',
                 pointer=pointer,
-                hint="chamadas MCP pertencem a nós determinísticos (ADR-0004)",
+                hint=_DETERMINISTIC_TOOLS_HINT,
             )
 
 
@@ -144,6 +157,7 @@ def _llm_input_trust(ctx: SemanticContext) -> Iterator[Diagnostic]:
     for graph, node in ctx.nodes():
         if not isinstance(node, LlmExtractNode):
             continue
+
         agent = ctx.spec.llm_agents.get(node.agent)
         if agent is not None and agent.input_trust != "untrusted":
             yield node_diagnostic(
@@ -155,12 +169,3 @@ def _llm_input_trust(ctx: SemanticContext) -> Iterator[Diagnostic]:
                 field="agent",
                 hint=f'defina llm_agents.{node.agent}.input_trust como "untrusted"',
             )
-
-
-def check(ctx: SemanticContext) -> list[Diagnostic]:
-    return [
-        *_guard_and_gate(ctx),
-        *_agent_tools(ctx),
-        *_llm_input_trust(ctx),
-        *_pii_policy(ctx),
-    ]

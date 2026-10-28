@@ -1,5 +1,3 @@
-"""Graph structure rules: identity, connectivity, fan-in and cycles."""
-
 from collections.abc import Iterator
 
 from transpiler.errors import Code, Diagnostic
@@ -11,7 +9,24 @@ from transpiler.semantic.context import (
     kind_of,
     node_diagnostic,
 )
-from transpiler.spec.models import START, JoinNodeSpec, LlmExtractNode, SubworkflowNode
+from transpiler.spec.models import START, JoinNodeSpec, LlmExtractNode, NodeSpec, SubworkflowNode
+
+
+def check(ctx: SemanticContext) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    for graph in ctx.graphs:
+        diagnostics.extend(_duplicate_ids(graph))
+        diagnostics.extend(_edge_endpoints(graph))
+        diagnostics.extend(_start_and_reachability(graph))
+        diagnostics.extend(_terminal_with_outgoing(graph))
+        diagnostics.extend(_dead_ends(graph))
+        diagnostics.extend(_duplicate_edges(graph))
+        diagnostics.extend(_fan_in(graph))
+        diagnostics.extend(_unconditional_cycles(graph))
+
+    diagnostics.extend(_duplicate_adk_names(ctx))
+    diagnostics.extend(_subworkflow_cycles(ctx))
+    return diagnostics
 
 
 def _duplicate_ids(graph: GraphView) -> Iterator[Diagnostic]:
@@ -28,27 +43,23 @@ def _duplicate_ids(graph: GraphView) -> Iterator[Diagnostic]:
         seen.add(node.id)
 
 
-def _adk_names(ctx: SemanticContext) -> Iterator[Diagnostic]:
-    """ADK names must be unique across the whole program, nested workflows included.
-
-    Lowering adds names that do not appear as node ids (`<id>_input` and the
-    agent name of llm_extract), and a subworkflow referenced twice would emit
-    its inner nodes twice, so the walk follows references from the root.
-    """
+def _duplicate_adk_names(ctx: SemanticContext) -> Iterator[Diagnostic]:
+    """Walks refs from the root: lowering adds names; a reused subworkflow emits nodes twice."""
     owners: dict[str, str] = {ctx.spec.agent.name: "/agent/name"}
     agents_seen: set[str] = set()
 
     def claim(name: str, pointer: str, node_id: str, kind: str) -> Iterator[Diagnostic]:
-        if name in owners:
-            yield Diagnostic(
-                code=Code.E_DUPLICATE_ID,
-                message=f'nome ADK "{name}" repetido; já usado em {owners[name] or "/"}',
-                pointer=pointer,
-                node_id=node_id,
-                kind=kind,
-            )
-        else:
+        if name not in owners:
             owners[name] = pointer
+            return
+
+        yield Diagnostic(
+            code=Code.E_DUPLICATE_ID,
+            message=f'nome ADK "{name}" repetido; já usado em {owners[name] or "/"}',
+            pointer=pointer,
+            node_id=node_id,
+            kind=kind,
+        )
 
     def walk(graph: GraphView, stack: tuple[str, ...]) -> Iterator[Diagnostic]:
         for node in graph.nodes.values():
@@ -106,6 +117,7 @@ def _start_and_reachability(graph: GraphView) -> Iterator[Diagnostic]:
             hint='adicione {"from": "START", "to": "<primeiro nó>"}',
         )
         return
+
     reached = graph.reachable_from_start()
     for node_id, node in graph.nodes.items():
         if node_id not in reached:
@@ -114,19 +126,19 @@ def _start_and_reachability(graph: GraphView) -> Iterator[Diagnostic]:
             )
 
 
-def _exits(graph: GraphView) -> Iterator[Diagnostic]:
-    sinks = []
+def _terminal_with_outgoing(graph: GraphView) -> Iterator[Diagnostic]:
     for node_id, node in graph.nodes.items():
-        terminal = kind_of(node).terminal
-        if terminal and graph.outgoing(node_id):
+        if kind_of(node).terminal and graph.outgoing(node_id):
             yield node_diagnostic(
                 graph,
                 node,
                 Code.E_TERMINAL_HAS_OUTGOING,
                 f'"{node_id}" ({node.kind}) encerra o fluxo e não pode ter arestas de saída',
             )
-        if not graph.outgoing(node_id):
-            sinks.append(node)
+
+
+def _dead_ends(graph: GraphView) -> Iterator[Diagnostic]:
+    sinks = [graph.nodes[node_id] for node_id in graph.sinks()]
     if graph.is_root:
         for node in sinks:
             if not kind_of(node).terminal:
@@ -137,7 +149,9 @@ def _exits(graph: GraphView) -> Iterator[Diagnostic]:
                     f'"{node.id}" não tem aresta de saída e {node.kind} não é terminal',
                     hint="ligue o nó a outro nó ou termine em present/abort",
                 )
-    elif len(sinks) > 1:
+        return
+
+    if len(sinks) > 1:
         names = ", ".join(f'"{node.id}"' for node in sinks)
         for node in sinks:
             yield node_diagnostic(
@@ -170,44 +184,51 @@ def _duplicate_edges(graph: GraphView) -> Iterator[Diagnostic]:
 
 
 def _fan_in(graph: GraphView) -> Iterator[Diagnostic]:
-    for node_id, node in graph.nodes.items():
-        incoming = graph.incoming(node_id)
+    for node in graph.nodes.values():
         if isinstance(node, JoinNodeSpec):
-            sources = {e.source for e in incoming}
-            if len(sources) < 2:  # noqa: PLR2004
-                yield node_diagnostic(
-                    graph,
-                    node,
-                    Code.E_JOIN_ARITY,
-                    f'join "{node_id}" precisa de ao menos 2 predecessores (tem {len(sources)})',
-                )
-            for edge in incoming:
-                if edge.route is not None:
-                    # JoinNode waits for every predecessor; a route not taken blocks it forever.
-                    yield edge_diagnostic(
-                        graph,
-                        edge,
-                        Code.E_JOIN_ROUTED_INPUT,
-                        f'join "{node_id}" recebe a rota "{edge.route}" de "{edge.source}"; '
-                        "o join esperaria para sempre se essa rota não for tomada",
-                        field="route",
-                        hint="ligue ao join só arestas incondicionais (ramos que sempre executam)",
-                    )
-            continue
-        unconditional = [e for e in incoming if e.route is None]
-        if len(unconditional) >= 2:  # noqa: PLR2004
-            names = ", ".join(f'"{e.source}"' for e in unconditional)
-            yield node_diagnostic(
-                graph,
-                node,
-                Code.E_FAN_IN_REQUIRES_JOIN,
-                f'"{node_id}" recebe arestas incondicionais de {names}',
-                hint="use um nó join para combinar as entradas",
-            )
+            yield from _join_inputs(graph, node)
+        else:
+            yield from _unjoined_fan_in(graph, node)
+
+
+def _join_inputs(graph: GraphView, node: JoinNodeSpec) -> Iterator[Diagnostic]:
+    incoming = graph.incoming(node.id)
+    sources = {e.source for e in incoming}
+    if len(sources) < 2:  # noqa: PLR2004
+        yield node_diagnostic(
+            graph,
+            node,
+            Code.E_JOIN_ARITY,
+            f'join "{node.id}" precisa de ao menos 2 predecessores (tem {len(sources)})',
+        )
+
+    for edge in (e for e in incoming if e.route is not None):
+        yield edge_diagnostic(
+            graph,
+            edge,
+            Code.E_JOIN_ROUTED_INPUT,
+            f'join "{node.id}" recebe a rota "{edge.route}" de "{edge.source}"; '
+            "o join esperaria para sempre se essa rota não for tomada",
+            field="route",
+            hint="ligue ao join só arestas incondicionais (ramos que sempre executam)",
+        )
+
+
+def _unjoined_fan_in(graph: GraphView, node: NodeSpec) -> Iterator[Diagnostic]:
+    unconditional = [e for e in graph.incoming(node.id) if e.route is None]
+    if len(unconditional) >= 2:  # noqa: PLR2004
+        names = ", ".join(f'"{e.source}"' for e in unconditional)
+        yield node_diagnostic(
+            graph,
+            node,
+            Code.E_FAN_IN_REQUIRES_JOIN,
+            f'"{node.id}" recebe arestas incondicionais de {names}',
+            hint="use um nó join para combinar as entradas",
+        )
 
 
 def _strongly_connected(graph: GraphView) -> list[list[str]]:
-    """Tarjan's algorithm over unconditional edges; returns components that form cycles."""
+    """Tarjan over unconditional edges; only components that form a cycle are returned."""
     successors = {
         node_id: [
             e.target for e in graph.outgoing(node_id) if e.route is None and e.target in graph.nodes
@@ -230,20 +251,25 @@ def _strongly_connected(graph: GraphView) -> list[list[str]]:
                 low[node_id] = min(low[node_id], low[target])
             elif target in on_stack:
                 low[node_id] = min(low[node_id], index[target])
-        if low[node_id] == index[node_id]:
-            component: list[str] = []
-            while True:
-                member = stack.pop()
-                on_stack.discard(member)
-                component.append(member)
-                if member == node_id:
-                    break
-            if len(component) > 1 or node_id in successors[node_id]:
-                cycles.append(sorted(component, key=graph.positions.__getitem__))
+
+        if low[node_id] != index[node_id]:
+            return
+
+        component: list[str] = []
+        while True:
+            member = stack.pop()
+            on_stack.discard(member)
+            component.append(member)
+            if member == node_id:
+                break
+
+        if len(component) > 1 or node_id in successors[node_id]:
+            cycles.append(sorted(component, key=graph.positions.__getitem__))
 
     for node_id in graph.nodes:
         if node_id not in index:
             visit(node_id)
+
     return sorted(cycles, key=lambda c: graph.positions[c[0]])
 
 
@@ -267,35 +293,24 @@ def _subworkflow_cycles(ctx: SemanticContext) -> Iterator[Diagnostic]:
         for node in graph.nodes.values():
             if not isinstance(node, SubworkflowNode) or node.ref not in ctx.subgraphs:
                 continue
-            if node.ref in stack:
-                if (graph.key, node.id) not in reported:
-                    reported.add((graph.key, node.id))
-                    chain = " → ".join((*stack[stack.index(node.ref) :], node.ref))
-                    yield node_diagnostic(
-                        graph,
-                        node,
-                        Code.E_SUBWORKFLOW_CYCLE,
-                        f"subworkflow referencia a si mesmo: {chain}",
-                        field="ref",
-                    )
+
+            if node.ref not in stack:
+                yield from walk(ctx.subgraphs[node.ref], (*stack, node.ref))
                 continue
-            yield from walk(ctx.subgraphs[node.ref], (*stack, node.ref))
+
+            if (graph.key, node.id) in reported:
+                continue
+
+            reported.add((graph.key, node.id))
+            chain = " → ".join((*stack[stack.index(node.ref) :], node.ref))
+            yield node_diagnostic(
+                graph,
+                node,
+                Code.E_SUBWORKFLOW_CYCLE,
+                f"subworkflow referencia a si mesmo: {chain}",
+                field="ref",
+            )
 
     yield from walk(ctx.root, ())
     for name, graph in ctx.subgraphs.items():
         yield from walk(graph, (name,))
-
-
-def check(ctx: SemanticContext) -> list[Diagnostic]:
-    diagnostics: list[Diagnostic] = []
-    for graph in ctx.graphs:
-        diagnostics.extend(_duplicate_ids(graph))
-        diagnostics.extend(_edge_endpoints(graph))
-        diagnostics.extend(_start_and_reachability(graph))
-        diagnostics.extend(_exits(graph))
-        diagnostics.extend(_duplicate_edges(graph))
-        diagnostics.extend(_fan_in(graph))
-        diagnostics.extend(_unconditional_cycles(graph))
-    diagnostics.extend(_adk_names(ctx))
-    diagnostics.extend(_subworkflow_cycles(ctx))
-    return diagnostics

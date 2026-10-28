@@ -1,8 +1,3 @@
-"""`lab-transpile`: validate specs, generate ADK packages and print the JSON Schema.
-
-Exit codes: 0 ok, 1 usage or I/O, 2 schema, 3 semantic, 4 generated-code validation.
-"""
-
 import argparse
 import sys
 from collections.abc import Sequence
@@ -13,6 +8,9 @@ from transpiler.errors import Diagnostic, Stage, TranspileError, render_json, re
 from transpiler.pipeline import compile_spec, generate
 from transpiler.spec.schema_export import render_schema
 
+DESCRIPTION = "`lab-transpile`: validate specs, generate ADK packages and print the JSON Schema."
+_OUTPUT_FORMATS = ("text", "json")
+
 
 class _Parser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
@@ -20,24 +18,38 @@ class _Parser(argparse.ArgumentParser):
         self.exit(Stage.IO.value, f"{self.prog}: erro: {message}\n")
 
 
-def _parser() -> argparse.ArgumentParser:
-    parser = _Parser(prog="lab-transpile", description=__doc__.splitlines()[0])
+def main(argv: Sequence[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
+    if args.command == "schema":
+        sys.stdout.write(render_schema())
+        return 0
+
+    try:
+        if args.command == "validate":
+            return _validate(args.spec, args.format)
+        return _generate(args.spec, args.out, args.format)
+    except TranspileError as error:
+        return _report_failure(error, args.format)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = _Parser(prog="lab-transpile", description=DESCRIPTION)
     commands = parser.add_subparsers(dest="command", required=True)
 
     validate = commands.add_parser("validate", help="valida a spec sem gerar arquivos")
     validate.add_argument("spec", type=Path)
-    validate.add_argument("--format", choices=("text", "json"), default="text")
+    validate.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
     generate = commands.add_parser("generate", help="gera o pacote ADK a partir da spec")
     generate.add_argument("spec", type=Path)
     generate.add_argument("--out", type=Path, default=Path("generated"))
-    generate.add_argument("--format", choices=("text", "json"), default="text")
+    generate.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
     commands.add_parser("schema", help="imprime o JSON Schema das specs")
     return parser
 
 
-def _relative(path: Path) -> Path:
+def _relative_to_cwd(path: Path) -> Path:
     try:
         return path.relative_to(Path.cwd())
     except ValueError:
@@ -50,6 +62,7 @@ def _report_failure(error: TranspileError, output_format: str) -> int:
     else:
         sys.stderr.write(render_text(error.diagnostics) + "\n")
         sys.stderr.write(f"{summary(error.diagnostics)} Nenhum arquivo foi gerado.\n")
+
     return error.exit_code
 
 
@@ -66,6 +79,7 @@ def _validate(spec: Path, output_format: str) -> int:
         _report_warnings(compiled.warnings)
         notes = f" ({len(compiled.warnings)} aviso(s))" if compiled.warnings else ""
         sys.stdout.write(f"✔ spec válida: {spec}{notes}\n")
+
     return 0
 
 
@@ -78,21 +92,9 @@ def _generate(spec: Path, out: Path, output_format: str) -> int:
     else:
         _report_warnings(warnings)
         files = ", ".join(result.files)
-        sys.stdout.write(f"✔ gerado: {_relative(result.path)} ({files})\n")
+        sys.stdout.write(f"✔ gerado: {_relative_to_cwd(result.path)} ({files})\n")
+
     return 0
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    if args.command == "schema":
-        sys.stdout.write(render_schema())
-        return 0
-    try:
-        if args.command == "validate":
-            return _validate(args.spec, args.format)
-        return _generate(args.spec, args.out, args.format)
-    except TranspileError as error:
-        return _report_failure(error, args.format)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,3 @@
-"""Indexed, read-only view of a spec for the semantic checks.
-
-Checks must tolerate broken graphs (unknown nodes, duplicated ids, cycles)
-because all of them run and report together; the views below therefore only
-index what is well defined and leave the judging to each check.
-"""
-
 from __future__ import annotations
 
 from collections import defaultdict
@@ -55,12 +48,14 @@ class GraphView:
             if node.id not in nodes:
                 nodes[node.id] = node
                 positions[node.id] = position
+
         out_edges: defaultdict[str, list[IndexedEdge]] = defaultdict(list)
         in_edges: defaultdict[str, list[IndexedEdge]] = defaultdict(list)
         for index, edge in enumerate(spec.edges):
             indexed = IndexedEdge(index, edge)
             out_edges[edge.source].append(indexed)
             in_edges[edge.target].append(indexed)
+
         return cls(
             key=key,
             base=base,
@@ -105,15 +100,17 @@ class GraphView:
     def successors(self, node_id: str) -> list[str]:
         return [e.target for e in self.outgoing(node_id) if e.target in self.nodes]
 
-    def reachable_from_start(self, removed: frozenset[str] = frozenset()) -> set[str]:
+    def reachable_from_start(self) -> set[str]:
         seen: set[str] = set()
-        stack = [t for t in self.successors(START) if t not in removed]
+        stack = self.successors(START)
         while stack:
             node_id = stack.pop()
             if node_id in seen:
                 continue
+
             seen.add(node_id)
-            stack.extend(t for t in self.successors(node_id) if t not in removed)
+            stack.extend(self.successors(node_id))
+
         return seen
 
     def sinks(self) -> list[str]:

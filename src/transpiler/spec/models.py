@@ -1,14 +1,4 @@
-"""Pydantic models for agent spec v1.0.
-
-The models are the schema pass of the transpiler: anything that can be decided
-by looking at one value in isolation (shape, ranges, identifier syntax) is
-rejected here, so later passes can assume well-formed input. Cross-references
-and graph rules belong to the semantic pass.
-
-Identifiers end up as Python variable names in generated code, which is why
-they are restricted to a lowercase regex and cannot shadow keywords, builtins
-or names the template defines.
-"""
+"""Identifiers become Python names in generated code, hence the strict regex and reserved words."""
 
 import builtins
 import keyword
@@ -27,8 +17,7 @@ ROUTE_PATTERN = r"^[a-z][a-z0-9_]{0,62}$"
 
 START = "START"
 
-# Names the generated module binds at top level; a node called `deps` would
-# silently replace the runtime dependencies object.
+# A node named like a top-level binding of the template (e.g. deps) would silently replace it.
 TEMPLATE_NAMES = frozenset(
     {
         "start",
@@ -51,6 +40,12 @@ RESERVED_IDENTIFIERS = TEMPLATE_NAMES | frozenset(
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
+_SECRET_KEY = re.compile(r"(?:^|_)(?:secret|token|password|api_key)(?:_|$)")
+# Keys of these maps are names chosen by the spec author, not field names.
+_NAMED_MAPS = frozenset({"models", "mcp_servers", "http_services", "llm_agents", "subworkflows"})
+
+type JsonPath = tuple[str | int, ...]
+
 
 def _not_reserved(value: str) -> str:
     if keyword.iskeyword(value) or keyword.issoftkeyword(value) or value in RESERVED_IDENTIFIERS:
@@ -71,7 +66,6 @@ TimeoutSeconds = Annotated[float, Field(gt=0, le=300)]
 
 
 class _Model(BaseModel):
-    # strict: JSON strings are never coerced into numbers or booleans.
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
@@ -133,9 +127,6 @@ class RetrySpec(_Model):
         return self
 
 
-# --- node params (defaults here are the defaults of the node kind) ---
-
-
 class OcrExtractParams(_Model):
     min_mean_confidence: Threshold = 0.55
     max_image_bytes: Annotated[int, Field(ge=1, le=MAX_IMAGE_BYTES)] = MAX_IMAGE_BYTES
@@ -182,9 +173,6 @@ class HumanReviewParams(_Model):
 
 class PresentParams(_Model):
     format: Literal["table", "json"] = "table"
-
-
-# --- nodes ---
 
 
 class _Node(_Model):
@@ -326,13 +314,7 @@ class AgentSpec(_Model):
     policies: Policies
 
 
-# --- inline secrets ---
-
-_SECRET_KEY = re.compile(r"(?:^|_)(?:secret|token|password|api_key)(?:_|$)")
-# Keys of these maps are names chosen by the spec author, not field names.
-_NAMED_MAPS = frozenset({"models", "mcp_servers", "http_services", "llm_agents", "subworkflows"})
-
-type JsonPath = tuple[str | int, ...]
+McpNode = OcrExtractNode | LexicalExtractNode | RagResolveNode
 
 
 def is_secret_key(key: str) -> bool:
@@ -340,25 +322,29 @@ def is_secret_key(key: str) -> bool:
 
 
 def find_inline_secrets(raw: object) -> list[JsonPath]:
-    """Paths of object keys that look like a secret given inline instead of by env var name.
-
-    Runs on the raw JSON before model validation: those keys are not fields, so
-    validation alone would report a generic "unknown field" and hide the real
-    problem.
-    """
+    """Runs on raw JSON: model validation would only report these keys as unknown fields."""
     found: list[JsonPath] = []
-    # Depth-first in document order, without recursion (the loader also caps depth).
-    # Each entry: value, its path, and whether its key is a name (not a field).
     pending: list[tuple[object, JsonPath, bool]] = [(raw, (), True)]
     while pending:
-        value, path, is_name = pending.pop()
-        if path and not is_name and isinstance(path[-1], str) and is_secret_key(path[-1]):
+        value, path, key_is_name = pending.pop()
+        if _is_inline_secret(path, key_is_name):
             found.append(path)
-        children: list[tuple[object, JsonPath, bool]] = []
-        if isinstance(value, dict):
-            keys_are_names = len(path) == 1 and path[0] in _NAMED_MAPS
-            children = [(child, (*path, key), keys_are_names) for key, child in value.items()]
-        elif isinstance(value, list):
-            children = [(child, (*path, index), True) for index, child in enumerate(value)]
-        pending.extend(reversed(children))
+        pending.extend(reversed(_children(value, path)))
+
     return found
+
+
+def _is_inline_secret(path: JsonPath, key_is_name: bool) -> bool:
+    key = path[-1] if path else None
+    return not key_is_name and isinstance(key, str) and is_secret_key(key)
+
+
+def _children(value: object, path: JsonPath) -> list[tuple[object, JsonPath, bool]]:
+    if isinstance(value, dict):
+        keys_are_names = len(path) == 1 and path[0] in _NAMED_MAPS
+        return [(child, (*path, key), keys_are_names) for key, child in value.items()]
+
+    if isinstance(value, list):
+        return [(child, (*path, index), True) for index, child in enumerate(value)]
+
+    return []

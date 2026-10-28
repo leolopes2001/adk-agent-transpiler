@@ -10,7 +10,12 @@ from transpiler.lowering import AdkProgram, lower
 from transpiler.spec.loader import InstructionFile, parse_spec
 from transpiler.validation.ast_rules import check_source
 from transpiler.validation.compile_check import compile_source
-from transpiler.validation.runner import check_files, compare, dummy_env, expected_workflows
+from transpiler.validation.runner import (
+    check_files,
+    dummy_env,
+    expected_workflows,
+    probe_mismatches,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -152,7 +157,7 @@ def _probe_result(adk: AdkProgram) -> dict[str, Any]:
 
 
 def test_compare_accepts_matching_probe(adk: AdkProgram) -> None:
-    assert compare(_probe_result(adk), adk) == []
+    assert probe_mismatches(_probe_result(adk), adk) == []
 
 
 @pytest.mark.parametrize(
@@ -168,6 +173,6 @@ def test_compare_accepts_matching_probe(adk: AdkProgram) -> None:
 def test_compare_reports_mismatch(adk: AdkProgram, key: str, value: object) -> None:
     result = {**_probe_result(adk), key: value}
 
-    [diagnostic] = compare(result, adk)
+    [diagnostic] = probe_mismatches(result, adk)
     assert diagnostic.code is Code.E_CODEGEN_MISMATCH
     assert diagnostic.message.startswith(f"{key}:")

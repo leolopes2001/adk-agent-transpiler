@@ -1,10 +1,3 @@
-"""Typed intermediate representation of a validated spec.
-
-The IR is what the later passes consume: references are resolved to the
-objects they name, defaults are applied and everything is immutable, so
-lowering and codegen never look at the raw spec again.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -68,7 +61,7 @@ class NodeIR:
     kind: NodeKind
     params: Mapping[str, ParamValue]
     retry: RetryIR | None
-    """Only for kinds that accept retry; policy defaults already applied."""
+    """None unless the kind accepts retry; policy defaults are already applied."""
     timeout_s: float | None
     server: McpServerIR | None = None
     tool: str | None = None
@@ -107,12 +100,7 @@ class ProgramIR:
     spec_sha256: str
 
     def digest(self) -> str:
-        """SHA-256 of a canonical serialization of the program.
-
-        The spec hash is left out on purpose: reformatting the spec file changes
-        `spec_sha256` but not what the program does, and the digest should only
-        move when the generated workflow would.
-        """
+        """Leaves out spec_sha256: reformatting the spec must not move the digest."""
         canonical = json.dumps(
             _plain(self, skip=frozenset({"spec_sha256"})),
             sort_keys=True,

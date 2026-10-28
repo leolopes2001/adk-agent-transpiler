@@ -1,16 +1,10 @@
-"""Structured diagnostics shared by every transpiler pass.
-
-A diagnostic has a stable code (tests and users can rely on it), a JSON
-Pointer into the spec and a message for humans. Passes collect all their
-diagnostics before failing, so a user fixes a spec in one round instead of
-one error per run.
-"""
+"""Passes collect every diagnostic before failing, so a spec is fixed in one round."""
 
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
-from typing import Any
+from typing import Any, TypeGuard
 
 from pydantic import ValidationError
 from pydantic_core import ErrorDetails
@@ -23,15 +17,15 @@ from transpiler.spec.models import (
     JsonPath,
 )
 
+_INVALID_KEY_MARKER = "[key]"
+
 
 class Code(StrEnum):
-    # load
     E_IO = "E_IO"
     E_SPEC_TOO_LARGE = "E_SPEC_TOO_LARGE"
     E_SPEC_ENCODING = "E_SPEC_ENCODING"
     E_SPEC_JSON = "E_SPEC_JSON"
     E_DUPLICATE_KEY = "E_DUPLICATE_KEY"
-    # schema
     E_SCHEMA = "E_SCHEMA"
     E_MISSING_FIELD = "E_MISSING_FIELD"
     E_UNKNOWN_FIELD = "E_UNKNOWN_FIELD"
@@ -41,7 +35,6 @@ class Code(StrEnum):
     E_INVALID_ENV_NAME = "E_INVALID_ENV_NAME"
     E_THRESHOLD_ORDER = "E_THRESHOLD_ORDER"
     E_INLINE_SECRET = "E_INLINE_SECRET"  # noqa: S105 - a code, not a secret
-    # semantic: graph
     E_DUPLICATE_ID = "E_DUPLICATE_ID"
     E_UNKNOWN_NODE = "E_UNKNOWN_NODE"
     E_NO_START = "E_NO_START"
@@ -55,7 +48,6 @@ class Code(StrEnum):
     E_JOIN_ROUTED_INPUT = "E_JOIN_ROUTED_INPUT"
     E_UNCONDITIONAL_CYCLE = "E_UNCONDITIONAL_CYCLE"
     E_SUBWORKFLOW_CYCLE = "E_SUBWORKFLOW_CYCLE"
-    # semantic: routes, types, references, budget
     E_UNKNOWN_ROUTE = "E_UNKNOWN_ROUTE"
     E_ROUTE_NOT_COVERED = "E_ROUTE_NOT_COVERED"
     E_ROUTE_ON_NON_ROUTER = "E_ROUTE_ON_NON_ROUTER"
@@ -69,23 +61,19 @@ class Code(StrEnum):
     E_AGENT_REUSED = "E_AGENT_REUSED"
     E_TIMEOUT_BUDGET = "E_TIMEOUT_BUDGET"
     E_INSTRUCTION_FILE = "E_INSTRUCTION_FILE"
-    # semantic: security
     E_LLM_NOT_GUARDED = "E_LLM_NOT_GUARDED"
     E_SCHEDULE_NOT_GATED = "E_SCHEDULE_NOT_GATED"
     E_UNTRUSTED_AGENT_HAS_TOOLS = "E_UNTRUSTED_AGENT_HAS_TOOLS"
     E_AGENT_TOOLS_UNSUPPORTED = "E_AGENT_TOOLS_UNSUPPORTED"
     E_LLM_EXTRACT_REQUIRES_UNTRUSTED = "E_LLM_EXTRACT_REQUIRES_UNTRUSTED"
     E_PII_POLICY = "E_PII_POLICY"
-    # generated code
     E_CODEGEN_RENDER = "E_CODEGEN_RENDER"
     E_CODEGEN_SYNTAX = "E_CODEGEN_SYNTAX"
     E_CODEGEN_FORBIDDEN = "E_CODEGEN_FORBIDDEN"
     E_CODEGEN_IMPORT = "E_CODEGEN_IMPORT"
     E_CODEGEN_TIMEOUT = "E_CODEGEN_TIMEOUT"
     E_CODEGEN_MISMATCH = "E_CODEGEN_MISMATCH"
-    # output
     E_OUTPUT = "E_OUTPUT"
-    # warnings
     W_UNUSED_DECLARATION = "W_UNUSED_DECLARATION"
 
 
@@ -139,25 +127,11 @@ class TranspileError(Exception):
         return self.stage.value
 
 
-def errors_of(diagnostics: Iterable[Diagnostic]) -> list[Diagnostic]:
-    return [d for d in diagnostics if d.severity is Severity.ERROR]
+@dataclass(frozen=True, slots=True)
+class _Located:
+    path: JsonPath
+    graph_node: Mapping[str, Any] | None
 
-
-def fail_on_errors(stage: Stage, diagnostics: Sequence[Diagnostic]) -> None:
-    """Raises with every diagnostic (warnings included) if any of them is an error."""
-    if errors_of(diagnostics):
-        raise TranspileError(stage, diagnostics)
-
-
-# --- JSON Pointer ---
-
-
-def json_pointer(path: Iterable[str | int]) -> str:
-    """RFC 6901 pointer for a path; `~` and `/` inside keys are escaped."""
-    return "".join("/" + str(part).replace("~", "~0").replace("/", "~1") for part in path)
-
-
-# --- Pydantic translation ---
 
 _PATTERN_CODES = {
     IDENTIFIER_PATTERN: Code.E_INVALID_IDENTIFIER,
@@ -175,100 +149,22 @@ _TYPE_CODES = {
 }
 
 
-@dataclass(frozen=True, slots=True)
-class _Located:
-    path: JsonPath
-    node: Mapping[str, Any] | None
-    """The graph node the error is inside, if any."""
+def errors_of(diagnostics: Iterable[Diagnostic]) -> list[Diagnostic]:
+    return [d for d in diagnostics if d.severity is Severity.ERROR]
 
 
-def _locate(raw: object, loc: tuple[str | int, ...]) -> _Located:
-    """Maps a Pydantic `loc` onto the raw JSON.
-
-    Pydantic inserts the discriminator value of tagged unions (e.g. the node
-    kind) and a `[key]` marker for invalid dict keys; neither exists in the
-    document, so both are dropped.
-    """
-    path: list[str | int] = []
-    current: object = raw
-    node: Mapping[str, Any] | None = None
-    for part in loc:
-        if part == "[key]":
-            break
-        if isinstance(current, Mapping):
-            if part not in current and current.get("kind") == part:
-                continue
-            path.append(part)
-            current = current.get(str(part))
-        elif isinstance(current, list) and isinstance(part, int) and 0 <= part < len(current):
-            path.append(part)
-            current = current[part]
-            parent = path[-2] if len(path) >= 2 else None  # noqa: PLR2004
-            if parent == "nodes" and isinstance(current, Mapping):
-                node = current
-        else:
-            path.append(part)
-            current = None
-    return _Located(path=tuple(path), node=node)
+def fail_on_errors(stage: Stage, diagnostics: Sequence[Diagnostic]) -> None:
+    """Raises with every diagnostic, warnings included, if any of them is an error."""
+    if errors_of(diagnostics):
+        raise TranspileError(stage, diagnostics)
 
 
-def _node_label(node: Mapping[str, Any] | None) -> tuple[str | None, str | None]:
-    if node is None:
-        return None, None
-    node_id, kind = node.get("id"), node.get("kind")
-    return (
-        node_id if isinstance(node_id, str) else None,
-        kind if isinstance(kind, str) else None,
-    )
-
-
-def _translate(error: ErrorDetails, raw: object) -> Diagnostic:
-    located = _locate(raw, error["loc"])
-    node_id, kind = _node_label(located.node)
-    field = str(located.path[-1]) if located.path else ""
-    error_type = error["type"]
-    ctx = error.get("ctx") or {}
-    code = _TYPE_CODES.get(error_type, Code.E_SCHEMA)
-    hint: str | None = None
-    message = error["msg"]
-
-    if error_type == "string_pattern_mismatch":
-        code = _PATTERN_CODES.get(str(ctx.get("pattern")), Code.E_SCHEMA)
-        message = f"valor {error['input']!r} não segue o formato {ctx.get('pattern')}"
-    elif error_type == "missing":
-        message = (
-            f'{kind} requer "{field}"'
-            if kind and located.node is not None
-            else f'campo obrigatório "{field}" ausente'
-        )
-    elif error_type == "union_tag_not_found":
-        message = 'campo obrigatório "kind" ausente'
-    elif error_type == "extra_forbidden":
-        where = f"em nós {kind}" if kind else "aqui"
-        message = f'campo "{field}" não é permitido {where}'
-    elif error_type == "union_tag_invalid":
-        message = f"kind {ctx.get('tag')!r} desconhecido"
-        hint = f"kinds válidos: {ctx.get('expected_tags')}"
-
-    return Diagnostic(
-        code=code,
-        message=message,
-        pointer=json_pointer(located.path),
-        hint=hint,
-        node_id=node_id,
-        kind=kind,
-    )
+def json_pointer(path: Iterable[str | int]) -> str:
+    return "".join("/" + str(part).replace("~", "~0").replace("/", "~1") for part in path)
 
 
 def diagnostics_from_validation_error(exc: ValidationError, raw: object) -> list[Diagnostic]:
-    return [_translate(error, raw) for error in exc.errors()]
-
-
-# --- rendering ---
-
-
-def _plural(count: int, singular: str, plural: str) -> str:
-    return f"{count} {singular if count == 1 else plural}"
+    return [_diagnostic_from_error(error, raw) for error in exc.errors()]
 
 
 def summary(diagnostics: Sequence[Diagnostic]) -> str:
@@ -277,6 +173,7 @@ def summary(diagnostics: Sequence[Diagnostic]) -> str:
     parts = [_plural(errors, "erro", "erros")]
     if warnings:
         parts.append(_plural(warnings, "aviso", "avisos"))
+
     return ", ".join(parts) + "."
 
 
@@ -292,6 +189,7 @@ def render_text(diagnostics: Sequence[Diagnostic]) -> str:
         lines.append(f"  {diag.message}")
         if diag.hint:
             lines.append(f"  dica: {diag.hint}")
+
     return "\n".join(lines)
 
 
@@ -305,3 +203,97 @@ def render_json(diagnostics: Sequence[Diagnostic], extra: Mapping[str, Any] | No
         "diagnostics": [d.to_dict() for d in diagnostics],
     }
     return json.dumps(document, ensure_ascii=False, indent=2)
+
+
+def _diagnostic_from_error(error: ErrorDetails, raw: object) -> Diagnostic:
+    located = _locate_in_raw(raw, error["loc"])
+    node_id, kind = _node_label(located.graph_node)
+    field = str(located.path[-1]) if located.path else ""
+    message, hint = _message_and_hint(error, field, kind)
+    return Diagnostic(
+        code=_code_for(error),
+        message=message,
+        pointer=json_pointer(located.path),
+        hint=hint,
+        node_id=node_id,
+        kind=kind,
+    )
+
+
+def _locate_in_raw(raw: object, loc: tuple[str | int, ...]) -> _Located:
+    """Pydantic adds union tags and a "[key]" marker to `loc`; neither exists in the JSON."""
+    path: list[str | int] = []
+    current: object = raw
+    graph_node: Mapping[str, Any] | None = None
+    for part in loc:
+        if part == _INVALID_KEY_MARKER:
+            break
+
+        if _is_union_tag(current, part):
+            continue
+
+        path.append(part)
+        if isinstance(current, Mapping):
+            current = current.get(str(part))
+        elif isinstance(current, list) and isinstance(part, int) and 0 <= part < len(current):
+            current = current[part]
+            if _is_graph_node(current, path):
+                graph_node = current
+        else:
+            current = None
+
+    return _Located(path=tuple(path), graph_node=graph_node)
+
+
+def _is_union_tag(current: object, part: str | int) -> bool:
+    return isinstance(current, Mapping) and part not in current and current.get("kind") == part
+
+
+def _is_graph_node(value: object, path: list[str | int]) -> TypeGuard[Mapping[str, Any]]:
+    parent = path[-2] if len(path) >= 2 else None  # noqa: PLR2004
+    return parent == "nodes" and isinstance(value, Mapping)
+
+
+def _node_label(node: Mapping[str, Any] | None) -> tuple[str | None, str | None]:
+    if node is None:
+        return None, None
+
+    node_id, kind = node.get("id"), node.get("kind")
+    return (
+        node_id if isinstance(node_id, str) else None,
+        kind if isinstance(kind, str) else None,
+    )
+
+
+def _code_for(error: ErrorDetails) -> Code:
+    if error["type"] == "string_pattern_mismatch":
+        ctx = error.get("ctx") or {}
+        return _PATTERN_CODES.get(str(ctx.get("pattern")), Code.E_SCHEMA)
+
+    return _TYPE_CODES.get(error["type"], Code.E_SCHEMA)
+
+
+def _message_and_hint(error: ErrorDetails, field: str, kind: str | None) -> tuple[str, str | None]:
+    ctx = error.get("ctx") or {}
+    match error["type"]:
+        case "string_pattern_mismatch":
+            return f"valor {error['input']!r} não segue o formato {ctx.get('pattern')}", None
+        case "missing":
+            message = f'{kind} requer "{field}"' if kind else f'campo obrigatório "{field}" ausente'
+            return message, None
+        case "union_tag_not_found":
+            return 'campo obrigatório "kind" ausente', None
+        case "extra_forbidden":
+            where = f"em nós {kind}" if kind else "aqui"
+            return f'campo "{field}" não é permitido {where}', None
+        case "union_tag_invalid":
+            return (
+                f"kind {ctx.get('tag')!r} desconhecido",
+                f"kinds válidos: {ctx.get('expected_tags')}",
+            )
+        case _:
+            return error["msg"], None
+
+
+def _plural(count: int, singular: str, plural: str) -> str:
+    return f"{count} {singular if count == 1 else plural}"

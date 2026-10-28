@@ -1,10 +1,4 @@
-"""JSON Schema for agent specs, derived from the Pydantic models.
-
-The exported file is versioned so editors can validate specs; a test fails if
-it drifts from the models. Rules that need code (reserved identifiers, inline
-secrets, cross-field checks) are not expressible here and only run in the
-transpiler.
-"""
+"""Rules that need code (reserved names, inline secrets, cross-field checks) are not in here."""
 
 import json
 import sys

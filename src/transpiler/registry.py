@@ -1,11 +1,4 @@
-"""Node kind registry: the single source of truth for validation and lowering.
-
-Each kind declares the port types it accepts and produces (per route for
-routers), its params model, which references it needs, which ADK primitive it
-becomes and which runtime factory builds it. Port types are names only; the
-classes live in `agent_runtime.schemas` and a contract test keeps both sides in
-sync.
-"""
+"""Port types are names only; agent_runtime.schemas owns the classes, a contract test syncs them."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -55,31 +48,29 @@ type AdkPrimitive = Literal["function", "agent", "join", "workflow"]
 class NodeKindSpec:
     kind: NodeKind
     input_types: frozenset[PortType]
-    """Accepted input types; empty means the kind accepts anything (join, subworkflow)."""
+    """Empty means the kind accepts anything (join, subworkflow)."""
     adk_primitive: AdkPrimitive
     factory: str | None
-    """Name of the `agent_runtime.nodes` factory; for llm_extract, the factory of its input node."""
+    """For llm_extract, the factory of its input node."""
     output_type: PortType | None = None
     routes: Mapping[str, PortType] = field(default_factory=lambda: MappingProxyType({}))
     params_model: type[BaseModel] | None = None
     requires: frozenset[Requirement] = frozenset()
     terminal: bool = False
     accepts_retry: bool = False
-    """Calls a server, service or model, so it takes retry and timeout_s."""
     rerun_on_resume: bool = False
     join_inputs: tuple[PortType, ...] = ()
-    """For kinds fed by a join: the exact types the join must combine, in sorted order."""
+    """Sorted, to compare with the sorted types a join combines."""
     tools: frozenset[str] = frozenset()
-    """MCP tools the runtime factory knows how to call, for kinds that require a tool."""
 
     @property
     def is_router(self) -> bool:
         return bool(self.routes)
 
     def output_types(self) -> frozenset[PortType]:
-        """Every type this kind can emit, across routes. Empty for terminals and subworkflows."""
         if self.routes:
             return frozenset(self.routes.values())
+
         return frozenset() if self.output_type is None else frozenset({self.output_type})
 
 

@@ -1,8 +1,4 @@
-"""Builds the IR from a spec that already passed the semantic checks.
-
-The builder trusts that validation: an unknown reference here is a bug in an
-earlier pass, not a user error, so it surfaces as a plain exception.
-"""
+"""Trusts the semantic pass: a bad reference here is a transpiler bug, so it raises KeyError."""
 
 from collections.abc import Mapping
 from dataclasses import replace
@@ -27,11 +23,9 @@ from transpiler.spec.loader import InstructionFile
 from transpiler.spec.models import (
     AgentSpec,
     GraphSpec,
-    LexicalExtractNode,
     LlmExtractNode,
+    McpNode,
     NodeSpec,
-    OcrExtractNode,
-    RagResolveNode,
     RetrySpec,
     ScheduleNode,
     SubworkflowNode,
@@ -86,56 +80,61 @@ class _Builder:
             output_schema=agent.output_schema,
         )
 
-    def node(self, node: NodeSpec) -> NodeIR:
+    def build_node(self, node: NodeSpec) -> NodeIR:
         spec = kind_spec(node.kind)
-        node_params: BaseModel | None = getattr(node, "params", None)
-        params: dict[str, ParamValue] = {} if node_params is None else node_params.model_dump()
-        retry: RetryIR | None = None
-        timeout: float | None = None
-        if spec.accepts_retry:
-            defaults = self.spec.policies.defaults
-            chosen: RetrySpec = getattr(node, "retry", None) or defaults.retry
-            retry = RetryIR(
-                max_attempts=chosen.max_attempts,
-                initial_delay_s=float(chosen.initial_delay_s),
-                max_delay_s=float(chosen.max_delay_s),
-            )
-            node_timeout = getattr(node, "timeout_s", None)
-            timeout = float(defaults.timeout_s if node_timeout is None else node_timeout)
+        retry, timeout = self._retry_and_timeout(node) if spec.accepts_retry else (None, None)
         if spec.rerun_on_resume:
             self.needs_resumability = True
 
         result = NodeIR(
             id=node.id,
             kind=spec.kind,
-            params=MappingProxyType(params),
+            params=MappingProxyType(_params(node)),
             retry=retry,
             timeout_s=timeout,
         )
-        if isinstance(node, OcrExtractNode | LexicalExtractNode | RagResolveNode):
-            return replace(result, server=self.server(node.server), tool=node.tool)
-        if isinstance(node, ScheduleNode):
-            return replace(result, service=self.service(node.service))
-        if isinstance(node, LlmExtractNode):
-            return replace(result, agent=self.agent(node.agent))
-        if isinstance(node, SubworkflowNode):
-            return replace(result, subgraph=self.graph(node.ref, self.spec.subworkflows[node.ref]))
-        return result
+        return self._with_references(result, node)
 
-    def graph(self, name: str, graph: GraphSpec) -> GraphIR:
+    def build_graph(self, name: str, graph: GraphSpec) -> GraphIR:
         return GraphIR(
             name=name,
-            nodes=tuple(self.node(node) for node in graph.nodes),
+            nodes=tuple(self.build_node(node) for node in graph.nodes),
             edges=tuple(EdgeIR(e.source, e.target, e.route) for e in graph.edges),
         )
+
+    def _retry_and_timeout(self, node: NodeSpec) -> tuple[RetryIR, float]:
+        defaults = self.spec.policies.defaults
+        chosen: RetrySpec = getattr(node, "retry", None) or defaults.retry
+        node_timeout = getattr(node, "timeout_s", None)
+        retry = RetryIR(
+            max_attempts=chosen.max_attempts,
+            initial_delay_s=float(chosen.initial_delay_s),
+            max_delay_s=float(chosen.max_delay_s),
+        )
+        return retry, float(defaults.timeout_s if node_timeout is None else node_timeout)
+
+    def _with_references(self, result: NodeIR, node: NodeSpec) -> NodeIR:
+        if isinstance(node, McpNode):
+            return replace(result, server=self.server(node.server), tool=node.tool)
+
+        if isinstance(node, ScheduleNode):
+            return replace(result, service=self.service(node.service))
+
+        if isinstance(node, LlmExtractNode):
+            return replace(result, agent=self.agent(node.agent))
+
+        if isinstance(node, SubworkflowNode):
+            subgraph = self.build_graph(node.ref, self.spec.subworkflows[node.ref])
+            return replace(result, subgraph=subgraph)
+
+        return result
 
 
 def build_program(
     spec: AgentSpec, *, spec_sha256: str, instructions: Mapping[str, InstructionFile]
 ) -> ProgramIR:
-    """`instructions` maps each llm_agent key to its loaded instruction file."""
     builder = _Builder(spec, instructions)
-    root = builder.graph(spec.agent.name, spec.workflow)
+    root = builder.build_graph(spec.agent.name, spec.workflow)
     return ProgramIR(
         agent_name=spec.agent.name,
         description=spec.agent.description,
@@ -148,3 +147,8 @@ def build_program(
         needs_resumability=builder.needs_resumability,
         spec_sha256=spec_sha256,
     )
+
+
+def _params(node: NodeSpec) -> dict[str, ParamValue]:
+    node_params: BaseModel | None = getattr(node, "params", None)
+    return {} if node_params is None else node_params.model_dump()
