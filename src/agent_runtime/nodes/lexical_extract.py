@@ -1,19 +1,3 @@
-"""`lexical_extract`: finds exam names in the document without the model.
-
-It runs next to the LLM extractor, so an injection that makes the model omit
-an exam does not make the exam disappear. The text is cut into candidate
-segments (lines, then `;`, `•` and `,`; never " e ", which is part of names
-such as "Colesterol total e frações"). Segments that are headers, mostly
-placeholders or of implausible length are dropped; the rest go to the
-catalog search in one batch, and segments whose best match scores at least
-`min_score` become mentions.
-
-Two-character segments ("T4", "T3", "Na") count only on list items (a line
-that starts with an enumeration or bullet): elsewhere they are mostly state
-abbreviations and initials, and "MG" in "Belo Horizonte, MG" would be an
-exact catalog alias of Magnésio.
-"""
-
 import re
 from typing import Annotated, Any
 
@@ -38,6 +22,7 @@ from lab_common import telemetry as lab_telemetry
 from lab_common.contracts.rag import MAX_BATCH_QUERIES, BatchSearchResult
 
 MIN_SEGMENT_CHARS = 2
+# Off a list item, two letters are mostly initials or states ("MG" would match Magnésio).
 MIN_UNLISTED_SEGMENT_CHARS = 3
 MAX_SEGMENT_CHARS = 80
 HEADER_LABELS = frozenset(
@@ -61,93 +46,32 @@ HEADER_LABELS = frozenset(
         "dra",
     }
 )
+# Never " e ": it is part of names such as "Colesterol total e frações".
 _SEPARATORS = re.compile(r"[;•,]")
 _PLACEHOLDER = re.compile(r"\[[A-Z_]+_\d+\]")
+_DEFAULT_MIN_SCORE = 0.8
+_DEFAULT_MAX_LINES = 60
 
 log = lab_logging.get_logger(__name__)
 
 
 class LexicalExtractParams(Params):
-    min_score: Annotated[float, Field(ge=0, le=1)] = 0.8
-    max_lines: Annotated[int, Field(ge=1)] = 60
+    min_score: Annotated[float, Field(ge=0, le=1)] = _DEFAULT_MIN_SCORE
+    max_lines: Annotated[int, Field(ge=1)] = _DEFAULT_MAX_LINES
 
 
-def _is_header(segment: str) -> bool:
-    if segment.endswith(":"):
-        return True
-    words = search_form(segment.split(":", 1)[0]).split()
-    return bool(words) and words[0] in HEADER_LABELS
-
-
-def _mostly_placeholders(segment: str) -> bool:
-    placeholders = sum(len(m.group()) for m in _PLACEHOLDER.finditer(segment))
-    rest = _PLACEHOLDER.sub("", segment)
-    return placeholders * 2 >= len(segment) or sum(c.isalnum() for c in rest) < MIN_SEGMENT_CHARS
-
-
-def segments(text: str, max_lines: int) -> list[str]:
-    """Candidate exam mentions in document order, without duplicates."""
-    found: list[str] = []
-    seen: set[str] = set()
-    for line in text.split("\n")[:max_lines]:
-        listed = strip_list_marker(line) != line.strip()
-        shortest = MIN_SEGMENT_CHARS if listed else MIN_UNLISTED_SEGMENT_CHARS
-        for piece in _SEPARATORS.split(line):
-            segment = strip_list_marker(piece.strip())
-            if not shortest <= len(segment) <= MAX_SEGMENT_CHARS:
-                continue
-            if _is_header(segment) or _mostly_placeholders(segment):
-                continue
-            key = search_form(segment)
-            if key and key not in seen:
-                seen.add(key)
-                found.append(segment)
-    return found
-
-
-async def batch_search(  # noqa: PLR0913 - the tool's arguments plus where to send them
-    mcp: McpGateway,
-    server: str,
-    tool: str,
-    queries: list[str],
-    top_k: int,
-    *,
-    request_id: str,
-) -> BatchSearchResult:
-    """One `batch_search` result for all `queries`, in order (chunked by the batch limit).
-
-    `request_id` (the run id) is what the server logs the calls under.
-    """
-    results = []
-    contract = None
-    for start in range(0, len(queries), MAX_BATCH_QUERIES):
-        chunk = queries[start : start + MAX_BATCH_QUERIES]
-        args = {"queries": chunk, "top_k": top_k, "request_id": request_id}
-        body = await mcp.call(server, tool, args)
-        try:
-            contract = BatchSearchResult.model_validate(body)
-        except ValidationError:
-            raise PermanentError("RAG_INVALID_RESULT", "result breaks the contract") from None
-        if len(contract.results) != len(chunk):
-            raise PermanentError("RAG_INVALID_RESULT", "search result count differs from queries")
-        results.extend(contract.results)
-    if contract is None:
-        raise ValueError("batch_search needs at least one query")
-    return contract.model_copy(update={"results": results})
-
-
+# Runs next to the model: an injection that makes the model omit an exam cannot hide it.
 def lexical_extract(  # noqa: PLR0913 - one keyword per node param
     *,
     name: str,
     deps: RuntimeDeps,
     server: str,
     tool: str,
-    min_score: float = 0.8,
-    max_lines: int = 60,
+    min_score: float = _DEFAULT_MIN_SCORE,
+    max_lines: int = _DEFAULT_MAX_LINES,
     retry: RetryConfig | None = None,
     timeout: float | None = None,
 ) -> FunctionNode:
-    """Finds exam names line by line through catalog search."""
     params = LexicalExtractParams(min_score=min_score, max_lines=max_lines)
 
     async def run(ctx: Context, node_input: Any) -> Event:
@@ -163,8 +87,76 @@ def lexical_extract(  # noqa: PLR0913 - one keyword per node param
                 for segment, found in zip(candidates, result.results, strict=True)
                 if found.candidates and found.candidates[0].score >= params.min_score
             ]
+
         log.info("lexical_extract_done", node=name, segments=len(candidates), found=len(mentions))
         lab_telemetry.annotate(segments=len(candidates), mentions=len(mentions))
         return Event(output=ExamMentions(items=mentions))
 
     return function_node(name, run, retry=retry, timeout=timeout)
+
+
+def segments(text: str, max_lines: int) -> list[str]:
+    found: list[str] = []
+    seen: set[str] = set()
+    for line in text.split("\n")[:max_lines]:
+        listed = strip_list_marker(line) != line.strip()
+        shortest = MIN_SEGMENT_CHARS if listed else MIN_UNLISTED_SEGMENT_CHARS
+        for piece in _SEPARATORS.split(line):
+            segment = strip_list_marker(piece.strip())
+            if not shortest <= len(segment) <= MAX_SEGMENT_CHARS:
+                continue
+
+            if _is_header(segment) or _mostly_placeholders(segment):
+                continue
+
+            key = search_form(segment)
+            if key and key not in seen:
+                seen.add(key)
+                found.append(segment)
+
+    return found
+
+
+async def batch_search(  # noqa: PLR0913 - the tool's arguments plus where to send them
+    mcp: McpGateway,
+    server: str,
+    tool: str,
+    queries: list[str],
+    top_k: int,
+    *,
+    request_id: str,
+) -> BatchSearchResult:
+    results = []
+    contract = None
+    for start in range(0, len(queries), MAX_BATCH_QUERIES):
+        chunk = queries[start : start + MAX_BATCH_QUERIES]
+        args = {"queries": chunk, "top_k": top_k, "request_id": request_id}
+        body = await mcp.call(server, tool, args)
+        try:
+            contract = BatchSearchResult.model_validate(body)
+        except ValidationError:
+            raise PermanentError("RAG_INVALID_RESULT", "result breaks the contract") from None
+
+        if len(contract.results) != len(chunk):
+            raise PermanentError("RAG_INVALID_RESULT", "search result count differs from queries")
+
+        results.extend(contract.results)
+
+    if contract is None:
+        raise ValueError("batch_search needs at least one query")
+
+    return contract.model_copy(update={"results": results})
+
+
+def _is_header(segment: str) -> bool:
+    if segment.endswith(":"):
+        return True
+
+    words = search_form(segment.split(":", 1)[0]).split()
+    return bool(words) and words[0] in HEADER_LABELS
+
+
+def _mostly_placeholders(segment: str) -> bool:
+    placeholders = sum(len(m.group()) for m in _PLACEHOLDER.finditer(segment))
+    rest = _PLACEHOLDER.sub("", segment)
+    return placeholders * 2 >= len(segment) or sum(c.isalnum() for c in rest) < MIN_SEGMENT_CHARS

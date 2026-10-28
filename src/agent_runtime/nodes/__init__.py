@@ -1,11 +1,3 @@
-"""Factories for the workflow nodes that generated code composes.
-
-Each factory has its final signature: keyword-only arguments named after the
-node kind's params, plus `deps` for nodes that call a server or service and
-`retry`/`timeout` for nodes that do I/O. Each kind lives in its own
-module; building the graph never does I/O.
-"""
-
 from agent_runtime.nodes.abort import abort
 from agent_runtime.nodes.confidence_gate import confidence_gate
 from agent_runtime.nodes.human_review import human_review

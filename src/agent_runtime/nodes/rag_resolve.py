@@ -1,14 +1,3 @@
-"""`rag_resolve`: catalog candidates for every mention, in one search call.
-
-It decides nothing: the confidence gate reads the candidates. Candidates keep
-the RAG server's order (best first).
-
-A mention the model named (`llm` or `both`) is also looked up by its
-evidence, in the same call: the gate accepts the model's name only when the
-document text resolves to the same exam (audit F02). Lexical mentions are
-their own evidence.
-"""
-
 from typing import Annotated, Any
 
 from google.adk import Context, Event
@@ -23,15 +12,13 @@ from lab_common import logging as lab_logging
 from lab_common import telemetry as lab_telemetry
 from lab_common.contracts.rag import MAX_TOP_K
 
+_DEFAULT_TOP_K = 5
+
 log = lab_logging.get_logger(__name__)
 
 
-def _named_by_model(mention: ExamMention) -> bool:
-    return mention.source != "lexical"
-
-
 class RagResolveParams(Params):
-    top_k: Annotated[int, Field(ge=1, le=MAX_TOP_K)] = 5
+    top_k: Annotated[int, Field(ge=1, le=MAX_TOP_K)] = _DEFAULT_TOP_K
 
 
 def rag_resolve(  # noqa: PLR0913 - one keyword per node param
@@ -40,11 +27,10 @@ def rag_resolve(  # noqa: PLR0913 - one keyword per node param
     deps: RuntimeDeps,
     server: str,
     tool: str,
-    top_k: int = 5,
+    top_k: int = _DEFAULT_TOP_K,
     retry: RetryConfig | None = None,
     timeout: float | None = None,
 ) -> FunctionNode:
-    """Looks up catalog candidates for every mention."""
     params = RagResolveParams(top_k=top_k)
 
     async def run(ctx: Context, node_input: Any) -> Event:
@@ -73,16 +59,21 @@ def rag_resolve(  # noqa: PLR0913 - one keyword per node param
                 )
                 for mention, found in zip(mentions, result.results, strict=False)
             ]
+
+        without_candidates = sum(not item.candidates for item in items)
         log.info(
             "rag_resolve_done",
             node=name,
             mentions=len(items),
-            without_candidates=sum(not item.candidates for item in items),
+            without_candidates=without_candidates,
             catalog_sha256=catalog_sha256,
         )
-        lab_telemetry.annotate(
-            mentions=len(items), without_candidates=sum(not item.candidates for item in items)
-        )
+        lab_telemetry.annotate(mentions=len(items), without_candidates=without_candidates)
         return Event(output=ResolvedExams(items=items))
 
     return function_node(name, run, retry=retry, timeout=timeout)
+
+
+# Audit F02: the gate accepts a name from the model only if its evidence resolves the same.
+def _named_by_model(mention: ExamMention) -> bool:
+    return mention.source != "lexical"

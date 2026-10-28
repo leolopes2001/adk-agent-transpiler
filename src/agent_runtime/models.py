@@ -1,14 +1,3 @@
-"""Model selection for generated agents.
-
-`resolve_model(name)` is what generated code passes to `Agent(model=...)`. By
-default it returns the name and ADK resolves the Gemini model (credentials
-from `GOOGLE_API_KEY`). With `AGENT_LLM_BACKEND=fake` it returns a `FakeLlm`,
-which only exists for tests: any `APP_ENV` other than `test` is a
-configuration error, raised when the generated module is imported (CLI exit 8).
-
-The graph is the same either way; only the model behind the Agent changes.
-"""
-
 import json
 import os
 from collections.abc import AsyncGenerator
@@ -27,19 +16,8 @@ FIXTURE_ENV = "FAKE_LLM_FIXTURE"
 BACKENDS = ("gemini", "fake")
 
 
-def _require_test_env() -> None:
-    if os.environ.get(APP_ENV) != "test":
-        raise ConfigurationError(
-            "FAKE_LLM_OUTSIDE_TEST", f"{BACKEND_ENV}=fake requires {APP_ENV}=test"
-        )
-
-
 class FakeLlm(BaseLlm):
-    """Test model: answers with the `ExtractedExams` in a fixture file, records requests.
-
-    The fixture path is `fixture` or, when empty, `FAKE_LLM_FIXTURE` read at each
-    call, so one imported workflow can serve several test cases.
-    """
+    """Test model: answers with the ExtractedExams of a fixture read at each call."""
 
     model: str = "fake"
     fixture: str | None = None
@@ -53,6 +31,7 @@ class FakeLlm(BaseLlm):
         path = self.fixture or os.environ.get(FIXTURE_ENV)
         if not path:
             raise ConfigurationError("MISSING_ENV", FIXTURE_ENV)
+
         try:
             return ExtractedExams.model_validate(json.loads(Path(path).read_text("utf-8")))
         except (OSError, ValueError, ValidationError):
@@ -68,11 +47,20 @@ class FakeLlm(BaseLlm):
 
 
 def resolve_model(name: str) -> str | BaseLlm:
-    """Model handed to `Agent(model=...)` for the spec's model `name`."""
     backend = os.environ.get(BACKEND_ENV) or "gemini"
     if backend not in BACKENDS:
         raise ConfigurationError("INVALID_ENV", f"{BACKEND_ENV} must be one of {list(BACKENDS)}")
+
     if backend == "fake":
         _require_test_env()
         return FakeLlm(model=f"fake/{name}")
+
     return name
+
+
+def _require_test_env() -> None:
+    if os.environ.get(APP_ENV) != "test":
+        raise ConfigurationError(
+            "FAKE_LLM_OUTSIDE_TEST",
+            f"{BACKEND_ENV}=fake requires {APP_ENV}=test",
+        )

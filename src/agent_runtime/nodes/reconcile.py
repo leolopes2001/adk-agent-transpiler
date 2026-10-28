@@ -1,24 +1,3 @@
-"""`reconcile`: merges the LLM and lexical mentions into one list.
-
-1. Fails the run if the PII tripwire blocked the model call (ADR-0009).
-2. LLM items must be grounded: their evidence has to be in the guarded text
-   (`partial_ratio >= grounding_min_ratio` on the search form). Items without
-   grounding, or with a name outside the allowed characters (placeholders,
-   markup), are dropped and counted in the log. Evidence shorter than
-   `MIN_EVIDENCE_CHARS` (in search form) grounds nothing: one character is
-   in almost any document.
-3. An LLM item absorbs a lexical item only when their names are
-   near-identical (`token_sort_ratio >= 90`): both would send the same query
-   to the catalog. When the LLM evidence is the lexical segment but the
-   names differ ("Proteína C reativa" from "PCR"), the LLM item is marked
-   `both` and the lexical item stays: the model's name must never hide what
-   the document says (a model can be steered to name things wrongly). The
-   gate later collapses mentions that resolve to the same code.
-4. Items are ordered by where they appear in the document, then capped.
-
-A missing source (the agent produced nothing) counts as an empty list.
-"""
-
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -37,109 +16,39 @@ from agent_runtime.schemas import ExamMention, ExamMentions, ExtractedExam, Extr
 from lab_common import logging as lab_logging
 from lab_common.text import normalize_for_search
 
+# Near-identical names send the same query to the catalog, so one item absorbs the other.
 DUPLICATE_MIN_RATIO = 90
+# One character is in almost any document: shorter evidence grounds nothing.
 MIN_EVIDENCE_CHARS = 2
+# Letters, digits and the punctuation of exam names: no placeholders or markup.
 _NAME_CHARSET = re.compile(r"^[^\W_]+(?:[ .,()/+%'\-][^\W_]*)*[.)%]?$")
+_DEFAULT_GROUNDING_MIN_RATIO = 90
+_DEFAULT_MAX_ITEMS = 30
 
 log = lab_logging.get_logger(__name__)
 
 
 class ReconcileParams(Params):
     sources: Mapping[str, str]
-    grounding_min_ratio: Annotated[int, Field(ge=0, le=100)] = 90
-    max_items: Annotated[int, Field(ge=1)] = 30
+    grounding_min_ratio: Annotated[int, Field(ge=0, le=100)] = _DEFAULT_GROUNDING_MIN_RATIO
+    max_items: Annotated[int, Field(ge=1)] = _DEFAULT_MAX_ITEMS
 
 
 @dataclass(frozen=True, slots=True)
-class _Counts:
+class _MergeCounts:
     llm: int
     lexical: int
     ungrounded: int
     invalid_name: int
 
 
-def valid_name(name: str) -> bool:
-    """Letters and digits with the punctuation exam names use; no brackets or markup."""
-    return bool(_NAME_CHARSET.match(name.strip()))
-
-
-def grounded(evidence: str, document_form: str, min_ratio: int) -> bool:
-    form = search_form(evidence)
-    return len(form) >= MIN_EVIDENCE_CHARS and fuzz.partial_ratio(form, document_form) >= min_ratio
-
-
-def _same_name(llm: ExtractedExam, lexical: ExamMention) -> bool:
-    ratio = fuzz.token_sort_ratio(search_form(llm.name), search_form(lexical.text))
-    return ratio >= DUPLICATE_MIN_RATIO
-
-
-def _same_segment(llm: ExtractedExam, lexical: ExamMention) -> bool:
-    return search_form(llm.evidence) == search_form(lexical.text)
-
-
-def _position(text: str, document: str) -> int:
-    index = document.find(text)
-    if index < 0:
-        index = document.casefold().find(text.casefold())
-    return index if index >= 0 else len(document)
-
-
-def merge(
-    llm_items: list[ExtractedExam],
-    lexical_items: list[ExamMention],
-    document: str,
-    params: ReconcileParams,
-) -> tuple[list[ExamMention], _Counts]:
-    document_form = normalize_for_search(document)
-    accepted: list[ExtractedExam] = []
-    ungrounded = invalid = 0
-    for item in llm_items:
-        if not valid_name(item.name):
-            invalid += 1
-        elif not grounded(item.evidence, document_form, params.grounding_min_ratio):
-            ungrounded += 1
-        else:
-            accepted.append(item)
-
-    absorbed: set[int] = set()
-    merged: list[tuple[int, int, ExamMention]] = []
-    for order, item in enumerate(accepted):
-        twins = [i for i, lex in enumerate(lexical_items) if _same_name(item, lex)]
-        absorbed.update(twins)
-        confirmed = bool(twins) or any(_same_segment(item, lex) for lex in lexical_items)
-        mention = ExamMention(
-            text=item.name.strip(), source="both" if confirmed else "llm", evidence=item.evidence
-        )
-        merged.append((_position(item.evidence, document), order, mention))
-    offset = len(accepted)
-    for index, lex in enumerate(lexical_items):
-        if index not in absorbed:
-            merged.append((_position(lex.evidence, document), offset + index, lex))
-    merged.sort(key=lambda entry: (entry[0], entry[1]))
-
-    items: list[ExamMention] = []
-    seen: dict[str, int] = {}
-    for _, _, mention in merged:
-        key = search_form(mention.text)
-        if key in seen:
-            first = items[seen[key]]
-            if first.source != mention.source:
-                items[seen[key]] = first.model_copy(update={"source": "both"})
-            continue
-        seen[key] = len(items)
-        items.append(mention)
-    counts = _Counts(len(accepted), len(lexical_items), ungrounded, invalid)
-    return items[: params.max_items], counts
-
-
 def reconcile(
     *,
     name: str,
     sources: Mapping[str, str],
-    grounding_min_ratio: int = 90,
-    max_items: int = 30,
+    grounding_min_ratio: int = _DEFAULT_GROUNDING_MIN_RATIO,
+    max_items: int = _DEFAULT_MAX_ITEMS,
 ) -> FunctionNode:
-    """Merges LLM and lexical mentions; `sources` names the join inputs by role."""
     params = ReconcileParams(
         sources=dict(sources), grounding_min_ratio=grounding_min_ratio, max_items=max_items
     )
@@ -147,8 +56,10 @@ def reconcile(
         raise ValueError("reconcile sources must name the 'llm' and 'lexical' inputs")
 
     async def run(ctx: Context, node_input: Any) -> Event:
+        # The tripwire's blocking answer does not fail the model step (ADR-0009); this does.
         if ctx.state.get(TRIPWIRE_STATE_KEY):
             raise PermanentError(TRIPWIRE_CODE, "the model call was blocked by the PII tripwire")
+
         joined: Mapping[str, Any] = node_input if isinstance(node_input, Mapping) else {}
         llm_output = joined.get(params.sources["llm"])
         lexical_output = joined.get(params.sources["lexical"])
@@ -157,6 +68,7 @@ def reconcile(
             parse_input(ExamMentions, lexical_output).items if lexical_output is not None else []
         )
         document = str(ctx.state.get("doc.text") or "")
+
         items, counts = merge(llm, lexical, document, params)
         if counts.ungrounded or counts.invalid_name:
             log.warning(
@@ -177,3 +89,101 @@ def reconcile(
         return Event(output=ExamMentions(items=items))
 
     return function_node(name, run)
+
+
+def merge(
+    llm_items: list[ExtractedExam],
+    lexical_items: list[ExamMention],
+    document: str,
+    params: ReconcileParams,
+) -> tuple[list[ExamMention], _MergeCounts]:
+    grounded_items, ungrounded, invalid = _grounded_llm_items(
+        llm_items, normalize_for_search(document), params.grounding_min_ratio
+    )
+    mentions = _in_document_order(grounded_items, lexical_items, document)
+    items = _one_per_search_form(mentions)
+    counts = _MergeCounts(len(grounded_items), len(lexical_items), ungrounded, invalid)
+    return items[: params.max_items], counts
+
+
+def valid_name(name: str) -> bool:
+    return bool(_NAME_CHARSET.match(name.strip()))
+
+
+def grounded(evidence: str, document_form: str, min_ratio: int) -> bool:
+    form = search_form(evidence)
+    return len(form) >= MIN_EVIDENCE_CHARS and fuzz.partial_ratio(form, document_form) >= min_ratio
+
+
+def _grounded_llm_items(
+    llm_items: list[ExtractedExam], document_form: str, min_ratio: int
+) -> tuple[list[ExtractedExam], int, int]:
+    kept: list[ExtractedExam] = []
+    ungrounded = invalid = 0
+    for item in llm_items:
+        if not valid_name(item.name):
+            invalid += 1
+        elif not grounded(item.evidence, document_form, min_ratio):
+            ungrounded += 1
+        else:
+            kept.append(item)
+
+    return kept, ungrounded, invalid
+
+
+# A lexical item stays unless the names match: the model's name must never hide the document's.
+def _in_document_order(
+    llm_items: list[ExtractedExam], lexical_items: list[ExamMention], document: str
+) -> list[ExamMention]:
+    absorbed: set[int] = set()
+    positioned: list[tuple[int, int, ExamMention]] = []
+    for order, item in enumerate(llm_items):
+        twins = [i for i, lex in enumerate(lexical_items) if _same_name(item, lex)]
+        absorbed.update(twins)
+        confirmed = bool(twins) or any(_same_segment(item, lex) for lex in lexical_items)
+        mention = ExamMention(
+            text=item.name.strip(), source="both" if confirmed else "llm", evidence=item.evidence
+        )
+        positioned.append((_document_position(item.evidence, document), order, mention))
+
+    offset = len(llm_items)
+    for index, lex in enumerate(lexical_items):
+        if index not in absorbed:
+            positioned.append((_document_position(lex.evidence, document), offset + index, lex))
+
+    positioned.sort(key=lambda entry: (entry[0], entry[1]))
+    return [mention for _, _, mention in positioned]
+
+
+def _one_per_search_form(mentions: list[ExamMention]) -> list[ExamMention]:
+    items: list[ExamMention] = []
+    seen: dict[str, int] = {}
+    for mention in mentions:
+        key = search_form(mention.text)
+        if key in seen:
+            first = items[seen[key]]
+            if first.source != mention.source:
+                items[seen[key]] = first.model_copy(update={"source": "both"})
+            continue
+
+        seen[key] = len(items)
+        items.append(mention)
+
+    return items
+
+
+def _same_name(llm: ExtractedExam, lexical: ExamMention) -> bool:
+    ratio = fuzz.token_sort_ratio(search_form(llm.name), search_form(lexical.text))
+    return ratio >= DUPLICATE_MIN_RATIO
+
+
+def _same_segment(llm: ExtractedExam, lexical: ExamMention) -> bool:
+    return search_form(llm.evidence) == search_form(lexical.text)
+
+
+def _document_position(text: str, document: str) -> int:
+    index = document.find(text)
+    if index < 0:
+        index = document.casefold().find(text.casefold())
+
+    return index if index >= 0 else len(document)

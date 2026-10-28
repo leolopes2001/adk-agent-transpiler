@@ -1,16 +1,3 @@
-"""`schedule`: requests the appointment for the accepted exams (ADR-0006).
-
-The only side effect of the workflow. The `Idempotency-Key` is derived from
-what is being requested, `sha256("v1|<document sha256>|<patient_ref>|<codes>")`
-with the codes sorted, so a node retry, a lost response or a second run with
-the same image and result all map to one appointment.
-
-- no `patient_ref` (the order has no patient identifier) -> `not_scheduled`;
-- 201 -> `scheduled`; 200 replay -> `replayed`;
-- refusal (4xx) or another permanent error -> `failed`, with the reason;
-- 5xx, timeout, connection -> TransientError, retried by the node.
-"""
-
 import hashlib
 from typing import Any
 
@@ -30,23 +17,6 @@ KEY_VERSION = "v1"
 log = lab_logging.get_logger(__name__)
 
 
-def idempotency_key(document_sha256: str, patient_ref: str, codes: list[str]) -> str:
-    material = f"{KEY_VERSION}|{document_sha256}|{patient_ref}|{','.join(sorted(codes))}"
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()
-
-
-def accepted_exams(decision: GateDecision) -> list[Candidate]:
-    """Accepted candidates, one per code, sorted by code."""
-    by_code = {item.selected.code: item.selected for item in decision.items if item.selected}
-    return [by_code[code] for code in sorted(by_code)]
-
-
-def _outcome(decision: GateDecision, status: str, **fields: Any) -> ScheduleOutcome:
-    return ScheduleOutcome.model_validate(
-        {"decision": decision, "status": status, "appointment_id": None, "reason": None, **fields}
-    )
-
-
 def schedule(
     *,
     name: str,
@@ -55,8 +25,6 @@ def schedule(
     retry: RetryConfig | None = None,
     timeout: float | None = None,
 ) -> FunctionNode:
-    """Requests the appointment with a deterministic idempotency key."""
-
     async def run(ctx: Context, node_input: Any) -> Event:
         decision = parse_input(GateDecision, node_input)
         exams = accepted_exams(decision)
@@ -70,15 +38,17 @@ def schedule(
             raise PermanentError("MISSING_DOCUMENT_HASH", "run.document_sha256 is not set")
         else:
             outcome = await _request(ctx, decision, exams, patient_ref, document_sha256)
+
+        codes = [exam.code for exam in exams]
         log.info(
             "schedule_result",
             node=name,
             status=outcome.status,
             reason=outcome.reason,
             appointment_id=outcome.appointment_id,
-            exams=[exam.code for exam in exams],
+            exams=codes,
         )
-        lab_telemetry.annotate(status=outcome.status, exams=[exam.code for exam in exams])
+        lab_telemetry.annotate(status=outcome.status, exams=codes)
         return Event(output=outcome)
 
     async def _request(
@@ -103,6 +73,24 @@ def schedule(
             return _outcome(decision, "failed", reason=error.title)
         except PermanentError as error:
             return _outcome(decision, "failed", reason=error.code)
+
         return _outcome(decision, result.status, appointment_id=result.appointment_id)
 
     return function_node(name, run, retry=retry, timeout=timeout)
+
+
+# ADR-0006: a retry, a lost response or a rerun of the same order map to one appointment.
+def idempotency_key(document_sha256: str, patient_ref: str, codes: list[str]) -> str:
+    material = f"{KEY_VERSION}|{document_sha256}|{patient_ref}|{','.join(sorted(codes))}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def accepted_exams(decision: GateDecision) -> list[Candidate]:
+    by_code = {item.selected.code: item.selected for item in decision.items if item.selected}
+    return [by_code[code] for code in sorted(by_code)]
+
+
+def _outcome(decision: GateDecision, status: str, **fields: Any) -> ScheduleOutcome:
+    return ScheduleOutcome.model_validate(
+        {"decision": decision, "status": status, "appointment_id": None, "reason": None, **fields}
+    )

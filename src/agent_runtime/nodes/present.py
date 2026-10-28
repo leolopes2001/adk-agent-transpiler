@@ -1,11 +1,3 @@
-"""`present`: the terminal node of a run that got as far as the gate.
-
-`present` and `abort` both write a `RunResult` to `run.result` (and as their output); the CLI reads
-it to print the report and pick the exit code. Nothing here holds personal
-data: mentions come from the masked text, the patient is never named and PII
-appears only as counts per type.
-"""
-
 import unicodedata
 from collections.abc import Mapping
 from io import StringIO
@@ -33,6 +25,11 @@ from agent_runtime.theme import (
 )
 
 RESULT_STATE_KEY = "run.result"
+REPORT_WIDTH = 120
+UNFINISHED_TITLE = f"{ICON_FAIL} Não foi possível concluir o pedido"
+REVIEWED = "reviewed"
+REVIEWED_MARK = ICON_REVIEWED
+SUMMARY_LABEL_WIDTH = 18
 
 Outcome = Literal[
     "scheduled",
@@ -45,14 +42,15 @@ Outcome = Literal[
     "INPUT_BLOCKED",
     "NO_EXAMS_RESOLVED",
 ]
+OutputFormat = Literal["table", "json"]
+Pair = tuple[str | Text, Text | str]
+
 _SCHEDULE_OUTCOMES: dict[str, Outcome] = {
     "scheduled": "scheduled",
     "replayed": "replayed",
     "not_scheduled": "not_scheduled",
     "failed": "schedule_failed",
 }
-REVIEWED = "reviewed"
-REVIEWED_MARK = ICON_REVIEWED
 _REVIEW_REASONS = {"evidence_mismatch", "evidence_ambiguous"}
 _REASON_LABELS = {
     "not_found": "não encontrado no catálogo",
@@ -66,18 +64,16 @@ _REASON_LABELS = {
     "evidence_mismatch": "precisa de revisão: a interpretação da IA não confere com o pedido",
     "evidence_ambiguous": "precisa de revisão: o texto do pedido serve para mais de um exame",
 }
-SUMMARY_LABEL_WIDTH = 18
-_SUMMARIES: dict[str, tuple[str, bool]] = {
-    # outcome: (title, registered)
+_NOT_REGISTERED = (f"{ICON_FAIL} Solicitação não registrada", False)
+_SUMMARY_BY_OUTCOME: dict[str, tuple[str, bool]] = {
     "scheduled": (f"{ICON_OK} Solicitação registrada", True),
     "replayed": (f"{ICON_OK} Solicitação já registrada antes (nada foi duplicado)", True),
     "resolved": (f"{ICON_OK} Exames identificados no catálogo", True),
-    "not_scheduled": (f"{ICON_FAIL} Solicitação não registrada", False),
-    "schedule_failed": (f"{ICON_FAIL} Solicitação não registrada", False),
-    "rejected": (f"{ICON_FAIL} Solicitação não registrada", False),
+    "not_scheduled": _NOT_REGISTERED,
+    "schedule_failed": _NOT_REGISTERED,
+    "rejected": _NOT_REGISTERED,
 }
-_NOT_SCHEDULED = {
-    # reason or outcome: (why, what to do)
+_WHY_NOT_SCHEDULED = {
     "patient_identifier_missing": (
         "o pedido não identifica o paciente",
         "Envie um pedido com o CPF ou a carteirinha legível.",
@@ -95,9 +91,10 @@ _NOT_SCHEDULED = {
         "Se algum item deveria ser agendado, rode de novo e escolha o exame na revisão.",
     ),
 }
+_SCHEDULED_COUNT_LABELS = ("Agendados", "Não agendados")
 _COUNT_LABELS = {
-    "scheduled": ("Agendados", "Não agendados"),
-    "replayed": ("Agendados", "Não agendados"),
+    "scheduled": _SCHEDULED_COUNT_LABELS,
+    "replayed": _SCHEDULED_COUNT_LABELS,
     "resolved": ("Identificados", "Não identificados"),
 }
 _CONFIRMED_LABELS = ("Confirmados", "Não agendados")
@@ -106,8 +103,7 @@ _ACCEPTED_TITLES = {
     "replayed": "Exames agendados",
     "resolved": "Exames identificados",
 }
-_FAILURES: dict[str, tuple[str, str, str]] = {
-    # outcome: (title, why, what to do); the run's own message stays in the JSON report
+_FAILURE_SUMMARIES: dict[str, tuple[str, str, str]] = {
     "OCR_LOW_QUALITY": (
         f"{ICON_FAIL} Não foi possível ler o pedido",
         "a imagem não tem qualidade suficiente para a leitura",
@@ -125,7 +121,6 @@ _FAILURES: dict[str, tuple[str, str, str]] = {
     ),
 }
 _PII_NAMES = {
-    # entity: (singular, plural)
     "PERSON": ("nome", "nomes"),
     "ADDRESS": ("endereço", "endereços"),
     "BIRTH_DATE": ("data de nascimento", "datas de nascimento"),
@@ -170,9 +165,10 @@ class Appointment(_Result):
     status: Literal["scheduled", "replayed", "not_scheduled", "failed"]
 
 
+# Masked mentions, catalog data and PII counts per type only: the patient is never named.
 class RunResult(_Result):
     outcome: Outcome
-    format: Literal["table", "json"]
+    format: OutputFormat
     exams: list[ExamRow]
     appointment: Appointment | None
     reason: str | None
@@ -182,7 +178,49 @@ class RunResult(_Result):
 
 
 class PresentParams(Params):
-    format: Literal["table", "json"] = "table"
+    format: OutputFormat = "table"
+
+
+def present(*, name: str, format: OutputFormat = "table") -> FunctionNode:
+    params = PresentParams(format=format)
+
+    async def run(ctx: Context, node_input: Any) -> Event:
+        result = present_result(node_input, params.format, run_context(ctx))
+        ctx.state[RESULT_STATE_KEY] = result.model_dump(mode="json")
+        return Event(output=result)
+
+    return function_node(name, run)
+
+
+def present_result(
+    node_input: object, output_format: OutputFormat, context: dict[str, Any]
+) -> RunResult:
+    if isinstance(node_input, ScheduleOutcome) or (
+        isinstance(node_input, dict) and "decision" in node_input
+    ):
+        outcome = parse_input(ScheduleOutcome, node_input)
+        decision = outcome.decision
+        appointment: Appointment | None = Appointment(
+            id=outcome.appointment_id, status=outcome.status
+        )
+        result_outcome = _SCHEDULE_OUTCOMES[outcome.status]
+        reason = outcome.reason
+    else:
+        decision = parse_input(GateDecision, node_input)
+        appointment = None
+        accepted = any(item.status == "accepted" for item in decision.items)
+        result_outcome = "resolved" if accepted else "rejected"
+        reason = None
+
+    return RunResult(
+        outcome=result_outcome,
+        format=output_format,
+        exams=[exam_row(item) for item in decision.items],
+        appointment=appointment,
+        reason=reason,
+        user_message=None,
+        **context,
+    )
 
 
 def exam_row(item: GateItem) -> ExamRow:
@@ -200,51 +238,12 @@ def exam_row(item: GateItem) -> ExamRow:
     )
 
 
-def _context(ctx: Context) -> dict[str, Any]:
+def run_context(ctx: Context) -> dict[str, Any]:
     counts = ctx.state.get("run.pii_counts") or {}
     return {
         "pii_masked": {str(k): int(v) for k, v in dict(counts).items()},
         "injection_severity": str(ctx.state.get("run.injection_severity") or "none"),
     }
-
-
-OutputFormat = Literal["table", "json"]
-
-
-def present_result(
-    node_input: object, output_format: OutputFormat, context: dict[str, Any]
-) -> RunResult:
-    """Result for a schedule outcome, or for a gate decision when nothing was scheduled."""
-    if isinstance(node_input, ScheduleOutcome) or (
-        isinstance(node_input, dict) and "decision" in node_input
-    ):
-        outcome = parse_input(ScheduleOutcome, node_input)
-        decision = outcome.decision
-        appointment: Appointment | None = Appointment(
-            id=outcome.appointment_id, status=outcome.status
-        )
-        result_outcome = _SCHEDULE_OUTCOMES[outcome.status]
-        reason = outcome.reason
-    else:
-        decision = parse_input(GateDecision, node_input)
-        appointment = None
-        accepted = any(item.status == "accepted" for item in decision.items)
-        result_outcome = "resolved" if accepted else "rejected"
-        reason = None
-    return RunResult(
-        outcome=result_outcome,
-        format=output_format,
-        exams=[exam_row(item) for item in decision.items],
-        appointment=appointment,
-        reason=reason,
-        user_message=None,
-        **context,
-    )
-
-
-def run_context(ctx: Context) -> dict[str, Any]:
-    """PII counts and injection severity the OCR and guard nodes left in the state."""
-    return _context(ctx)
 
 
 def failure_result(failure: RunFailure, context: dict[str, Any]) -> RunResult:
@@ -259,53 +258,72 @@ def failure_result(failure: RunFailure, context: dict[str, Any]) -> RunResult:
     )
 
 
+def render(result: RunResult, output_format: str | None = None) -> str:
+    chosen = output_format or result.format
+    return render_json(result) if chosen == "json" else render_table(result)
+
+
 def render_json(result: RunResult) -> str:
     return result.model_dump_json(indent=2)
 
 
-def _plural(count: int, singular: str, plural: str) -> str:
-    return f"{count} {singular if count == 1 else plural}"
+def render_table(result: RunResult, width: int = REPORT_WIDTH, *, verbose: bool = False) -> str:
+    return to_text(details_view(result) if verbose else result_view(result), width)
 
 
-def _comparable(text: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", text.casefold())
-    return "".join(c for c in decomposed if not unicodedata.combining(c) and not c.isspace())
+def to_text(renderable: RenderableType, width: int = REPORT_WIDTH, *, color: bool = False) -> str:
+    console = Console(
+        file=StringIO(),
+        width=width,
+        color_system="standard" if color else None,
+        force_terminal=color,
+        no_color=not color,
+        highlight=False,
+        theme=THEME,
+    )
+    console.print(renderable)
+    file = console.file
+    text = file.getvalue() if isinstance(file, StringIO) else ""
+    return text if color else "\n".join(line.rstrip() for line in text.split("\n"))
 
 
-def matches_catalog(row: ExamRow) -> bool:
-    """The order's text is the catalog name, ignoring case, accents and spaces."""
-    return row.name is not None and _comparable(row.evidence) == _comparable(row.name)
+def result_view(result: RunResult) -> Group:
+    if result.user_message:
+        return _failure_summary(result)
+
+    accepted = [row for row in result.exams if row.status == "accepted"]
+    other = _one_per_text_and_reason([row for row in result.exams if row.status != "accepted"])
+    parts: list[RenderableType] = [_outcome_summary(result, len(accepted), len(other))]
+    if accepted:
+        parts += [Text(), _accepted_table(result, accepted)]
+    if other:
+        parts += [Text(), _not_accepted_table(result, other)]
+
+    return Group(*parts)
 
 
-def as_written(row: ExamRow) -> Text:
-    """The order's text for an accepted row; highlighted when it is not the catalog name."""
-    return Text(row.evidence, style="" if matches_catalog(row) else WARN)
+def details_view(result: RunResult) -> Group:
+    parts: list[RenderableType] = []
+    if result.user_message:
+        parts.append(Text(f"Resultado: {result.outcome}", style=LABEL))
+        parts.append(Text(result.user_message))
+    else:
+        parts.append(_exams_table(result))
+        parts.append(Text(_appointment_line(result)))
 
+    masked = ", ".join(f"{k} {v}" for k, v in sorted(result.pii_masked.items())) or "nenhum"
+    parts.append(Text(f"Dados pessoais mascarados: {masked}"))
+    if result.injection_severity != "none":
+        parts.append(
+            Text(
+                f"Atenção: conteúdo suspeito no documento (severidade {result.injection_severity})."
+            )
+        )
 
-def reason_label(row: ExamRow) -> str:
-    """Why a row was not scheduled, in plain Portuguese."""
-    label = _REASON_LABELS.get(row.reason or "", "não confirmado")
-    if row.status == "review" and row.reason not in _REVIEW_REASONS:
-        return f"precisa de revisão humana: {label}"
-    return label
-
-
-def masked_summary(counts: Mapping[str, int]) -> str:
-    """'3 (2 nomes, 1 CPF)': the total, then each type spelled out, most frequent first."""
-    total = sum(counts.values())
-    if not total:
-        return "nenhum"
-    named = [(count, _PII_NAMES.get(kind, (kind, kind))) for kind, count in counts.items() if count]
-    named.sort(key=lambda pair: (-pair[0], pair[1][0].casefold()))
-    detail = ", ".join(_plural(count, *names) for count, names in named)
-    return f"{total} ({detail})"
-
-
-Pair = tuple[str | Text, Text | str]
+    return Group(*parts)
 
 
 def summary(title: str, style: str, pairs: list[Pair]) -> Group:
-    """A title line and aligned label/value pairs under it, after a blank line."""
     grid = Table.grid(padding=(0, 1))
     grid.add_column(width=SUMMARY_LABEL_WIDTH, no_wrap=True)
     grid.add_column()
@@ -314,38 +332,79 @@ def summary(title: str, style: str, pairs: list[Pair]) -> Group:
             label if isinstance(label, Text) else Text(label, style=LABEL),
             value if isinstance(value, Text) else Text(value),
         )
+
     return Group(Text(), Text(title, style=style), Padding(grid, (0, 0, 0, 2)))
 
 
-def _exams(count: int) -> str:
-    return _plural(count, "exame", "exames")
+def matches_catalog(row: ExamRow) -> bool:
+    return row.name is not None and _comparable_form(row.evidence) == _comparable_form(row.name)
 
 
-def _attention(severity: str) -> list[Pair]:
-    if severity == "none":
-        return []
-    label = _SEVERITY_LABELS.get(severity, severity)
-    text = f"o pedido tem trechos que parecem instruções (risco {label})"
-    return [(Text("Atenção", style=f"{LABEL} {WARN}"), text)]
+def as_written(row: ExamRow) -> Text:
+    return Text(row.evidence, style="" if matches_catalog(row) else WARN)
 
 
-def _summary(result: RunResult, accepted: int, other: int) -> Group:
-    title, registered = _SUMMARIES[result.outcome]
+def reason_label(row: ExamRow) -> str:
+    label = _REASON_LABELS.get(row.reason or "", "não confirmado")
+    if row.status == "review" and row.reason not in _REVIEW_REASONS:
+        return f"precisa de revisão humana: {label}"
+
+    return label
+
+
+def masked_summary(counts: Mapping[str, int]) -> str:
+    total = sum(counts.values())
+    if not total:
+        return "nenhum"
+
+    named = [(count, _PII_NAMES.get(kind, (kind, kind))) for kind, count in counts.items() if count]
+    named.sort(key=lambda pair: (-pair[0], pair[1][0].casefold()))
+    detail = ", ".join(_plural(count, *names) for count, names in named)
+    return f"{total} ({detail})"
+
+
+def _outcome_summary(result: RunResult, accepted: int, other: int) -> Group:
+    title, registered = _SUMMARY_BY_OUTCOME[result.outcome]
     pairs: list[Pair] = []
     if result.appointment and result.appointment.id:
         pairs.append(("ID", result.appointment.id))
     done, missing = _COUNT_LABELS.get(result.outcome, _CONFIRMED_LABELS)
-    pairs += [(done, _exams(accepted)), (missing, _exams(other))]
+    pairs += [(done, _exam_count(accepted)), (missing, _exam_count(other))]
     pairs.append(("Dados mascarados", masked_summary(result.pii_masked)))
     if result.outcome == "resolved":
         pairs.append(("Observação", "este agente não registra solicitação"))
-    pairs += _attention(result.injection_severity)
-    why_and_what = _NOT_SCHEDULED.get(result.reason or "") or _NOT_SCHEDULED.get(result.outcome)
+    pairs += _attention_pairs(result.injection_severity)
+
+    why_and_what = _WHY_NOT_SCHEDULED.get(result.reason or "") or _WHY_NOT_SCHEDULED.get(
+        result.outcome
+    )
     if not registered and why_and_what:
         why, what = why_and_what
         pairs.insert(0, ("Motivo", why))
         pairs.append(("O que fazer", what))
+
     return summary(title, OK if registered else FAIL, pairs)
+
+
+def _failure_summary(result: RunResult) -> Group:
+    message = result.user_message or ""
+    title, why, what = _FAILURE_SUMMARIES.get(result.outcome, (UNFINISHED_TITLE, message, ""))
+    pairs: list[Pair] = [("Motivo", why)]
+    pairs.append(("Dados mascarados", masked_summary(result.pii_masked)))
+    pairs += _attention_pairs(result.injection_severity)
+    if what:
+        pairs.append(("O que fazer", what))
+
+    return summary(title, FAIL, pairs)
+
+
+def _attention_pairs(severity: str) -> list[Pair]:
+    if severity == "none":
+        return []
+
+    label = _SEVERITY_LABELS.get(severity, severity)
+    text = f"o pedido tem trechos que parecem instruções (risco {label})"
+    return [(Text("Atenção", style=f"{LABEL} {WARN}"), text)]
 
 
 def _accepted_table(result: RunResult, rows: list[ExamRow]) -> Table:
@@ -364,13 +423,15 @@ def _accepted_table(result: RunResult, rows: list[ExamRow]) -> Table:
         if row.reason == REVIEWED:
             name.append(f" {REVIEWED_MARK}", style=WARN)
         table.add_row(name, Text(row.code or ""), as_written(row))
+
     if any(row.reason == REVIEWED for row in rows):
         table.caption = Text.assemble((REVIEWED_MARK, WARN), " escolhido por você na revisão")
         table.caption_justify = "left"
+
     return table
 
 
-def _other_table(result: RunResult, rows: list[ExamRow]) -> Table:
+def _not_accepted_table(result: RunResult, rows: list[ExamRow]) -> Table:
     missing = _COUNT_LABELS.get(result.outcome, _CONFIRMED_LABELS)[1]
     table = Table(
         title=f"{missing} ({len(rows)})",
@@ -382,122 +443,60 @@ def _other_table(result: RunResult, rows: list[ExamRow]) -> Table:
     table.add_column("Motivo")
     for row in rows:
         table.add_row(Text(row.evidence), Text(reason_label(row)))
+
     return table
 
 
-def _failure(result: RunResult) -> Group:
-    message = result.user_message or ""
-    title, why, what = _FAILURES.get(
-        result.outcome, (f"{ICON_FAIL} Não foi possível concluir o pedido", message, "")
-    )
-    pairs: list[Pair] = [("Motivo", why)]
-    pairs.append(("Dados mascarados", masked_summary(result.pii_masked)))
-    pairs += _attention(result.injection_severity)
-    if what:
-        pairs.append(("O que fazer", what))
-    return summary(title, FAIL, pairs)
+def _exams_table(result: RunResult) -> Table:
+    table = Table(title="Exames do pedido", show_lines=False)
+    for column in ("No pedido", "Exame", "Código", "Nome no catálogo", "Score", "Status", "Motivo"):
+        table.add_column(column)
+    for row in result.exams:
+        table.add_row(
+            Text(row.evidence),
+            Text(row.mention),
+            row.code or "—",
+            Text(row.name or "—"),
+            f"{row.score:.4f}" if row.score is not None else "—",
+            _STATUS_LABELS[row.status],
+            row.reason or "",
+        )
+
+    return table
 
 
-def _distinct(rows: list[ExamRow]) -> list[ExamRow]:
-    """One row per order text and reason: the model and the lexical pass may read the same line."""
+def _appointment_line(result: RunResult) -> str:
+    label = _OUTCOME_LABELS.get(result.outcome, result.outcome)
+    text = f"Agendamento: {label}"
+    if result.appointment and result.appointment.id:
+        text += f" — id {result.appointment.id}"
+    if result.reason:
+        text += f" ({result.reason})"
+
+    return text
+
+
+# The model and the lexical pass may both read the same line of the order.
+def _one_per_text_and_reason(rows: list[ExamRow]) -> list[ExamRow]:
     seen: set[tuple[str, str]] = set()
     kept: list[ExamRow] = []
     for row in rows:
-        key = (_comparable(row.evidence), reason_label(row))
+        key = (_comparable_form(row.evidence), reason_label(row))
         if key not in seen:
             seen.add(key)
             kept.append(row)
+
     return kept
 
 
-def result_view(result: RunResult) -> Group:
-    """What the operator reads: a summary, the scheduled exams and the ones left out."""
-    if result.user_message:
-        return _failure(result)
-    accepted = [row for row in result.exams if row.status == "accepted"]
-    other = _distinct([row for row in result.exams if row.status != "accepted"])
-    parts: list[RenderableType] = [_summary(result, len(accepted), len(other))]
-    if accepted:
-        parts += [Text(), _accepted_table(result, accepted)]
-    if other:
-        parts += [Text(), _other_table(result, other)]
-    return Group(*parts)
+def _exam_count(count: int) -> str:
+    return _plural(count, "exame", "exames")
 
 
-def details_view(result: RunResult) -> Group:
-    """Every exam with score, status and technical reason (`--verbose`)."""
-    parts: list[RenderableType] = []
-    if result.user_message:
-        parts.append(Text(f"Resultado: {result.outcome}", style=LABEL))
-        parts.append(Text(result.user_message))
-    else:
-        table = Table(title="Exames do pedido", show_lines=False)
-        for column in ("No pedido", "Exame", "Código", "Nome no catálogo", "Score", "Status"):
-            table.add_column(column)
-        table.add_column("Motivo")
-        for row in result.exams:
-            table.add_row(
-                Text(row.evidence),
-                Text(row.mention),
-                row.code or "—",
-                Text(row.name or "—"),
-                f"{row.score:.4f}" if row.score is not None else "—",
-                _STATUS_LABELS[row.status],
-                row.reason or "",
-            )
-        parts.append(table)
-        label = _OUTCOME_LABELS.get(result.outcome, result.outcome)
-        line = f"Agendamento: {label}"
-        if result.appointment and result.appointment.id:
-            line += f" — id {result.appointment.id}"
-        if result.reason:
-            line += f" ({result.reason})"
-        parts.append(Text(line))
-    masked = ", ".join(f"{k} {v}" for k, v in sorted(result.pii_masked.items())) or "nenhum"
-    parts.append(Text(f"Dados pessoais mascarados: {masked}"))
-    if result.injection_severity != "none":
-        parts.append(
-            Text(
-                f"Atenção: conteúdo suspeito no documento (severidade {result.injection_severity})."
-            )
-        )
-    return Group(*parts)
+def _plural(count: int, singular: str, plural: str) -> str:
+    return f"{count} {singular if count == 1 else plural}"
 
 
-def to_text(renderable: RenderableType, width: int = 120, *, color: bool = False) -> str:
-    """`renderable` as terminal text; with `color`, as ANSI sequences."""
-    console = Console(
-        file=StringIO(),
-        width=width,
-        color_system="standard" if color else None,
-        force_terminal=color,
-        no_color=not color,
-        highlight=False,
-        theme=THEME,
-    )
-    console.print(renderable)
-    file = console.file
-    text = file.getvalue() if isinstance(file, StringIO) else ""
-    return text if color else "\n".join(line.rstrip() for line in text.split("\n"))
-
-
-def render_table(result: RunResult, width: int = 120, *, verbose: bool = False) -> str:
-    """Plain-text report for the operator; `verbose` adds the technical columns."""
-    return to_text(details_view(result) if verbose else result_view(result), width)
-
-
-def render(result: RunResult, output_format: str | None = None) -> str:
-    chosen = output_format or result.format
-    return render_json(result) if chosen == "json" else render_table(result)
-
-
-def present(*, name: str, format: Literal["table", "json"] = "table") -> FunctionNode:
-    """Renders the final result."""
-    params = PresentParams(format=format)
-
-    async def run(ctx: Context, node_input: Any) -> Event:
-        result = present_result(node_input, params.format, run_context(ctx))
-        ctx.state[RESULT_STATE_KEY] = result.model_dump(mode="json")
-        return Event(output=result)
-
-    return function_node(name, run)
+def _comparable_form(text: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", text.casefold())
+    return "".join(c for c in decomposed if not unicodedata.combining(c) and not c.isspace())

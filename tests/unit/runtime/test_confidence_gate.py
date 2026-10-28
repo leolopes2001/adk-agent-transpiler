@@ -5,7 +5,7 @@ from runtime_fakes import candidate, run_node
 
 from agent_runtime.nodes.confidence_gate import (
     ConfidenceGateParams,
-    classify,
+    classify_item,
     confidence_gate,
     decide,
 )
@@ -51,7 +51,7 @@ def test_gate_table(
 ) -> None:
     candidates = [cand(f"LAB-1000{i + 1}", s) for i, s in enumerate(scores)]
 
-    item = classify(resolved("x", *candidates), PARAMS)
+    item = classify_item(resolved("x", *candidates), PARAMS)
 
     assert (item.status, item.reason) == (status, reason)
     assert (item.selected.code if item.selected else None) == selected
@@ -60,13 +60,13 @@ def test_gate_table(
 def test_margin_is_rounded_like_the_scores() -> None:
     # 0.85 - 0.80 == 0.04999... in floating point.
     assert 0.85 - 0.80 < 0.05
-    item = classify(resolved("x", cand("LAB-10001", 0.85), cand("LAB-10002", 0.80)), PARAMS)
+    item = classify_item(resolved("x", cand("LAB-10001", 0.85), cand("LAB-10002", 0.80)), PARAMS)
 
     assert item.status == "accepted"
 
 
 def test_candidates_are_ranked_whatever_order_they_come_in() -> None:
-    item = classify(resolved("x", cand("LAB-10002", 0.7), cand("LAB-10009", 1.0)), PARAMS)
+    item = classify_item(resolved("x", cand("LAB-10002", 0.7), cand("LAB-10009", 1.0)), PARAMS)
 
     assert item.selected == cand("LAB-10009", 1.0)
     assert [c.code for c in item.candidates] == ["LAB-10009", "LAB-10002"]
@@ -145,7 +145,7 @@ def test_model_name_the_evidence_does_not_support_adds_no_code() -> None:
 def test_specific_name_for_an_ambiguous_evidence_goes_to_review() -> None:
     t4 = [cand("LAB-10044", 0.925), cand("LAB-10045", 0.925)]
 
-    item = classify(from_model("T4 total", "2. T4", [cand("LAB-10045", 1.0)], t4), PARAMS)
+    item = classify_item(from_model("T4 total", "2. T4", [cand("LAB-10045", 1.0)], t4), PARAMS)
 
     assert (item.status, item.reason, item.selected) == ("review", "evidence_ambiguous", None)
     assert [c.code for c in item.candidates] == ["LAB-10045", "LAB-10044"]
@@ -156,7 +156,7 @@ def test_ocr_typo_in_the_evidence_of_the_same_exam_is_accepted() -> None:
     # Real RAG scores for the typo, below accept_threshold.
     evidence = [cand("LAB-10020", 0.7241), cand("LAB-10012", 0.5063)]
 
-    item = classify(
+    item = classify_item(
         from_model("Triglicerídeos", "8. Trigliceríideos", [triglicerideos], evidence), PARAMS
     )
 
@@ -166,7 +166,7 @@ def test_ocr_typo_in_the_evidence_of_the_same_exam_is_accepted() -> None:
 def test_evidence_below_review_threshold_goes_to_review() -> None:
     evidence = [cand("LAB-10020", 0.55)]
 
-    item = classify(
+    item = classify_item(
         from_model("Triglicerídeos", "8. Tr", [cand("LAB-10020", 1.0)], evidence), PARAMS
     )
 
@@ -183,7 +183,7 @@ def test_evidence_below_review_threshold_goes_to_review() -> None:
 def test_model_name_confirmed_by_its_evidence_is_accepted(
     name: str, evidence: str, code: str
 ) -> None:
-    item = classify(
+    item = classify_item(
         from_model(name, evidence, [cand(code, 1.0)], [cand(code, 1.0), cand("LAB-10104", 0.9)]),
         PARAMS,
     )

@@ -1,42 +1,13 @@
-# Full stack: Postgres, scheduler API, OCR and RAG MCP servers, plus the agent CLI.
-#
-#   docker compose up -d --build --wait
-#   docker compose run --rm transpile          # spec -> generated code (named volume)
-#   docker compose run --rm export-generated   # copy it to ./generated on the host
-#   docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png
-#   docker compose --profile "*" down -v      # also removes the agent/tool network and volume
-#
-# Optional logs and traces in the Aspire Dashboard (http://localhost:18888), see README:
-#   docker compose --profile observability up -d --build --wait
-#
-# Networks: `backend` is internal (no internet) and holds every service; only the
-# agent also joins `egress` to reach Gemini, and only the API joins `edge`, which
-# exists to publish its port (a port cannot be published from an internal network).
-# Each service gets only the secrets it uses.
-#
-# Every service is given the collector's OTLP endpoint (OTEL_EXPORTER_OTLP_ENDPOINT)
-# but exports only if the collector answers there when the process starts: without
-# the `observability` profile the name does not resolve on `backend`, so nothing is
-# exported and nothing waits for it. With the profile on, the servers start after the
-# collector (an optional dependency, ignored when it is off) and give it a few seconds
-# to listen.
-
 name: lab-agent
 
-# Every project container: read-only root filesystem (writable /tmp in memory),
-# no Linux capabilities and no privilege gain through setuid binaries.
 x-hardening: &hardening
   read_only: true
   tmpfs: ["/tmp:size=64m"]
   security_opt: ["no-new-privileges:true"]
   cap_drop: [ALL]
 
-# OTLP over HTTP/protobuf, the Aspire Dashboard's OTLP/HTTP port.
 x-otlp-endpoint: &otlp-endpoint http://observability:18890
 
-# The servers start after the collector, when the `observability` profile is on.
-# The dashboard image has no shell for a health check, so "started" is all that is
-# known; the services wait for the port themselves (lab_common.telemetry).
 x-after-collector: &after-collector
   condition: service_started
   required: false
@@ -52,13 +23,11 @@ services:
       - pgdata:/var/lib/postgresql/data
     networks: [backend]
     restart: unless-stopped
-    # The official image starts as root to fix the data directory's ownership,
-    # then drops to the postgres user: it needs these capabilities and a
-    # writable socket directory, nothing else.
     read_only: true
     tmpfs: ["/tmp:size=64m", "/var/run/postgresql:size=1m"]
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
+    # The entrypoint fixes the data directory's ownership before dropping to the postgres user.
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler"]
@@ -77,7 +46,6 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: *otlp-endpoint
     volumes:
       - ./data:/app/data:ro
-    # Loopback only: Swagger at http://localhost:8000/docs, not reachable from the network.
     ports: ["127.0.0.1:8000:8000"]
     networks: [backend, edge]
     depends_on:
@@ -85,11 +53,7 @@ services:
       observability: *after-collector
     restart: unless-stopped
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=2)
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -110,11 +74,7 @@ services:
       resources:
         limits: { cpus: "2", memory: 1g }
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - import urllib.request; urllib.request.urlopen('http://localhost:8101/health', timeout=2)
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/health', timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -134,26 +94,15 @@ services:
       observability: *after-collector
     restart: unless-stopped
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - import urllib.request; urllib.request.urlopen('http://localhost:8102/health', timeout=2)
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8102/health', timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 20
 
-  # Optional (profile `observability`): the Aspire Dashboard, one small container that
-  # receives OTLP and shows logs and traces, for local demos only. Data lives in
-  # memory and is lost when the container stops. The UI is published on the loopback
-  # interface only and opens without a login (unsecured mode); OTLP/HTTP (18890) is
-  # not published, so only the project's containers can send telemetry. The gRPC and
-  # MCP endpoints are turned off. No internet access: `edge` has no IP masquerading.
   observability:
     <<: *hardening
     image: mcr.microsoft.com/dotnet/aspire-dashboard:13.6.0@sha256:064b50d557fcaffd10f06bf79ba4069bd50994a84034f1a0fc35c165500482d7
     profiles: [observability]
-    # The image already runs as an unprivileged user (UID 1654).
     environment:
       ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
       DOTNET_DASHBOARD_OTLP_ENDPOINT_URL: ""
@@ -164,8 +113,6 @@ services:
       resources:
         limits: { memory: 256m }
 
-  # A CLI, not a long-running service: `docker compose run --rm agent ...`.
-  # The `cli` profile keeps it out of `docker compose up`.
   agent:
     <<: *hardening
     image: lab-agent-agent
@@ -173,8 +120,6 @@ services:
     profiles: [cli]
     environment:
       APP_ENV: ${APP_ENV:-dev}
-      # No LOG_LEVEL: the CLI logs only errors unless run with --verbose
-      # (or `-e LOG_LEVEL=INFO`); the LOG_LEVEL in .env is for the services.
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       AGENT_LLM_BACKEND: ${AGENT_LLM_BACKEND:-gemini}
       OCR_MCP_URL: http://ocr-mcp:8101/sse
@@ -188,21 +133,15 @@ services:
     volumes:
       - ./specs:/app/specs:ro
       - ./samples:/app/inputs/samples:ro
-      # A named volume, not ./generated: on a Linux host a bind-mounted directory
-      # belongs to the host user (or to root, when Docker creates it), and UID
-      # 10001 could not write the generated code. `export-generated` copies it out.
       - generated:/app/generated
     networks: [backend, egress]
     depends_on:
       scheduler-api: { condition: service_healthy }
       ocr-mcp: { condition: service_healthy }
       rag-mcp: { condition: service_healthy }
-    # Human review asks on the terminal.
     stdin_open: true
     tty: true
 
-  # Tools (profile `tools`), same image as the agent, no network.
-  #   docker compose run --rm transpile [/app/specs/<spec>.json]
   transpile:
     <<: *hardening
     image: lab-agent-agent
@@ -215,12 +154,6 @@ services:
       - ./specs:/app/specs:ro
       - generated:/app/generated
 
-  # Copies the generated packages from the volume to ./generated on the host:
-  #   docker compose run --rm export-generated
-  # The only container that runs as root: ./generated belongs to the host user (or
-  # to root, when Docker creates it), so the copy is written and then handed to the
-  # owner of ./specs, the user who cloned the repository. Changing file ownership
-  # and bypassing file permissions is all it can do; it has no network.
   export-generated:
     <<: *hardening
     image: lab-agent-agent
@@ -244,7 +177,6 @@ services:
           name=$$(basename "$$dir")
           rm -rf "/export/$$name"
           cp -R "$${dir%/}" "/export/$$name"
-          # Docker Desktop (macOS, Windows) maps ownership itself and may refuse chown.
           chown -R "$$owner" "/export/$$name" 2>/dev/null || true
           echo "exported generated/$$name"
           exported=$$((exported + 1))
@@ -259,8 +191,6 @@ networks:
   backend:
     internal: true
   egress: {}
-  # Only for publishing the API port: without IP masquerading, inbound connections
-  # to the published port work but containers get no outbound internet access.
   edge:
     driver_opts:
       com.docker.network.bridge.enable_ip_masquerade: "false"

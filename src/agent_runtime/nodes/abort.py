@@ -1,5 +1,3 @@
-"""`abort`: the terminal node of a run that stopped early (low quality, blocked, empty)."""
-
 from typing import Any
 
 from google.adk import Context, Event
@@ -11,8 +9,6 @@ from agent_runtime.schemas import RunFailure
 
 
 def abort(*, name: str) -> FunctionNode:
-    """Renders a RunFailure."""
-
     async def run(ctx: Context, node_input: Any) -> Event:
         result = failure_result(parse_input(RunFailure, node_input), run_context(ctx))
         ctx.state[RESULT_STATE_KEY] = result.model_dump(mode="json")

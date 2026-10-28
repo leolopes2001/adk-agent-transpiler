@@ -1,12 +1,3 @@
-"""Configuration of the `lab-agent` CLI, read from the environment.
-
-Only what the CLI itself needs lives here. The servers and services a
-workflow uses declare their own variables in the generated code
-(`RuntimeDeps.required_env()`), and the CLI checks them before running, so a
-missing variable is reported once, with every name, instead of failing in
-the middle of a run.
-"""
-
 import os
 from pathlib import Path
 from typing import Literal
@@ -22,11 +13,8 @@ class AgentSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     input_root: Path
-    """INPUT_ROOT: the run's image must be under it (default: working directory)."""
     generated_root: Path
-    """GENERATED_ROOT: the generated package must be under it (default: ./generated)."""
     log_level: LogLevel | None = None
-    """LOG_LEVEL: unset leaves the choice to the CLI (quiet unless --verbose)."""
 
     @classmethod
     def from_env(cls) -> "AgentSettings":
@@ -44,5 +32,4 @@ class AgentSettings(BaseModel):
 
 
 def missing(names: list[str]) -> list[str]:
-    """Names in `names` that are unset or empty."""
     return [name for name in names if not os.environ.get(name)]

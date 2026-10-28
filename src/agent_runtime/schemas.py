@@ -1,14 +1,3 @@
-"""Data contracts between workflow nodes.
-
-Node outputs become ADK session events, so none of these types may carry raw
-PII or image bytes: OCR text arrives already masked and the image never
-leaves the node that reads it.
-
-Every port type name in the transpiler registry has a counterpart here. Data
-that comes from an MCP server keeps the server's contract
-(`lab_common.contracts`) instead of a copy of it.
-"""
-
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,6 +8,7 @@ from lab_common.contracts.ocr import OcrLine, OcrResult
 Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
 
+# Node outputs become ADK session events: no raw PII or image bytes in any of these types.
 class _Schema(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -27,8 +17,8 @@ class RunInput(_Schema):
     image_path: str
 
 
+# Port names of the transpiler registry; a contract test keeps both sides in sync.
 OcrDocument = OcrResult
-"""Port name for the OCR result: text masked by the server, `patient_ref` already computed."""
 
 
 class InjectionReport(_Schema):
@@ -63,7 +53,6 @@ class _LlmSchema(_Schema):
 class ExtractedExam(_LlmSchema):
     name: Annotated[str, Field(min_length=2, max_length=120)]
     evidence: Annotated[str, Field(min_length=1, max_length=200)]
-    """Text copied from the document; checked for grounding by reconcile."""
 
 
 class ExtractedExams(_LlmSchema):
@@ -71,7 +60,6 @@ class ExtractedExams(_LlmSchema):
 
 
 LlmMentions = ExtractedExams
-"""Port name for the LLM extractor output; same schema the Agent is constrained to."""
 
 
 class ExamMention(_Schema):
@@ -85,18 +73,15 @@ class ExamMentions(_Schema):
 
 
 type JoinResult = dict[str, Any]
-"""What a JoinNode emits: each predecessor's output keyed by node name."""
 
-
+# Catalog codes only ever come from the RAG server, never from the model.
 Candidate = rag.Candidate
-"""A catalog exam as the RAG server returned it; codes only ever come from here."""
 
 
 class ResolvedExam(_Schema):
     mention: ExamMention
     candidates: list[Candidate]
     evidence_candidates: list[Candidate] | None = None
-    """Candidates for the mention's evidence; only for mentions the model named."""
 
 
 class ResolvedExams(_Schema):

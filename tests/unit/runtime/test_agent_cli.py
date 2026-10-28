@@ -597,7 +597,7 @@ def test_invalid_log_level_is_a_configuration_error(
     ],
 )
 def test_failure_mapping(exc: BaseException, expected: tuple[int, str]) -> None:
-    assert cli._failure(exc) == expected
+    assert cli._exit_and_error_code(exc) == expected
 
 
 def test_every_outcome_has_an_exit_code() -> None:

@@ -1,12 +1,3 @@
-"""Runtime dependencies declared by generated code.
-
-Generated modules are imported by the transpiler's validation probe and by
-tests, so building the graph must never open a connection or read a secret.
-`RuntimeDeps.lazy` only records configuration; the environment is read and
-the gateways are created the first time a node uses them, and `aclose()`
-releases them at the end of a run.
-"""
-
 from __future__ import annotations
 
 import os
@@ -20,18 +11,11 @@ from agent_runtime.gateways.mcp import AdkMcpGateway, McpEndpoint, McpGateway, S
 from agent_runtime.gateways.scheduler import SchedulerClient, SchedulerGateway
 
 MCP_GATEWAY_ENV = "AGENT_MCP_GATEWAY"
-"""`session` (default) or `adk`; see ADR-0009."""
 INPUT_ROOT_ENV = "INPUT_ROOT"
-"""Directory the run's image must be under; the working directory when unset."""
 
 _MCP_GATEWAYS: Mapping[str, type[SessionMcpGateway | AdkMcpGateway]] = MappingProxyType(
     {"session": SessionMcpGateway, "adk": AdkMcpGateway}
 )
-
-
-def input_root() -> Path:
-    """Resolved INPUT_ROOT (symlinks included), read at each call."""
-    return Path(os.environ.get(INPUT_ROOT_ENV) or Path.cwd()).resolve()
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,9 +34,8 @@ class HttpServiceConfig:
     timeout_s: float
 
 
+# The transpiler probe and the tests import generated modules: no env read before first use.
 class RuntimeDeps:
-    """Configuration of the MCP servers and HTTP services a workflow uses."""
-
     def __init__(
         self,
         mcp_servers: Mapping[str, McpServerConfig],
@@ -82,62 +65,37 @@ class RuntimeDeps:
     def http_services(self) -> Mapping[str, HttpServiceConfig]:
         return self._http_services
 
+    @property
+    def mcp(self) -> McpGateway:
+        if self._injected_mcp is not None:
+            return self._injected_mcp
+
+        if self._mcp is None:
+            self._mcp = self._build_mcp()
+        return self._mcp
+
     def required_env(self) -> list[str]:
-        """Environment variables the declared servers and services need."""
-        names = {n for c in self._mcp_servers.values() for n in (c.url_env, c.auth_token_env)}
+        names = set(self._mcp_env_names())
         names |= {n for c in self._http_services.values() for n in (c.base_url_env, c.api_key_env)}
         return sorted(names)
 
     def missing_env(self) -> list[str]:
         return [name for name in self.required_env() if not os.environ.get(name)]
 
-    def _env(self, *names: str) -> list[str]:
-        missing = [name for name in names if not os.environ.get(name)]
-        if missing:
-            raise ConfigurationError("MISSING_ENV", ", ".join(missing))
-        return [os.environ[name] for name in names]
-
-    @property
-    def mcp(self) -> McpGateway:
-        """Gateway to the declared MCP servers; built from the environment on first use."""
-        if self._injected_mcp is not None:
-            return self._injected_mcp
-        if self._mcp is None:
-            self._mcp = self._build_mcp()
-        return self._mcp
-
-    def _build_mcp(self) -> McpGateway:
-        choice = os.environ.get(MCP_GATEWAY_ENV) or "session"
-        gateway = _MCP_GATEWAYS.get(choice)
-        if gateway is None:
-            raise ConfigurationError(
-                "INVALID_ENV", f"{MCP_GATEWAY_ENV} must be one of {sorted(_MCP_GATEWAYS)}"
-            )
-        self._env(*(n for c in self._mcp_servers.values() for n in (c.url_env, c.auth_token_env)))
-        endpoints = {}
-        for name, config in self._mcp_servers.items():
-            url, token = self._env(config.url_env, config.auth_token_env)
-            endpoints[name] = McpEndpoint(
-                url=url,
-                token=token,
-                allowed_tools=config.allowed_tools,
-                connect_timeout_s=config.connect_timeout_s,
-                read_timeout_s=config.read_timeout_s,
-            )
-        return gateway(endpoints)
-
     def scheduler(self, service: str) -> SchedulerGateway:
-        """Client of a declared HTTP service; built from the environment on first use."""
         if service in self._injected_schedulers:
             return self._injected_schedulers[service]
+
         client = self._schedulers.get(service)
         if client is None:
             config = self._http_services.get(service)
             if config is None:
                 raise ConfigurationError("UNKNOWN_SERVICE", f"service {service!r} is not declared")
-            base_url, api_key = self._env(config.base_url_env, config.api_key_env)
+
+            base_url, api_key = self._require_env(config.base_url_env, config.api_key_env)
             client = SchedulerClient(base_url, api_key, config.timeout_s)
             self._schedulers[service] = client
+
         return client
 
     def use(
@@ -146,15 +104,51 @@ class RuntimeDeps:
         mcp: McpGateway | None = None,
         schedulers: Mapping[str, SchedulerGateway] | None = None,
     ) -> None:
-        """Replace gateways with given ones (tests, fakes); `aclose` keeps them."""
+        """Replace the gateways (tests, fakes); `aclose` leaves these open."""
         self._injected_mcp = mcp
         self._injected_schedulers = dict(schedulers or {})
 
     async def aclose(self) -> None:
-        """Release the gateways built from the environment; the next use rebuilds them."""
         mcp, self._mcp = self._mcp, None
         schedulers, self._schedulers = self._schedulers, {}
         if mcp is not None:
             await mcp.aclose()
         for client in schedulers.values():
             await client.aclose()
+
+    def _build_mcp(self) -> McpGateway:
+        choice = os.environ.get(MCP_GATEWAY_ENV) or "session"
+        gateway = _MCP_GATEWAYS.get(choice)
+        if gateway is None:
+            raise ConfigurationError(
+                "INVALID_ENV", f"{MCP_GATEWAY_ENV} must be one of {sorted(_MCP_GATEWAYS)}"
+            )
+
+        # Checked all at once first, so the error lists every missing name.
+        self._require_env(*self._mcp_env_names())
+        endpoints = {}
+        for name, config in self._mcp_servers.items():
+            url, token = self._require_env(config.url_env, config.auth_token_env)
+            endpoints[name] = McpEndpoint(
+                url=url,
+                token=token,
+                allowed_tools=config.allowed_tools,
+                connect_timeout_s=config.connect_timeout_s,
+                read_timeout_s=config.read_timeout_s,
+            )
+
+        return gateway(endpoints)
+
+    def _mcp_env_names(self) -> list[str]:
+        return [n for c in self._mcp_servers.values() for n in (c.url_env, c.auth_token_env)]
+
+    def _require_env(self, *names: str) -> list[str]:
+        missing = [name for name in names if not os.environ.get(name)]
+        if missing:
+            raise ConfigurationError("MISSING_ENV", ", ".join(missing))
+
+        return [os.environ[name] for name in names]
+
+
+def input_root() -> Path:
+    return Path(os.environ.get(INPUT_ROOT_ENV) or Path.cwd()).resolve()

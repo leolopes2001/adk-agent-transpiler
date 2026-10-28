@@ -1,7 +1,5 @@
 # Debugging only: publishes the MCP servers on the loopback interface.
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait
-# Publishing needs a non-internal network, so here the servers also join `edge`
-# and lose the isolation of the default setup. Not used by the standard flow.
 
 services:
   ocr-mcp:

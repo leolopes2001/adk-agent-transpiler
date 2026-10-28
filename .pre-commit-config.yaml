@@ -16,8 +16,7 @@ repos:
         stages: [commit-msg]
         args: [feat, fix, test, refactor, docs, build, ci, chore, perf]
 
-  # Whole-project checks: they ignore the staged file list and run when something
-  # they cover changes. Incremental mypy takes well under a second after the first run.
+        
   - repo: local
     hooks:
       - id: mypy
