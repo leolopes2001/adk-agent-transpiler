@@ -1,9 +1,3 @@
-"""Request correlation and access logging.
-
-Pure ASGI middleware instead of `BaseHTTPMiddleware`, so the bound context
-variables reach the endpoint (and the thread pool that runs sync endpoints).
-"""
-
 import re
 import time
 import uuid
@@ -16,44 +10,15 @@ from scheduler_api.api.errors import internal_error_response
 from scheduler_api.log import get_logger
 
 REQUEST_ID_HEADER = "X-Request-ID"
+HEALTH_PREFIX = "/health/"
 
-# Anything else is replaced by a fresh id: the value is echoed in a header and
-# written to every log line, so it must not carry arbitrary client text.
+# Echoed in a header and in every log line, so it must not carry arbitrary client text.
 _VALID_REQUEST_ID = re.compile(r"[A-Za-z0-9_\-:.]{1,128}")
-
-_HEALTH_PREFIX = "/health/"
 
 _log = get_logger(__name__)
 
 
-def _request_id(scope: Scope) -> str:
-    incoming = Headers(scope=scope).get(REQUEST_ID_HEADER)
-    if incoming is not None and _VALID_REQUEST_ID.fullmatch(incoming):
-        return incoming
-    return str(uuid.uuid4())
-
-
-def route_template(scope: Scope) -> str:
-    # Route templates, not raw paths, so unmatched URLs never end up in the logs.
-    route = scope.get("route")
-    path = getattr(route, "path", None)
-    if isinstance(path, str):
-        return path
-    if scope.get("endpoint") is not None:
-        # Matched a plain Starlette route (/docs, /openapi.json): fixed paths, no parameters.
-        return str(scope["path"])
-    return "<unmatched>"
-
-
 class RequestContextMiddleware:
-    """Assigns a request id, echoes it in the response and logs one `request` event
-    (except for the health check routes).
-
-    It also turns unexpected exceptions into a generic 500 problem, so that
-    response carries the request id like any other and the stack trace is
-    logged once, with the request id and without the request body.
-    """
-
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
@@ -62,7 +27,7 @@ class RequestContextMiddleware:
             await self.app(scope, receive, send)
             return
 
-        request_id = _request_id(scope)
+        request_id = _resolve_request_id(scope)
         scope.setdefault("state", {})["request_id"] = request_id
         status: int | None = None
         started = time.perf_counter()
@@ -79,19 +44,45 @@ class RequestContextMiddleware:
                 await self.app(scope, receive, send_with_request_id)
             except Exception:
                 _log.exception("unhandled_error", route=route_template(scope))
+                # Headers already sent: nothing sensible to answer; let the server close it.
                 if status is not None:
-                    # Headers already sent: nothing sensible to answer; let the server close it.
                     raise
+
                 await internal_error_response(scope)(scope, receive, send_with_request_id)
             finally:
-                route = route_template(scope)
-                # Health checks run every few seconds and would drown the log;
-                # unmatched paths under /health are still logged.
-                if not route.startswith(_HEALTH_PREFIX):
-                    _log.info(
-                        "request",
-                        method=scope["method"],
-                        route=route,
-                        status=status,
-                        duration_ms=round((time.perf_counter() - started) * 1000, 1),
-                    )
+                _log_request(scope, status, started)
+
+
+def route_template(scope: Scope) -> str:
+    route_path = getattr(scope.get("route"), "path", None)
+    if isinstance(route_path, str):
+        return route_path
+
+    # Only a matched route's path is logged: an unmatched URL is arbitrary client text.
+    if scope.get("endpoint") is not None:
+        return str(scope["path"])
+
+    return "<unmatched>"
+
+
+def _resolve_request_id(scope: Scope) -> str:
+    incoming = Headers(scope=scope).get(REQUEST_ID_HEADER)
+    if incoming is not None and _VALID_REQUEST_ID.fullmatch(incoming):
+        return incoming
+
+    return str(uuid.uuid4())
+
+
+def _log_request(scope: Scope, status: int | None, started: float) -> None:
+    route = route_template(scope)
+    # Health checks run every few seconds and would drown the log.
+    if route.startswith(HEALTH_PREFIX):
+        return
+
+    _log.info(
+        "request",
+        method=scope["method"],
+        route=route,
+        status=status,
+        duration_ms=round((time.perf_counter() - started) * 1000, 1),
+    )

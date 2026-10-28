@@ -1,11 +1,3 @@
-"""Public request/response contract of the /v1 API.
-
-Every model forbids unknown fields: the contract has no place for personal
-data, and a client that sends `patient_name` gets a 422 instead of having the
-field silently dropped. The patient is only ever referred to by `patient_ref`,
-an opaque pseudonym.
-"""
-
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -32,6 +24,7 @@ ExamCode = Annotated[
 
 
 class _Contract(BaseModel):
+    # Unknown fields are rejected, not dropped: the contract has no place for personal data.
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
@@ -47,7 +40,7 @@ class Exam(_Contract):
     )
 
 
-def _unique_codes(exams: list[Exam]) -> list[Exam]:
+def _reject_duplicate_codes(exams: list[Exam]) -> list[Exam]:
     seen: set[str] = set()
     for exam in exams:
         if exam.code in seen:
@@ -57,6 +50,7 @@ def _unique_codes(exams: list[Exam]) -> list[Exam]:
                 {"code": exam.code},
             )
         seen.add(exam.code)
+
     return exams
 
 
@@ -68,7 +62,7 @@ class AppointmentCreate(_Contract):
         description="Opaque patient pseudonym (never a name or document number).",
         examples=["pt_K7Q2M4XZB3C6D7E5F6G7H2J4KA"],
     )
-    exams: Annotated[list[Exam], AfterValidator(_unique_codes)] = Field(
+    exams: Annotated[list[Exam], AfterValidator(_reject_duplicate_codes)] = Field(
         min_length=1,
         max_length=MAX_EXAMS,
         description=f"1 to {MAX_EXAMS} exams, each code at most once.",
@@ -87,7 +81,7 @@ class AppointmentCreate(_Contract):
     def to_domain(self) -> AppointmentRequest:
         return AppointmentRequest(
             patient_ref=self.patient_ref,
-            exams=tuple(ExamRef(code=e.code, name=e.name) for e in self.exams),
+            exams=tuple(ExamRef(code=exam.code, name=exam.name) for exam in self.exams),
             source_document_sha256=self.source_document_sha256,
             requested_by=self.requested_by,
         )
@@ -108,7 +102,7 @@ class AppointmentOut(_Contract):
             appointment_id=appointment.id,
             status=appointment.status,
             patient_ref=appointment.patient_ref,
-            exams=[Exam(code=e.code, name=e.name) for e in appointment.exams],
+            exams=[Exam(code=exam.code, name=exam.name) for exam in appointment.exams],
             source_document_sha256=appointment.source_document_sha256,
             requested_by=appointment.requested_by,
             created_at=appointment.created_at,

@@ -1,11 +1,3 @@
-"""Table definitions.
-
-The migrations are the source of truth for the schema; these classes describe
-the same tables for queries, and an integration test checks that the two never
-drift apart. Constraint names are explicit so errors can be matched by name
-(the idempotency key primary key in particular).
-"""
-
 from datetime import datetime
 
 from sqlalchemy import (

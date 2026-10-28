@@ -1,5 +1,3 @@
-"""/v1/appointments: thin adapters between HTTP and `AppointmentService`."""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, Path, Response, status
@@ -11,6 +9,7 @@ from scheduler_api.api.deps import (
     document_request_id,
     require_api_key,
 )
+from scheduler_api.api.middleware import REQUEST_ID_HEADER
 from scheduler_api.schemas import APPOINTMENT_ID_PATTERN, AppointmentCreate, AppointmentOut
 
 router = APIRouter(
@@ -19,6 +18,7 @@ router = APIRouter(
     dependencies=[Depends(require_api_key), Depends(document_request_id)],
 )
 
+_REPLAYED_HEADER = "Idempotent-Replayed"
 _APPOINTMENT_CONTENT = {"application/json": {"example": docs.APPOINTMENT_EXAMPLE}}
 
 
@@ -41,7 +41,7 @@ _APPOINTMENT_CONTENT = {"application/json": {"example": docs.APPOINTMENT_EXAMPLE
                     "description": "Path of the new appointment.",
                     "schema": {"type": "string"},
                 },
-                "X-Request-ID": docs.REQUEST_ID_HEADER_DOC,
+                REQUEST_ID_HEADER: docs.REQUEST_ID_HEADER_DOC,
             },
         },
         200: {
@@ -49,7 +49,7 @@ _APPOINTMENT_CONTENT = {"application/json": {"example": docs.APPOINTMENT_EXAMPLE
             "description": "Replay: same key and body as an earlier request; nothing new created.",
             "content": _APPOINTMENT_CONTENT,
             "headers": {
-                "Idempotent-Replayed": {
+                _REPLAYED_HEADER: {
                     "description": "Always `true` on a replay.",
                     "schema": {"type": "string", "enum": ["true"]},
                 },
@@ -57,7 +57,7 @@ _APPOINTMENT_CONTENT = {"application/json": {"example": docs.APPOINTMENT_EXAMPLE
                     "description": "Path of the original appointment.",
                     "schema": {"type": "string"},
                 },
-                "X-Request-ID": docs.REQUEST_ID_HEADER_DOC,
+                REQUEST_ID_HEADER: docs.REQUEST_ID_HEADER_DOC,
             },
         },
         **docs.problem_responses(
@@ -81,7 +81,8 @@ def create_appointment(
     response.headers["Location"] = f"/v1/appointments/{appointment.id}"
     if replayed:
         response.status_code = status.HTTP_200_OK
-        response.headers["Idempotent-Replayed"] = "true"
+        response.headers[_REPLAYED_HEADER] = "true"
+
     return AppointmentOut.from_domain(appointment)
 
 

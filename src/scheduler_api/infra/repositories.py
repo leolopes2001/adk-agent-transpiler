@@ -1,9 +1,4 @@
-"""SQLAlchemy implementations of the domain storage protocols.
-
-Statements are executed explicitly (Core-style through the session) rather
-than through the ORM identity map, so each call hits the database when it is
-made and the order of writes is the order of the code.
-"""
+"""Core statements, not the ORM identity map: each call hits the database in code order."""
 
 from datetime import UTC, datetime
 from types import TracebackType
@@ -25,12 +20,6 @@ from scheduler_api.infra.orm import (
     AppointmentRow,
     IdempotencyKeyRow,
 )
-
-
-def _violated_constraint(exc: IntegrityError) -> str | None:
-    diag = getattr(exc.orig, "diag", None)
-    name = getattr(diag, "constraint_name", None)
-    return name if isinstance(name, str) else None
 
 
 class SqlAppointmentRepository:
@@ -69,7 +58,8 @@ class SqlAppointmentRepository:
         ).one_or_none()
         if row is None:
             return None
-        exams = self._session.execute(
+
+        exam_rows = self._session.execute(
             select(AppointmentExamRow.code, AppointmentExamRow.name)
             .where(AppointmentExamRow.appointment_id == appointment_id)
             .order_by(AppointmentExamRow.code)
@@ -78,7 +68,7 @@ class SqlAppointmentRepository:
             id=row.id,
             status=row.status,
             patient_ref=row.patient_ref,
-            exams=tuple(ExamRef(code=e.code, name=e.name) for e in exams),
+            exams=tuple(ExamRef(code=exam.code, name=exam.name) for exam in exam_rows),
             source_document_sha256=row.source_document_sha256,
             requested_by=row.requested_by,
             # The driver returns the session time zone; the API always speaks UTC.
@@ -103,6 +93,7 @@ class SqlIdempotencyRepository:
         ).one_or_none()
         if row is None:
             return None
+
         return IdempotencyRecord(
             key=row.key,
             request_hash=row.request_hash,
@@ -114,8 +105,6 @@ class SqlIdempotencyRepository:
 
     def add(self, record: IdempotencyRecord) -> None:
         try:
-            # With a concurrent insert of the same key, Postgres blocks here until
-            # the other transaction ends, then reports the primary key violation.
             self._session.execute(
                 insert(IdempotencyKeyRow).values(
                     key=record.key,
@@ -127,13 +116,13 @@ class SqlIdempotencyRepository:
                 )
             )
         except IntegrityError as exc:
-            if _violated_constraint(exc) == IDEMPOTENCY_KEY_PK:
+            if _violated_constraint_name(exc) == IDEMPOTENCY_KEY_PK:
                 raise IdempotencyKeyTakenError(record.key) from exc
+
             raise
 
     def delete_expired(self, key: str, now: datetime) -> None:
-        # The condition is repeated so a concurrent request that already
-        # replaced the key does not lose its fresh record.
+        # Rechecked so the fresh record of a concurrent request that replaced the key is kept.
         self._session.execute(
             delete(IdempotencyKeyRow).where(
                 IdempotencyKeyRow.key == key, IdempotencyKeyRow.expires_at <= now
@@ -157,8 +146,13 @@ class SqlUnitOfWork:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        # Rolls back anything not committed, then returns the connection to the pool.
         self._session.close()
 
     def commit(self) -> None:
         self._session.commit()
+
+
+def _violated_constraint_name(exc: IntegrityError) -> str | None:
+    diagnostics = getattr(exc.orig, "diag", None)
+    name = getattr(diagnostics, "constraint_name", None)
+    return name if isinstance(name, str) else None

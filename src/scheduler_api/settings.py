@@ -1,5 +1,3 @@
-"""Runtime configuration, read from environment variables."""
-
 from pathlib import Path
 from typing import Literal
 
@@ -10,11 +8,6 @@ LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
 class Settings(BaseSettings):
-    """Each field maps to the upper-case environment variable of the same name.
-
-    Secrets are `SecretStr` so they never show up in a repr or a log line.
-    """
-
     model_config = SettingsConfigDict(frozen=True, extra="ignore")
 
     database_url: SecretStr
