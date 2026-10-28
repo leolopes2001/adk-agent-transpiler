@@ -181,8 +181,20 @@ def google_api_key() -> str:
 
 
 def _base_env(workdir: Path) -> dict[str, str]:
-    """Host PATH and Docker settings, plus fresh secrets; no other host variable."""
-    keep = ("PATH", "HOME", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "XDG_RUNTIME_DIR")
+    """Host PATH and Docker settings, plus fresh secrets; no other host variable.
+
+    COMPOSE_PROFILES passes through, so `COMPOSE_PROFILES=observability` runs the
+    suite with the observability stack up.
+    """
+    keep = (
+        "PATH",
+        "HOME",
+        "DOCKER_HOST",
+        "DOCKER_CONTEXT",
+        "DOCKER_CONFIG",
+        "XDG_RUNTIME_DIR",
+        "COMPOSE_PROFILES",
+    )
     env = {name: os.environ[name] for name in keep if name in os.environ}
     env.update({name: secrets.token_urlsafe(32) for name in SECRET_NAMES})
     env["COMPOSE_PROJECT_NAME"] = PROJECT
