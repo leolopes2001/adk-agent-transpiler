@@ -6,7 +6,7 @@ from fastapi.security import APIKeyHeader
 
 from scheduler_api.api.docs import IDEMPOTENCY_KEY_EXAMPLE
 from scheduler_api.api.errors import INVALID_API_KEY_DETAIL
-from scheduler_api.api.middleware import REQUEST_ID_HEADER
+from scheduler_api.api.middleware import REQUEST_ID_HEADER, REQUEST_ID_PATTERN
 from scheduler_api.domain.catalog import Catalog
 from scheduler_api.domain.services import AppointmentService
 from scheduler_api.log import get_logger
@@ -22,7 +22,7 @@ _log = get_logger(__name__)
 api_key_header = APIKeyHeader(
     name=API_KEY_HEADER,
     auto_error=False,
-    description="Shared API key configured on the server (`SCHEDULER_API_KEY`).",
+    description="Chave da API configurada no servidor (`SCHEDULER_API_KEY`).",
 )
 
 
@@ -63,13 +63,13 @@ IdempotencyKey = Annotated[
         max_length=128,
         pattern=IDEMPOTENCY_KEY_PATTERN,
         description=(
-            "Client-chosen key, 8 to 128 characters from `A-Z a-z 0-9 _ - : .`. "
-            "Repeating a request with the same key and body returns the original "
-            "appointment instead of creating another one."
+            "Chave escolhida pelo cliente: 8 a 128 caracteres de `A-Z a-z 0-9 _ - : .`. "
+            "Repetir a requisição com a mesma chave e o mesmo corpo devolve a solicitação "
+            "original em vez de criar outra."
         ),
         openapi_examples={
             "example": {
-                "summary": "Key chosen by the client",
+                "summary": "Chave escolhida pelo cliente",
                 "value": IDEMPOTENCY_KEY_EXAMPLE,
             }
         },
@@ -83,9 +83,12 @@ def document_request_id(
         Header(
             alias=REQUEST_ID_HEADER,
             description=(
-                "Optional correlation id, echoed in the response and in the logs. "
-                "Values outside `[A-Za-z0-9_-:.]{1,128}` are replaced by a generated UUID."
+                "Id de correlação opcional, devolvido na resposta e gravado nos logs: "
+                "1 a 128 caracteres de `A-Z a-z 0-9 _ - : .`. Um valor fora desse formato "
+                "é trocado por um UUID gerado."
             ),
+            # Documented only: an invalid value is replaced, not rejected.
+            json_schema_extra={"pattern": REQUEST_ID_PATTERN},
         ),
     ] = None,
 ) -> None:

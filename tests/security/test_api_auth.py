@@ -123,7 +123,7 @@ def test_openapi_declares_the_api_key_scheme(client: TestClient) -> None:
         "type": "apiKey",
         "in": "header",
         "name": "X-API-Key",
-        "description": "Shared API key configured on the server (`SCHEDULER_API_KEY`).",
+        "description": "Chave da API configurada no servidor (`SCHEDULER_API_KEY`).",
     }
 
 

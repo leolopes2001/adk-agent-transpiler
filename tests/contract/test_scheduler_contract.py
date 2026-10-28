@@ -185,3 +185,19 @@ def test_client_checks_every_field_of_the_success_body(
                 assert client["properties"][field].get(keyword) == (
                     schema["properties"][field].get(keyword)
                 ), (field, keyword)
+
+
+@pytest.mark.parametrize(
+    ("path", "method"),
+    [("/v1/appointments", "get"), ("/v1/appointments/{appointment_id}", "get")],
+)
+def test_read_routes_return_the_model_the_client_parses(
+    spec: dict[str, Any], operation: dict[str, Any], path: str, method: str
+) -> None:
+    created = operation["responses"]["201"]["content"]["application/json"]["schema"]
+    read = spec["paths"][path][method]["responses"]["200"]["content"]["application/json"]
+    schema = read["schema"].get("items", read["schema"])
+    example = read["example"][0] if isinstance(read["example"], list) else read["example"]
+
+    assert schema == created
+    assert scheduler.AppointmentOut.model_validate(example)

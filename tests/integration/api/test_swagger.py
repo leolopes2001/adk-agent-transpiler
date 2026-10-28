@@ -7,6 +7,7 @@ import httpx
 import pytest
 
 from scheduler_api import openapi
+from scheduler_api.api import docs
 
 pytestmark = pytest.mark.integration
 
@@ -37,7 +38,7 @@ async def test_declares_the_api_key_security_scheme(served: dict[str, Any]) -> N
         "type": "apiKey",
         "in": "header",
         "name": "X-API-Key",
-        "description": "Shared API key configured on the server (`SCHEDULER_API_KEY`).",
+        "description": "Chave da API configurada no servidor (`SCHEDULER_API_KEY`).",
     }
 
 
@@ -74,3 +75,28 @@ async def test_documented_example_works_against_the_api(
     assert response.status_code == 201, response.text
     documented = operation["responses"]["201"]["content"]["application/json"]["example"]
     assert set(response.json()) == set(documented)
+
+
+async def test_documented_read_examples_work_against_the_api(
+    client: httpx.AsyncClient, served: dict[str, Any]
+) -> None:
+    """The list filter and the exam code that "Try it out" fills in."""
+    created = await client.post(
+        "/v1/appointments",
+        json=docs.CREATE_EXAMPLES["two_exams"]["value"],
+        headers={"Idempotency-Key": docs.IDEMPOTENCY_KEY_EXAMPLE},
+    )
+    list_parameters = served["paths"]["/v1/appointments"]["get"]["parameters"]
+    [patient_ref] = [p for p in list_parameters if p["name"] == "patient_ref"]
+    exam_parameters = served["paths"]["/v1/exams/{code}"]["get"]["parameters"]
+    [code] = [p for p in exam_parameters if p["name"] == "code"]
+
+    listed = await client.get(
+        "/v1/appointments", params={"patient_ref": patient_ref["examples"]["patient_ref"]["value"]}
+    )
+    for example in code["examples"].values():
+        exam = await client.get(f"/v1/exams/{example['value']}")
+        assert exam.status_code == 200, example
+
+    assert listed.status_code == 200
+    assert listed.json() == [created.json()]

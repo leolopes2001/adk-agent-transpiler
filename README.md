@@ -37,6 +37,7 @@ flowchart LR
 - [Mapa do código](#mapa-do-código)
 - [Transpilador](#transpilador)
 - [Servidores MCP](#servidores-mcp)
+- [API de agendamento](#api-de-agendamento)
 - [Executando o agente](#executando-o-agente)
 - [Opcional: logs e traces](#opcional-logs-e-traces)
 - [Segurança](#segurança)
@@ -213,6 +214,32 @@ Como o agente se conecta:
 4. **Gateway.** As tools são chamadas por nós determinísticos, nunca pelo LLM. O padrão é o `SessionMcpGateway` ([`gateways/mcp.py`](src/agent_runtime/gateways/mcp.py)), que usa `mcp.client.sse.sse_client` + `ClientSession.call_tool`, uma conexão por chamada, com os timeouts da spec. Existe também o `AdkMcpGateway`, sobre `McpToolset` + `SseConnectionParams` do ADK (`AGENT_MCP_GATEWAY=adk`). O motivo de o padrão não ser o do ADK está no [ADR-0009](docs/adr/0009-adk-api-contract.md): ele somaria um segundo nível de retry e não distingue um 401 de uma queda de rede.
 
 Para acessar os servidores do host durante o desenvolvimento, o [`docker-compose.dev.yml`](docker-compose.dev.yml) publica as portas 8101 e 8102 (e tira o isolamento, como avisa o arquivo).
+
+## API de agendamento
+
+A [`scheduler_api`](src/scheduler_api/) registra as solicitações que o agente envia e permite consultá-las. As rotas `/v1` exigem o header `X-API-Key`; nenhuma recebe dado pessoal, só o pseudônimo `patient_ref`. Os erros vêm em `application/problem+json`.
+
+| Rota | O que faz |
+|---|---|
+| `POST /v1/appointments` | Registra uma solicitação (idempotente por `Idempotency-Key`) |
+| `GET /v1/appointments` | Lista da mais recente para a mais antiga; `limit` de 1 a 100 (padrão 20) e filtro opcional `patient_ref` |
+| `GET /v1/appointments/{appointment_id}` | Devolve uma solicitação; `404` se não existir |
+| `GET /v1/exams/{code}` | Devolve o nome oficial de um código do catálogo |
+| `GET /health/live`, `GET /health/ready` | Liveness e readiness, sem chave |
+
+Para conferir no Swagger a solicitação que o agente registrou:
+
+1. Rode o agente e copie o id da linha `ID` do resultado (por exemplo, `apt_01M5ZW49FFY9F6GH09JGZADNKV`).
+2. Abra [http://localhost:8000/docs](http://localhost:8000/docs), clique em **Authorize** e informe o `SCHEDULER_API_KEY` do `.env`.
+3. Em **Agendamentos**, abra `GET /v1/appointments/{appointment_id}`, clique em **Try it out**, cole o id em `appointment_id` e clique em **Execute**. A resposta traz os exames com o nome do catálogo, o `patient_ref` e o `created_at`.
+
+Sem o id em mãos, `GET /v1/appointments` com **Try it out** mostra as últimas solicitações. Apague o `patient_ref` de exemplo para ver todas.
+
+O mesmo pelo terminal, com o `SCHEDULER_API_KEY` do `.env` no ambiente:
+
+```bash
+curl -H "X-API-Key: $SCHEDULER_API_KEY" http://localhost:8000/v1/appointments/apt_01M5ZW49FFY9F6GH09JGZADNKV
+```
 
 ## Executando o agente
 

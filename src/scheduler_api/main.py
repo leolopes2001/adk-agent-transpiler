@@ -17,7 +17,7 @@ from scheduler_api.settings import Settings
 from scheduler_api.telemetry import TracingMiddleware
 from scheduler_api.telemetry import setup as setup_telemetry
 
-API_VERSION = "1.0.0"
+API_VERSION = "1.1.0"
 
 _log = get_logger(__name__)
 
@@ -29,7 +29,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging(settings.log_level, export=log_export)
 
     app = FastAPI(
-        title="Lab Exam Scheduler API",
+        title=docs.TITLE,
         version=API_VERSION,
         description=docs.DESCRIPTION,
         openapi_tags=docs.TAGS,

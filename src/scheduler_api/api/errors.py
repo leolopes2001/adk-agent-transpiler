@@ -59,22 +59,22 @@ _CODE_BY_STATUS = {
 
 
 class FieldError(BaseModel):
-    loc: list[str | int] = Field(description="Path to the offending field, e.g. body.exams.1.code.")
-    code: str = Field(description="Machine-readable error code.")
-    msg: str = Field(description="Human-readable message; never contains the submitted value.")
+    loc: list[str | int] = Field(description="Caminho do campo com erro, ex.: body.exams.1.code.")
+    code: str = Field(description="Código do erro, para máquinas.")
+    msg: str = Field(description="Mensagem legível; nunca contém o valor enviado.")
 
 
 class Problem(BaseModel):
-    """Error body (RFC 9457)."""
+    """Corpo de erro (RFC 9457)."""
 
-    type: str = Field(description="URI identifying the error code.")
-    title: str = Field(description="Short summary of the error code.")
-    status: int = Field(description="HTTP status code.")
-    detail: str | None = Field(default=None, description="Explanation of this occurrence.")
-    instance: str | None = Field(default=None, description="Path of the request.")
-    request_id: str | None = Field(default=None, description="Same value as `X-Request-ID`.")
+    type: str = Field(description="URI que identifica o código do erro.")
+    title: str = Field(description="Resumo do código do erro.")
+    status: int = Field(description="Status HTTP.")
+    detail: str | None = Field(default=None, description="Explicação desta ocorrência.")
+    instance: str | None = Field(default=None, description="Path da requisição.")
+    request_id: str | None = Field(default=None, description="Mesmo valor do `X-Request-ID`.")
     errors: list[FieldError] | None = Field(
-        default=None, description="Per-field errors (validation failures only)."
+        default=None, description="Erros por campo (só em falhas de validação)."
     )
 
 

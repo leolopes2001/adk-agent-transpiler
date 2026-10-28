@@ -13,7 +13,8 @@ REQUEST_ID_HEADER = "X-Request-ID"
 HEALTH_PREFIX = "/health/"
 
 # Echoed in a header and in every log line, so it must not carry arbitrary client text.
-_VALID_REQUEST_ID = re.compile(r"[A-Za-z0-9_\-:.]{1,128}")
+REQUEST_ID_PATTERN = r"^[A-Za-z0-9_\-:.]{1,128}$"
+_VALID_REQUEST_ID = re.compile(REQUEST_ID_PATTERN)
 
 _log = get_logger(__name__)
 

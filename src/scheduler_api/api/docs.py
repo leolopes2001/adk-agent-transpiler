@@ -13,47 +13,33 @@ from scheduler_api.api.errors import (
 )
 from scheduler_api.api.middleware import REQUEST_ID_HEADER
 
+TITLE = "API de Agendamento de Exames"
+
 DESCRIPTION = """
-Records **exam scheduling requests** sent by the exam scheduling agent. A request
-is stored with status `requested`; booking a time slot is out of scope.
+Registra e consulta **solicitações de agendamento de exames** enviadas pelo agente.
+Cada solicitação fica com status `requested`; reservar horário está fora do escopo.
 
-### Flow
-1. Click **Authorize** and enter the API key (`X-API-Key` header).
-2. `POST /v1/appointments` with an `Idempotency-Key` header and the request body.
-   Every exam code must exist in the catalog and its name must match the
-   catalog name (case, accents and punctuation are ignored).
-3. Sending the same request again with the same key returns the original
-   appointment (`200` with `Idempotent-Replayed: true`) instead of creating
-   another one. The same key with a different body is a `409`. Keys expire
-   after `IDEMPOTENCY_TTL_HOURS` (24 by default); after that the same request
-   creates a new appointment.
-4. `GET /v1/appointments/{appointment_id}` (the `Location` of the `201`) reads it back.
+**Autenticação:** as rotas `/v1` exigem o header `X-API-Key`. Clique em **Authorize**
+e informe a chave configurada no servidor (`SCHEDULER_API_KEY`).
 
-The contract has no field for personal data: the patient is identified only by
-`patient_ref`, an opaque pseudonym, and unknown fields are rejected with `422`.
+**Sem dados pessoais:** o paciente é identificado só pelo pseudônimo `patient_ref`
+(`pt_` + 26 caracteres). Campos fora do contrato, como nome ou CPF, são rejeitados com `422`.
 
-### Errors
-Every error is `application/problem+json` (RFC 9457) with a `type` URI per error
-code, the `request_id` (same as the `X-Request-ID` response header) and, for
-validation errors, an `errors` list with the location of each failing field.
-
-### Example
-```
-curl -X POST http://localhost:8000/v1/appointments \\
-  -H "X-API-Key: $SCHEDULER_API_KEY" \\
-  -H "Idempotency-Key: 3f0c9a8e5b7d4c21a6e9f0b1c2d3e4f5" \\
-  -H "Content-Type: application/json" \\
-  -d '{"patient_ref": "pt_K7Q2M4XZB3C6D7E5F6G7H2J4KA",
-       "exams": [{"code": "LAB-10001", "name": "Hemograma completo"}],
-       "source_document_sha256": "9b1e2c4d6f8a0b1c3d5e7f9a1b2c4d6e8f0a2b4c6d8e0f1a3b5c7d9e1f2a4b6c",
-       "requested_by": "exam_scheduling_agent"}'
-```
+Os erros usam `application/problem+json` (RFC 9457) e trazem o `request_id`, o mesmo
+valor do header `X-Request-ID` da resposta.
 """.strip()
 
+TAG_APPOINTMENTS = "Agendamentos"
+TAG_EXAMS = "Exames"
+TAG_HEALTH = "Health"
+
 TAGS: list[dict[str, Any]] = [
-    {"name": "appointments", "description": "Scheduling requests (authenticated)."},
-    {"name": "exams", "description": "Catalog lookup (authenticated)."},
-    {"name": "health", "description": "Liveness and readiness probes (public)."},
+    {
+        "name": TAG_APPOINTMENTS,
+        "description": "Registro e consulta de solicitações de agendamento (exige X-API-Key).",
+    },
+    {"name": TAG_EXAMS, "description": "Consulta ao catálogo de exames (exige X-API-Key)."},
+    {"name": TAG_HEALTH, "description": "Sondas de liveness e readiness (públicas)."},
 ]
 
 PATIENT_REF = "pt_K7Q2M4XZB3C6D7E5F6G7H2J4KA"
@@ -77,7 +63,7 @@ APPOINTMENT_EXAMPLE: dict[str, Any] = {
 
 CREATE_EXAMPLES: dict[str, Any] = {
     "two_exams": {
-        "summary": "Two catalog exams",
+        "summary": "Dois exames do catálogo",
         "value": {
             "patient_ref": PATIENT_REF,
             "exams": [COMPLETE_BLOOD_COUNT, FASTING_GLUCOSE],
@@ -86,8 +72,8 @@ CREATE_EXAMPLES: dict[str, Any] = {
         },
     },
     "unknown_code": {
-        "summary": "Unknown code (422)",
-        "description": f"{UNKNOWN_EXAM_CODE} is not in the catalog, so the request is rejected.",
+        "summary": "Código fora do catálogo (422)",
+        "description": f"{UNKNOWN_EXAM_CODE} não existe no catálogo; a solicitação é rejeitada.",
         "value": {
             "patient_ref": PATIENT_REF,
             "exams": [{"code": UNKNOWN_EXAM_CODE, "name": "Exame inexistente"}],
@@ -96,8 +82,8 @@ CREATE_EXAMPLES: dict[str, Any] = {
         },
     },
     "personal_data": {
-        "summary": "Personal data field (422)",
-        "description": "Fields outside the contract, such as a patient name, are rejected.",
+        "summary": "Campo com dado pessoal (422)",
+        "description": "Campos fora do contrato, como o nome do paciente, são rejeitados.",
         "value": {
             "patient_ref": PATIENT_REF,
             "patient_name": "Fulano de Tal",
@@ -111,73 +97,83 @@ CREATE_EXAMPLES: dict[str, Any] = {
 IDEMPOTENCY_KEY_EXAMPLE = "3f0c9a8e5b7d4c21a6e9f0b1c2d3e4f5"
 
 REQUEST_ID_HEADER_DOC = {
-    "description": "Request id: the `X-Request-ID` sent by the client, or a generated UUID.",
-    "schema": {"type": "string"},
+    "description": "Id da requisição: o `X-Request-ID` enviado pelo cliente ou um UUID gerado.",
+    "schema": {"type": "string", "maxLength": 128},
+    "example": REQUEST_ID,
 }
 
-_CREATE_PATH = "/v1/appointments"
+_APPOINTMENTS_PATH = "/v1/appointments"
 _APPOINTMENT_PATH = f"/v1/appointments/{APPOINTMENT_ID}"
 _UNKNOWN_EXAM_PATH = f"/v1/exams/{UNKNOWN_EXAM_CODE}"
 
 _DESCRIPTION_BY_STATUS = {
-    400: "`Idempotency-Key` missing or invalid.",
-    401: "API key missing or invalid.",
-    404: "Not found.",
-    409: "Same `Idempotency-Key` used with a different body.",
-    422: "Request does not satisfy the contract.",
-    500: "Unexpected error; details are only in the server log.",
+    400: "`Idempotency-Key` ausente ou inválido.",
+    401: "API key ausente ou inválida.",
+    404: "Não encontrado.",
+    409: "Mesmo `Idempotency-Key` usado com outro corpo.",
+    422: "A requisição não atende ao contrato.",
+    500: "Erro inesperado; os detalhes ficam só no log do servidor.",
 }
 
 
 def _problem_example(  # noqa: PLR0913, PLR0917 - one argument per problem field
+    summary: str,
     code: str,
-    title: str,
     status: int,
     detail: str | None,
     instance: str,
     errors: list[dict[str, Any]] | None = None,
+    *,
+    title: str | None = None,
 ) -> dict[str, Any]:
     problem = Problem(
         type=problem_type(code),
-        title=title,
+        title=title or PROBLEM_TITLES[code],
         status=status,
         detail=detail,
         instance=instance,
         request_id=REQUEST_ID,
         errors=errors,  # type: ignore[arg-type]  # validated into FieldError
     )
-    return problem.model_dump(mode="json", exclude_none=True)
+    return {"summary": summary, "value": problem.model_dump(mode="json", exclude_none=True)}
+
+
+def _validation_example(summary: str, instance: str, error: dict[str, Any]) -> dict[str, Any]:
+    return _problem_example(
+        summary, "validation_error", 422, "1 validation error(s).", instance, [error]
+    )
 
 
 PROBLEM_EXAMPLES: dict[str, dict[str, Any]] = {
     "invalid_idempotency_key": _problem_example(
+        "Idempotency-Key ausente",
         "invalid_idempotency_key",
-        PROBLEM_TITLES["invalid_idempotency_key"],
         400,
         INVALID_IDEMPOTENCY_KEY_DETAIL,
-        _CREATE_PATH,
+        _APPOINTMENTS_PATH,
         [{"loc": ["header", "Idempotency-Key"], "code": "missing", "msg": "Field required"}],
     ),
     "unauthorized": _problem_example(
+        "Sem API key ou com a chave errada",
         "unauthorized",
-        "Unauthorized",
         401,
         INVALID_API_KEY_DETAIL,
-        _CREATE_PATH,
+        _APPOINTMENTS_PATH,
+        title="Unauthorized",
     ),
     "idempotency_key_reuse": _problem_example(
+        "Mesma chave com outro corpo",
         "idempotency_key_reuse",
-        PROBLEM_TITLES["idempotency_key_reuse"],
         409,
         IDEMPOTENCY_KEY_REUSE_DETAIL,
-        _CREATE_PATH,
+        _APPOINTMENTS_PATH,
     ),
     "unknown_exam_code": _problem_example(
+        "Código fora do catálogo",
         "unknown_exam_code",
-        PROBLEM_TITLES["unknown_exam_code"],
         422,
         "1 exam code(s) do not exist in the catalog.",
-        _CREATE_PATH,
+        _APPOINTMENTS_PATH,
         [
             {
                 "loc": ["body", "exams", 1, "code"],
@@ -187,11 +183,11 @@ PROBLEM_EXAMPLES: dict[str, dict[str, Any]] = {
         ],
     ),
     "exam_name_mismatch": _problem_example(
+        "Nome diferente do catálogo",
         "exam_name_mismatch",
-        PROBLEM_TITLES["exam_name_mismatch"],
         422,
         "1 exam name(s) do not match the catalog.",
-        _CREATE_PATH,
+        _APPOINTMENTS_PATH,
         [
             {
                 "loc": ["body", "exams", 0, "name"],
@@ -200,49 +196,80 @@ PROBLEM_EXAMPLES: dict[str, dict[str, Any]] = {
             }
         ],
     ),
-    "validation_error": _problem_example(
-        "validation_error",
-        PROBLEM_TITLES["validation_error"],
-        422,
-        "1 validation error(s).",
-        _CREATE_PATH,
-        [
-            {
-                "loc": ["body", "patient_name"],
-                "code": "extra_forbidden",
-                "msg": "Extra inputs are not permitted",
-            }
-        ],
+    "validation_error": _validation_example(
+        "Campo fora do contrato",
+        _APPOINTMENTS_PATH,
+        {
+            "loc": ["body", "patient_name"],
+            "code": "extra_forbidden",
+            "msg": "Extra inputs are not permitted",
+        },
+    ),
+    "invalid_limit": _validation_example(
+        "limit fora de 1 a 100",
+        _APPOINTMENTS_PATH,
+        {
+            "loc": ["query", "limit"],
+            "code": "less_than_equal",
+            "msg": "Input should be less than or equal to 100",
+        },
+    ),
+    "invalid_patient_ref": _validation_example(
+        "patient_ref fora do formato",
+        _APPOINTMENTS_PATH,
+        {
+            "loc": ["query", "patient_ref"],
+            "code": "string_pattern_mismatch",
+            "msg": "String should match pattern '^pt_[A-Z2-7]{26}$'",
+        },
+    ),
+    "invalid_appointment_id": _validation_example(
+        "appointment_id fora do formato",
+        "/v1/appointments/123",
+        {
+            "loc": ["path", "appointment_id"],
+            "code": "string_pattern_mismatch",
+            "msg": "String should match pattern '^apt_[0-9A-HJKMNP-TV-Z]{26}$'",
+        },
+    ),
+    "invalid_exam_code": _validation_example(
+        "Código fora do formato",
+        "/v1/exams/lab-1",
+        {
+            "loc": ["path", "code"],
+            "code": "string_pattern_mismatch",
+            "msg": "String should match pattern '^[A-Z]{3}-\\d{5}$'",
+        },
     ),
     "appointment_not_found": _problem_example(
+        "Solicitação inexistente",
         "appointment_not_found",
-        PROBLEM_TITLES["appointment_not_found"],
         404,
         f"{APPOINTMENT_ID} does not exist.",
         _APPOINTMENT_PATH,
     ),
     "exam_not_found": _problem_example(
+        "Código fora do catálogo",
         "exam_not_found",
-        PROBLEM_TITLES["exam_not_found"],
         404,
         f"{UNKNOWN_EXAM_CODE} is not in the catalog.",
         _UNKNOWN_EXAM_PATH,
     ),
     "internal_error": _problem_example(
+        "Erro inesperado",
         "internal_error",
-        PROBLEM_TITLES["internal_error"],
         500,
         INTERNAL_ERROR_DETAIL,
-        _CREATE_PATH,
+        _APPOINTMENTS_PATH,
     ),
 }
 
 
 def problem_responses(
-    codes_by_status: Mapping[int, Sequence[str]],
+    examples_by_status: Mapping[int, Sequence[str]],
 ) -> dict[int | str, dict[str, Any]]:
     responses: dict[int | str, dict[str, Any]] = {
-        status: _problem_response_doc(status, codes) for status, codes in codes_by_status.items()
+        status: _problem_response_doc(status, names) for status, names in examples_by_status.items()
     }
     return responses
 
@@ -257,16 +284,12 @@ def fix_problem_media_types(schema: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
-def _problem_response_doc(status: int, codes: Sequence[str]) -> dict[str, Any]:
-    examples = {
-        code: {"summary": PROBLEM_EXAMPLES[code]["title"], "value": PROBLEM_EXAMPLES[code]}
-        for code in codes
-    }
+def _problem_response_doc(status: int, names: Sequence[str]) -> dict[str, Any]:
     return {
         "model": Problem,
         "description": _DESCRIPTION_BY_STATUS[status],
         "headers": {REQUEST_ID_HEADER: REQUEST_ID_HEADER_DOC},
-        "content": {PROBLEM_MEDIA_TYPE: {"examples": examples}},
+        "content": {PROBLEM_MEDIA_TYPE: {"examples": {n: PROBLEM_EXAMPLES[n] for n in names}}},
     }
 
 
