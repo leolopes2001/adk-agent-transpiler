@@ -154,3 +154,38 @@ def test_no_magenta_anywhere_in_the_review(monkeypatch: pytest.MonkeyPatch) -> N
     assert "[0/1/2]" in ANSI.sub("", text)
     assert not MAGENTA.search(text)
     assert "\x1b[" in text
+
+
+@pytest.mark.parametrize("invalid", ["9", "x", "", "  ", "-1", "1.0"])
+def test_an_invalid_answer_is_explained_in_portuguese_and_asked_again(invalid: str) -> None:
+    out = _console(color_system=None)
+
+    answer = terminal.ChoicePrompt.ask(
+        "Sua escolha para o item 1",
+        choices=["0", "1", "2", "3"],
+        console=out,
+        stream=StringIO(f"{invalid}\n 2 \n"),
+    )
+
+    assert isinstance(out.file, StringIO)
+    text = out.file.getvalue()
+    assert answer == "2"
+    assert "Opção inválida. Digite um dos números: 0, 1, 2 ou 3." in text
+    assert text.count("Sua escolha para o item 1 [0/1/2/3]:") == 2
+    assert "Please select" not in text
+
+
+def test_review_reasks_until_a_valid_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("sys.stdin", StringIO("7\nz\n\n2\n0\n"))
+    out = _console(color_system=None)
+
+    assert terminal.ask_review(PAYLOAD, out) == {"choices": {"1": "LAB-10045", "3": "none"}}
+    assert isinstance(out.file, StringIO)
+    assert out.file.getvalue().count("Opção inválida. Digite um dos números: 0, 1 ou 2.") == 3
+
+
+@pytest.mark.parametrize(
+    ("items", "spoken"), [(["0"], "0"), (["0", "1"], "0 ou 1"), (["0", "1", "2"], "0, 1 ou 2")]
+)
+def test_spoken_list(items: list[str], spoken: str) -> None:
+    assert terminal.spoken_list(items) == spoken

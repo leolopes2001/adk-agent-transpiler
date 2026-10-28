@@ -202,7 +202,7 @@ def test_spec_changed_without_regenerating_is_refused(e2e_stack: ComposeStack) -
     )
 
     assert result.returncode == 7, result.stderr
-    assert "out of date with the spec" in result.stderr
+    assert "o código gerado está desatualizado em relação à spec" in result.stderr
     assert result.stdout == ""
 
 

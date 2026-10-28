@@ -14,6 +14,7 @@ from google.adk import Event
 from rich.console import Group, RenderableType
 from rich.text import Text
 
+from agent_runtime.messages import run_error
 from agent_runtime.nodes.present import (
     RunResult,
     details_view,
@@ -139,49 +140,14 @@ def build_report(  # noqa: PLR0913 - every field of the report
     return report
 
 
-_ERRORS: tuple[tuple[str, str, str], ...] = (
-    (
-        "INPUT_REQUIRED",
-        "O pedido precisa de revisão humana, mas a execução é não interativa.",
-        "Rode de novo sem --non-interactive para escolher os exames.",
-    ),
-    (
-        "PII_TRIPWIRE",
-        "A execução foi interrompida para proteger dados pessoais do pedido.",
-        "Nada foi agendado. Encaminhe o pedido para conferência manual.",
-    ),
-    (
-        "LLM_",
-        "O serviço de IA não respondeu.",
-        "Tente de novo em alguns minutos; se continuar, confira a GOOGLE_API_KEY e a cota.",
-    ),
-    (
-        "MCP_",
-        "Um serviço necessário (leitura do pedido ou catálogo de exames) não respondeu.",
-        "Confira se os serviços estão no ar (docker compose ps) e tente de novo.",
-    ),
-    (
-        "NODE_TIMEOUT",
-        "Um serviço necessário demorou demais para responder.",
-        "Confira se os serviços estão no ar (docker compose ps) e tente de novo.",
-    ),
-)
-_UNEXPECTED = (
-    "Ocorreu um erro inesperado e nada foi agendado.",
-    "Tente de novo; se continuar, rode com --verbose e procure o suporte.",
-)
-
-
-def error_message(error_code: str) -> tuple[str, str]:
+def error_message(error_code: str, node: str | None = None) -> tuple[str, str]:
     """What went wrong and what the user can do, for a run that ended without a result."""
-    for prefix, message, action in _ERRORS:
-        if error_code.startswith(prefix):
-            return message, action
-    return _UNEXPECTED
+    what, action = run_error(error_code, node)
+    return what[:1].upper() + what[1:] + ".", action
 
 
-def _error_view(error_code: str) -> Group:
-    message, action = error_message(error_code)
+def _error_view(error_code: str, node: str | None) -> Group:
+    message, action = error_message(error_code, node)
     return summary(
         f"{ICON_FAIL} Não foi possível concluir o pedido",
         FAIL,
@@ -213,7 +179,8 @@ def render_text(
     if result:
         parts.append(details_view(result) if verbose else result_view(result))
     elif report.get("error_code"):
-        parts.append(_error_view(report["error_code"]))
+        path = report.get("path") or []
+        parts.append(_error_view(report["error_code"], path[-1] if path else None))
     timings = report["timings_ms"]
     if verbose:
         footer = (

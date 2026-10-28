@@ -18,7 +18,7 @@ from rich import box
 from rich.console import Console, Group
 from rich.padding import Padding
 from rich.panel import Panel
-from rich.prompt import Prompt
+from rich.prompt import InvalidResponse, Prompt
 from rich.rule import Rule
 from rich.status import Status
 from rich.table import Table
@@ -112,6 +112,27 @@ def welcome(console: Console, name: str, description: str, image: str) -> None:
     console.print(Text(f"Lendo {image}...", style=MUTED))
 
 
+def spoken_list(items: Sequence[str]) -> str:
+    """'0, 1, 2 ou 3'."""
+    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} ou {items[-1]}"
+
+
+class ChoicePrompt(Prompt):
+    """A prompt that accepts only one of its choices and says so in Portuguese.
+
+    rich's own message for an invalid answer is in English; blanks around the
+    answer are ignored.
+    """
+
+    def process_response(self, value: str) -> str:
+        answer = value.strip()
+        if self.choices is not None and answer not in self.choices:
+            raise InvalidResponse(
+                Text(f"Opção inválida. Digite um dos números: {spoken_list(self.choices)}.")
+            )
+        return answer
+
+
 def similarity(score: float) -> str:
     return f"{score:.2f}".replace(".", ",")
 
@@ -186,7 +207,7 @@ def ask_review(payload: Mapping[str, Any], console: Console | None = None) -> di
         options = list(item.get("options", []))
         console.print()
         console.print(review_item(item, position, len(items)))
-        answer = Prompt.ask(
+        answer = ChoicePrompt.ask(
             f"Sua escolha para o item {position}",
             choices=[str(n) for n in range(len(options) + 1)],
             console=console,

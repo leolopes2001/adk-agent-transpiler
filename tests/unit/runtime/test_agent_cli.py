@@ -9,6 +9,8 @@ import base64
 import hashlib
 import json
 import logging
+import re
+import signal
 import sys
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
@@ -28,7 +30,7 @@ from agent_runtime import cli, terminal
 from agent_runtime.errors import ConfigurationError, PermanentError, TransientError
 from agent_runtime.gateways.scheduler import SchedulerClient
 from agent_runtime.nodes.present import RunResult
-from agent_runtime.report import EXIT_BY_OUTCOME
+from agent_runtime.report import EXIT_BY_OUTCOME, error_message
 from agent_runtime.settings import AgentSettings
 from lab_common import logging as lab_logging
 from rag_mcp.catalog import load_catalog
@@ -163,7 +165,7 @@ async def _execute(review: cli.ReviewPrompt | None = None, interactive: bool = F
         interactive=interactive,
         run_id=RUN_ID,
         settings=AgentSettings.from_env(),
-        review=review or cli.ask_review,
+        review=review,
     )
 
 
@@ -371,7 +373,10 @@ def test_dependency_failure_is_explained_on_stdout_in_table_mode(
     captured = capsys.readouterr()
     assert code == 6
     assert "Não foi possível concluir o pedido" in captured.out
-    assert "docker compose ps" in captured.out
+    assert "  Motivo             O serviço de leitura do pedido (OCR) recusou a credencial." in (
+        captured.out.splitlines()
+    )
+    assert "MCP_AUTH_TOKEN" in captured.out
     assert "  Código             MCP_UNAUTHORIZED" in captured.out.splitlines()
     assert "lab-agent:" not in captured.err
 
@@ -477,16 +482,40 @@ def test_log_level(env_level: str | None, verbose: bool, expected: str) -> None:
 @pytest.mark.parametrize(
     ("argv", "code", "message"),
     [
-        (["--image", SAMPLE, "--run-id", "x"], 2, "--run-id must be a UUID"),
-        (["--image", "samples/missing.png"], 2, "invalid image: IMAGE_NOT_FOUND"),
-        (["--image", "README.md"], 2, "invalid image: UNSUPPORTED_FORMAT"),
-        (["--image", "/etc/hosts"], 2, "IMAGE_OUTSIDE_INPUT_ROOT"),
-        (["--image", SAMPLE, "--spec", "specs/examples/exam_lookup_only.json"], 7, "out of date"),
-        (["--image", SAMPLE, "--spec", "specs/none.json"], 8, "--spec file not found"),
+        (
+            ["--image", SAMPLE, "--run-id", "x"],
+            2,
+            "lab-agent: --run-id precisa ser um UUID. Omita a opção",
+        ),
+        (
+            ["--image", "samples/missing.png"],
+            2,
+            "lab-agent: imagem não encontrada. Confira o caminho passado em --image.",
+        ),
+        (
+            ["--image", "README.md"],
+            2,
+            "lab-agent: formato de imagem não suportado. Envie um arquivo PNG ou JPEG.",
+        ),
+        (
+            ["--image", "/etc/hosts"],
+            2,
+            "lab-agent: a imagem está fora da pasta permitida (INPUT_ROOT). Coloque o arquivo",
+        ),
+        (
+            ["--image", SAMPLE, "--spec", "specs/examples/exam_lookup_only.json"],
+            7,
+            "lab-agent: o código gerado está desatualizado em relação à spec. Rode lab-transpile",
+        ),
+        (
+            ["--image", SAMPLE, "--spec", "specs/none.json"],
+            8,
+            "lab-agent: arquivo da spec (--spec) não encontrado. Confira o caminho.",
+        ),
         (
             ["--image", SAMPLE, "--agent-dir", "generated/exam_scheduling_agent"],
             8,
-            "GENERATED_ROOT",
+            "lab-agent: --agent-dir precisa estar dentro de GENERATED_ROOT.",
         ),
     ],
 )
@@ -510,7 +539,8 @@ def test_missing_environment_is_listed(
 
     assert cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR)]) == 8
     assert (
-        "missing environment variables: RAG_MCP_URL, SCHEDULER_API_KEY" in capsys.readouterr().err
+        "lab-agent: faltam variáveis de ambiente: RAG_MCP_URL, SCHEDULER_API_KEY. "
+        "Defina-as no .env (veja o .env.example) e rode de novo." in capsys.readouterr().err
     )
     _forget_package()
 
@@ -534,16 +564,23 @@ def test_fake_model_outside_test_is_refused(
     monkeypatch.setenv("APP_ENV", app_env)
 
     assert cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR)]) == 8
-    assert "FAKE_LLM_OUTSIDE_TEST" in capsys.readouterr().err
+    assert (
+        "lab-agent: AGENT_LLM_BACKEND=fake só é aceito com APP_ENV=test. "
+        "Remova AGENT_LLM_BACKEND" in capsys.readouterr().err
+    )
     _forget_package()
 
 
 def test_invalid_log_level_is_a_configuration_error(
-    env: None, monkeypatch: pytest.MonkeyPatch
+    env: None, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("LOG_LEVEL", "LOUD")
 
     assert cli.main(["run", "--image", SAMPLE]) == 8
+    assert (
+        "lab-agent: uma variável de ambiente tem valor inválido: LOG_LEVEL. Confira o valor"
+        in capsys.readouterr().err
+    )
 
 
 @pytest.mark.parametrize(
@@ -556,6 +593,7 @@ def test_invalid_log_level_is_a_configuration_error(
             (6, "LLM_RESOURCE_EXHAUSTED"),
         ),
         (RuntimeError("boom"), (6, "INTERNAL_ERROR")),
+        (EOFError(), (2, "INPUT_CLOSED")),
     ],
 )
 def test_failure_mapping(exc: BaseException, expected: tuple[int, str]) -> None:
@@ -706,3 +744,158 @@ def test_off_a_terminal_the_cli_writes_no_escape_codes(
     assert "\x1b[" not in captured.out
     assert "\x1b[" not in captured.err
     assert "Lendo o pedido (OCR)" not in captured.err
+
+
+ENGLISH = re.compile(
+    r"\b(usage|error|the following|required|invalid|choose|arguments?|options?|show this|"
+    r"expected|unrecognized|not found|missing|must)\b",
+    re.IGNORECASE,
+)
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        ([], "lab-agent: erro: faltam argumentos obrigatórios: comando"),
+        (["run"], "lab-agent run: erro: faltam argumentos obrigatórios: --image"),
+        (
+            ["run", "--image", SAMPLE, "--output", "xml"],
+            "lab-agent run: erro: argumento --output: opção inválida: 'xml' "
+            "(escolha entre table, json)",
+        ),
+        (["run", "--image"], "lab-agent run: erro: argumento --image: falta o valor"),
+        (["run", "--image", SAMPLE, "--bogus"], "lab-agent: erro: argumentos não reconhecidos"),
+        (["foo"], "lab-agent: erro: argumento comando: opção inválida: 'foo' (escolha entre run)"),
+    ],
+)
+def test_argument_errors_are_in_portuguese(
+    capsys: pytest.CaptureFixture[str], argv: list[str], expected: str
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(argv)
+
+    err = capsys.readouterr().err
+    assert exit_info.value.code == 2
+    assert err.startswith("uso: lab-agent")
+    assert expected in err
+    assert not ENGLISH.search(err.replace("--output", "").replace("--image", ""))
+
+
+@pytest.mark.parametrize("argv", [["--help"], ["run", "--help"]])
+def test_help_is_in_portuguese(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(argv)
+
+    out = capsys.readouterr().out
+    assert exit_info.value.code == 0
+    assert out.startswith("uso: lab-agent")
+    assert "-h, --help" in out
+    assert "mostra esta ajuda e sai" in out
+    assert "options:" not in out
+    assert "show this help" not in out
+
+
+def test_run_help_describes_every_option(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["run", "--help"])
+
+    out = " ".join(capsys.readouterr().out.split())
+    for expected in (
+        "--image IMAGEM PNG ou JPEG dentro de INPUT_ROOT",
+        "--non-interactive não pergunta nada",
+        "--output {table,json} table (tabela para leitura) ou json",
+        "--run-id UUID identifica a execução nos logs",
+        "--verbose mostra a tabela técnica",
+    ):
+        assert expected in out
+
+
+def test_ctrl_c_cancels_the_run_in_portuguese(
+    services: Services, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    services.lines = ["Exames:", "1. Hemograma completo", "2. T4"]
+    monkeypatch.setenv("FAKE_LLM_FIXTURE", str(FIXTURES / "pedido_ambiguo.json"))
+
+    def interrupt(payload: Mapping[str, Any]) -> dict[str, Any]:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "ask_review", interrupt)
+
+    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR)])
+
+    captured = capsys.readouterr()
+    assert code == 130
+    assert captured.err.rstrip().endswith("lab-agent: execução cancelada pelo usuário.")
+    assert "Traceback" not in captured.err
+    assert services.requests == []
+
+
+def test_ctrl_c_interrupts_at_once_during_the_run() -> None:
+    with cli._interrupt_at_once():
+        handler = signal.getsignal(signal.SIGINT)
+        with pytest.raises(KeyboardInterrupt):
+            signal.raise_signal(signal.SIGINT)
+
+    assert handler is cli._raise_interrupt
+    assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+
+
+def test_closed_input_during_review_is_explained(
+    services: Services, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    services.lines = ["Exames:", "1. Hemograma completo", "2. T4"]
+    monkeypatch.setenv("FAKE_LLM_FIXTURE", str(FIXTURES / "pedido_ambiguo.json"))
+    monkeypatch.setattr(sys, "stdin", StringIO(""))
+
+    code = cli.main(["run", "--image", SAMPLE, "--agent-dir", str(AGENT_DIR)])
+
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "  Motivo             A entrada terminou antes das respostas da revisão." in (
+        out.splitlines()
+    )
+    assert "use --non-interactive" in out
+
+
+@pytest.mark.parametrize(
+    ("code", "node", "what", "action"),
+    [
+        (
+            "MCP_UNAVAILABLE",
+            "ocr",
+            "O serviço de leitura do pedido (OCR) não respondeu.",
+            "ocr-mcp",
+        ),
+        ("MCP_TIMEOUT", "resolve", "O catálogo de exames (RAG) não respondeu.", "rag-mcp"),
+        ("MCP_TIMEOUT", None, "Um serviço necessário não respondeu.", "docker compose ps"),
+        (
+            "SCHEDULER_UNAVAILABLE",
+            "schedule",
+            "A API de agendamento não respondeu.",
+            "scheduler-api",
+        ),
+        (
+            "LLM_UNAVAILABLE",
+            "extraction",
+            "O serviço de IA (Gemini) não respondeu.",
+            "GOOGLE_API_KEY",
+        ),
+        (
+            "LLM_RESOURCE_EXHAUSTED",
+            "extraction",
+            "A cota do serviço de IA (Gemini) acabou.",
+            "cota",
+        ),
+        ("MISSING_ENV", "ocr", "Faltam variáveis de ambiente.", ".env"),
+        ("INVALID_IMAGE", "ocr", "O serviço de OCR não conseguiu abrir a imagem.", "PNG ou JPEG"),
+        ("INTERNAL_ERROR", "gate", "Ocorreu um erro inesperado e nada foi agendado.", "--verbose"),
+    ],
+)
+def test_dependency_errors_name_the_service_and_what_to_do(
+    code: str, node: str | None, what: str, action: str
+) -> None:
+    message, todo = error_message(code, node)
+
+    assert message == what
+    assert action in todo
+    assert not ENGLISH.search(message)

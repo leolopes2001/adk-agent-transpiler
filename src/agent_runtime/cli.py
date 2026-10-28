@@ -19,7 +19,9 @@ every run event.
 
 Exit codes: 0 done, 2 invalid input, 3 blocked by the guard, 4 low OCR
 quality, 5 no exam resolved, 6 dependency failure or scheduling refused,
-7 stale generated code, 8 invalid configuration.
+7 stale generated code, 8 invalid configuration, 130 cancelled with Ctrl+C.
+Everything the user reads on the terminal is in Portuguese
+(`agent_runtime.messages`); codes, logs and the JSON report stay in English.
 """
 
 import argparse
@@ -28,14 +30,17 @@ import hashlib
 import importlib
 import json
 import logging
+import signal
 import sys
+import threading
 import uuid
 import warnings
 from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
-from typing import Any
+from types import FrameType, ModuleType
+from typing import Any, NoReturn
 
 import structlog
 from google.adk import Agent, Event, Runner, Workflow
@@ -49,6 +54,15 @@ from rich.console import Console
 
 from agent_runtime.bootstrap import RuntimeDeps
 from agent_runtime.errors import AgentRuntimeError, ConfigurationError, InvalidInputError
+from agent_runtime.messages import (
+    CANCELLED,
+    REBUILD,
+    argparse_error,
+    config_error,
+    image_error,
+    line,
+    run_error,
+)
 from agent_runtime.nodes.ocr_extract import OcrExtractParams, load_image
 from agent_runtime.nodes.present import RESULT_STATE_KEY, RunResult
 from agent_runtime.report import (
@@ -83,6 +97,8 @@ LLM_KEY_ENV = "GOOGLE_API_KEY"
 QUIET_LOG_LEVEL = "ERROR"
 """Warnings of a run (retries, injection, grounding) are in the report already."""
 VERBOSE_LOG_LEVEL = "INFO"
+EXIT_CANCELLED = 130
+"""Ctrl+C, as shells report a process ended by SIGINT (128 + 2)."""
 REPORT_WIDTH = 120
 """Width of the table report when stdout is not a terminal (a file, a pipe, a capture)."""
 
@@ -113,17 +129,76 @@ class LoadedAgent:
     """Long steps of the root workflow, in spec order, for the progress indicator."""
 
 
+class _HelpFormatter(argparse.HelpFormatter):
+    def add_usage(
+        self, usage: str | None, actions: Any, groups: Any, prefix: str | None = None
+    ) -> None:
+        super().add_usage(usage, actions, groups, "uso: " if prefix is None else prefix)
+
+
+class ArgumentParser(argparse.ArgumentParser):
+    """argparse with its usage, help and errors in Portuguese."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("formatter_class", _HelpFormatter)
+        kwargs["add_help"] = False
+        super().__init__(*args, **kwargs)
+        # argparse names its two default groups itself, in English.
+        self._positionals.title = "argumentos"
+        self._optionals.title = "opções"
+        self.add_argument("-h", "--help", action="help", help="mostra esta ajuda e sai")
+
+    def error(self, message: str) -> NoReturn:
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_INVALID_INPUT, f"{self.prog}: erro: {argparse_error(message)}\n")
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="lab-agent", description="Run a generated agent.")
-    commands = parser.add_subparsers(dest="command", required=True)
-    run = commands.add_parser("run", help="process one medical order image")
-    run.add_argument("--image", required=True, help="PNG or JPEG under INPUT_ROOT")
-    run.add_argument("--agent-dir", default="generated/exam_scheduling_agent", type=Path)
-    run.add_argument("--spec", default="specs/exam_scheduling_agent.json", type=Path)
-    run.add_argument("--non-interactive", action="store_true", help="reject review items")
-    run.add_argument("--output", choices=("table", "json"), default=None)
-    run.add_argument("--run-id", default=None, help="UUID used to correlate logs")
-    run.add_argument("--verbose", action="store_true", help="JSON logs of the run on stderr")
+    parser = ArgumentParser(prog="lab-agent", description="Executa um agente gerado.")
+    commands = parser.add_subparsers(
+        dest="command", required=True, title="comandos", metavar="comando"
+    )
+    run = commands.add_parser(
+        "run",
+        help="processa a imagem de um pedido médico",
+        description="Lê a imagem de um pedido médico, identifica os exames e pede o agendamento.",
+    )
+    run.add_argument(
+        "--image", required=True, metavar="IMAGEM", help="PNG ou JPEG dentro de INPUT_ROOT"
+    )
+    run.add_argument(
+        "--agent-dir",
+        default="generated/exam_scheduling_agent",
+        type=Path,
+        metavar="PASTA",
+        help="pacote gerado pelo lab-transpile (padrão: %(default)s)",
+    )
+    run.add_argument(
+        "--spec",
+        default="specs/exam_scheduling_agent.json",
+        type=Path,
+        metavar="ARQUIVO",
+        help="spec do pacote (padrão: %(default)s)",
+    )
+    run.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="não pergunta nada: itens que pedem revisão não são agendados",
+    )
+    run.add_argument(
+        "--output",
+        choices=("table", "json"),
+        default=None,
+        help="table (tabela para leitura) ou json (relatório completo); padrão: o da spec",
+    )
+    run.add_argument(
+        "--run-id", default=None, metavar="UUID", help="identifica a execução nos logs"
+    )
+    run.add_argument(
+        "--verbose",
+        action="store_true",
+        help="mostra a tabela técnica e os logs JSON da execução no stderr",
+    )
     return parser
 
 
@@ -133,7 +208,10 @@ def _run_id(value: str | None) -> str:
     try:
         return str(uuid.UUID(value))
     except ValueError:
-        raise CliError(EXIT_INVALID_INPUT, "--run-id must be a UUID") from None
+        raise CliError(
+            EXIT_INVALID_INPUT,
+            "--run-id precisa ser um UUID. Omita a opção para gerar um automaticamente.",
+        ) from None
 
 
 def _sha256(path: Path) -> str:
@@ -150,11 +228,16 @@ def _import(agent_dir: Path) -> ModuleType:
         raise
     except Exception as exc:  # noqa: BLE001 - any import failure means unusable generated code
         raise CliError(
-            EXIT_STALE_CODE, f"generated code failed to import ({type(exc).__name__})"
+            EXIT_STALE_CODE,
+            f"o código gerado não pôde ser importado ({type(exc).__name__}). {REBUILD}",
         ) from None
     origin = Path(module.__file__ or "").resolve()
     if not origin.is_relative_to(agent_dir):
-        raise CliError(EXIT_STALE_CODE, f"module {agent_dir.name!r} is loaded from elsewhere")
+        raise CliError(
+            EXIT_STALE_CODE,
+            f"o módulo {agent_dir.name!r} foi carregado de outra pasta. "
+            "Confira o --agent-dir e o PYTHONPATH.",
+        )
     return module
 
 
@@ -220,27 +303,37 @@ def load_agent(agent_dir: Path, spec: Path, settings: AgentSettings) -> LoadedAg
     """Generated app after the manifest and location checks (exit 7 or 8 on failure)."""
     resolved = agent_dir.resolve()
     if not resolved.is_relative_to(settings.generated_root):
-        raise CliError(EXIT_CONFIG, "--agent-dir must be under GENERATED_ROOT")
+        raise CliError(
+            EXIT_CONFIG,
+            "--agent-dir precisa estar dentro de GENERATED_ROOT. "
+            "Use o pacote gerado pelo lab-transpile.",
+        )
     if not spec.is_file():
-        raise CliError(EXIT_CONFIG, "--spec file not found")
+        raise CliError(EXIT_CONFIG, "arquivo da spec (--spec) não encontrado. Confira o caminho.")
     try:
         manifest = json.loads((resolved / MANIFEST).read_text("utf-8"))
     except (OSError, ValueError):
-        raise CliError(EXIT_STALE_CODE, "generated code has no readable manifest") from None
+        raise CliError(
+            EXIT_STALE_CODE, f"o código gerado não tem um manifesto legível. {REBUILD}"
+        ) from None
     spec_sha256 = _sha256(spec)
     try:
         spec_data = json.loads(spec.read_text("utf-8"))
         output_format = _present_format(spec_data) or "table"
     except (OSError, ValueError):
-        raise CliError(EXIT_CONFIG, "--spec file is not valid JSON") from None
+        raise CliError(
+            EXIT_CONFIG, "a spec (--spec) não é um JSON válido. Corrija o arquivo e rode de novo."
+        ) from None
     if manifest.get("spec_sha256") != spec_sha256:
         raise CliError(
-            EXIT_STALE_CODE, "generated code is out of date with the spec; run lab-transpile"
+            EXIT_STALE_CODE,
+            "o código gerado está desatualizado em relação à spec. "
+            "Rode lab-transpile para gerá-lo de novo.",
         )
     module = _import(resolved)
     app = getattr(module, "app", None)
     if not isinstance(app, App):
-        raise CliError(EXIT_STALE_CODE, "generated package has no App")
+        raise CliError(EXIT_STALE_CODE, f"o pacote gerado não tem um App. {REBUILD}")
     agent_module = sys.modules.get(f"{module.__name__}.agent")
     deps = getattr(agent_module, "deps", None)
     return LoadedAgent(
@@ -311,6 +404,13 @@ def _root_cause(exc: BaseException) -> BaseException:
     return exc
 
 
+_FIXED_FAILURES: tuple[tuple[type[BaseException], int, str], ...] = (
+    (EOFError, EXIT_INVALID_INPUT, "INPUT_CLOSED"),
+    (NodeTimeoutError, EXIT_DEPENDENCY, "NODE_TIMEOUT"),
+)
+"""Failures without a code of their own: stdin closed during a review, a node timeout."""
+
+
 def _failure(exc: BaseException) -> tuple[int, str]:
     cause = _root_cause(exc)
     if isinstance(cause, InvalidInputError):
@@ -319,8 +419,9 @@ def _failure(exc: BaseException) -> tuple[int, str]:
         return EXIT_CONFIG, cause.code
     if isinstance(cause, AgentRuntimeError):
         return EXIT_DEPENDENCY, cause.code
-    if isinstance(cause, NodeTimeoutError):
-        return EXIT_DEPENDENCY, "NODE_TIMEOUT"
+    for kind, exit_code, code in _FIXED_FAILURES:
+        if isinstance(cause, kind):
+            return exit_code, code
     if isinstance(cause, genai_errors.APIError):
         status = (
             cause.status
@@ -373,7 +474,7 @@ async def _drive(  # noqa: PLR0913, PLR0917 - the run, plus what the operator se
             return
         event, call = pending
         if review is None:
-            raise CliError(EXIT_DEPENDENCY, "the run asked for input in non-interactive mode")
+            raise CliError(EXIT_DEPENDENCY, line(run_error("INPUT_REQUIRED")))
         args = call.args or {}
         if progress is not None:
             progress.stop()
@@ -400,6 +501,16 @@ class RunOutcome:
     result: RunResult | None
 
 
+def _checked_image(image: str, settings: AgentSettings) -> Path:
+    """The image path relative to INPUT_ROOT, once the image is acceptable (exit 2)."""
+    max_bytes = OcrExtractParams().max_image_bytes
+    try:
+        load_image(image, settings.input_root, max_bytes)
+    except InvalidInputError as error:
+        raise CliError(EXIT_INVALID_INPUT, line(image_error(error.code, max_bytes))) from None
+    return (settings.input_root / image).resolve().relative_to(settings.input_root)
+
+
 async def execute(  # noqa: PLR0913 - the CLI options
     *,
     image: str,
@@ -408,24 +519,18 @@ async def execute(  # noqa: PLR0913 - the CLI options
     interactive: bool,
     run_id: str,
     settings: AgentSettings,
-    review: ReviewPrompt = ask_review,
+    review: ReviewPrompt | None = None,
     announce: Announce | None = None,
 ) -> RunOutcome:
     """Checks, runs and reports; raises CliError for failures before the run."""
     try:
         agent = load_agent(agent_dir, spec, settings)
     except ConfigurationError as error:
-        raise CliError(EXIT_CONFIG, f"invalid configuration: {error.code}") from None
+        raise CliError(EXIT_CONFIG, line(config_error(error.code, error.message))) from None
     absent = missing(required_env(agent))
     if absent:
-        raise CliError(EXIT_CONFIG, "missing environment variables: " + ", ".join(absent))
-    try:
-        path = load_image(image, settings.input_root, OcrExtractParams().max_image_bytes)
-    except InvalidInputError as error:
-        raise CliError(EXIT_INVALID_INPUT, f"invalid image: {error.code}") from None
-    del path
-    resolved = (settings.input_root / image).resolve()
-    relative = resolved.relative_to(settings.input_root)
+        raise CliError(EXIT_CONFIG, line(config_error("MISSING_ENV", ", ".join(absent))))
+    relative = _checked_image(image, settings)
     progress = announce(agent, image) if announce is not None else None
 
     trace = RunTrace()
@@ -445,7 +550,8 @@ async def execute(  # noqa: PLR0913 - the CLI options
     try:
         if progress is not None:
             progress.start()
-        await _drive(runner, session.id, message, trace, review if interactive else None, progress)
+        prompt = (review or ask_review) if interactive else None
+        await _drive(runner, session.id, message, trace, prompt, progress)
         final = await service.get_session(
             app_name=agent.app.name, user_id=USER_ID, session_id=session.id
         )
@@ -484,12 +590,6 @@ async def execute(  # noqa: PLR0913 - the CLI options
     return RunOutcome(exit_code, report, result)
 
 
-_ERROR_MESSAGES = {
-    "NO_RESULT": "a execução terminou sem resultado",
-    "INPUT_REQUIRED": "a execução pediu revisão em modo não interativo",
-}
-
-
 def log_level(settings: AgentSettings, *, verbose: bool) -> str:
     """--verbose shows at least INFO; otherwise LOG_LEVEL, or ERROR when unset."""
     if verbose:
@@ -524,6 +624,28 @@ def announcer(output: str | None, *, verbose: bool = False) -> Announce:
     return announce
 
 
+def _raise_interrupt(signum: int, frame: FrameType | None) -> None:
+    raise KeyboardInterrupt
+
+
+@contextmanager
+def _interrupt_at_once() -> Iterator[None]:
+    """Ctrl+C stops the run right away, also while a review prompt waits for input.
+
+    `asyncio.run` installs its own SIGINT handler only when the default one is
+    in place, and that handler's first Ctrl+C just cancels the main task: a
+    prompt blocked in `input()` would keep waiting.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    previous = signal.signal(signal.SIGINT, _raise_interrupt)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -531,20 +653,24 @@ def main(argv: list[str] | None = None) -> int:
         _configure_logging(log_level(settings, verbose=args.verbose))
         run_id = _run_id(args.run_id)
         structlog.contextvars.bind_contextvars(run_id=run_id)
-        outcome = asyncio.run(
-            execute(
-                image=args.image,
-                agent_dir=args.agent_dir,
-                spec=args.spec,
-                interactive=not args.non_interactive,
-                run_id=run_id,
-                settings=settings,
-                announce=announcer(args.output, verbose=args.verbose),
+        with _interrupt_at_once():
+            outcome = asyncio.run(
+                execute(
+                    image=args.image,
+                    agent_dir=args.agent_dir,
+                    spec=args.spec,
+                    interactive=not args.non_interactive,
+                    run_id=run_id,
+                    settings=settings,
+                    announce=announcer(args.output, verbose=args.verbose),
+                )
             )
-        )
     except ConfigurationError as error:
-        print(f"lab-agent: invalid configuration: {error.code}", file=sys.stderr)
+        print(f"lab-agent: {line(config_error(error.code, error.message))}", file=sys.stderr)
         return EXIT_CONFIG
+    except KeyboardInterrupt:
+        print(f"\nlab-agent: {CANCELLED}", file=sys.stderr)
+        return EXIT_CANCELLED
     except CliError as error:
         print(f"lab-agent: {error.message}", file=sys.stderr)
         return error.exit_code
@@ -566,8 +692,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     error_code = outcome.report.get("error_code")
     if error_code and output == "json":
-        detail = _ERROR_MESSAGES.get(error_code, f"falha de dependência ({error_code})")
-        print(f"lab-agent: {detail}", file=sys.stderr)
+        path = outcome.report.get("path") or []
+        message = line(run_error(error_code, path[-1] if path else None))
+        print(f"lab-agent: {message}", file=sys.stderr)
     return outcome.exit_code
 
 
