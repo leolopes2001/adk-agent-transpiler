@@ -198,15 +198,97 @@ async def test_get_unknown_exam_is_404(client: httpx.AsyncClient) -> None:
     _problem(await client.get("/v1/exams/LAB-99999"), 404, "exam_not_found")
 
 
-@pytest.mark.parametrize(
-    ("method", "path"),
-    [
-        ("POST", "/v1/appointments"),
-        ("GET", "/v1/appointments/apt_01JB0000000000000000000000"),
-        ("GET", "/v1/exams/LAB-10001"),
-    ],
-)
-async def test_v1_requires_api_key(client: httpx.AsyncClient, method: str, path: str) -> None:
+async def create_many(client: httpx.AsyncClient, *patients: str) -> list[str]:
+    """Creates one appointment per patient, in order; returns their ids."""
+    ids = []
+    for index, patient in enumerate(patients):
+        response = await post(client, payload(patient_ref=patient), key=f"key-{index:04d}")
+        assert response.status_code == 201, response.text
+        ids.append(response.json()["appointment_id"])
+    return ids
+
+
+async def test_list_is_newest_first_with_the_post_model(client: httpx.AsyncClient) -> None:
+    created = await post(client, payload())
+    second = await post(client, payload(), key="key-0002")
+
+    response = await client.get("/v1/appointments")
+
+    assert response.status_code == 200
+    assert response.json() == [second.json(), created.json()]
+
+
+async def test_list_is_empty_without_appointments(client: httpx.AsyncClient) -> None:
+    response = await client.get("/v1/appointments")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_list_limit(client: httpx.AsyncClient) -> None:
+    ids = await create_many(client, *[PATIENT] * 3)
+
+    response = await client.get("/v1/appointments", params={"limit": 2})
+
+    assert [a["appointment_id"] for a in response.json()] == [ids[2], ids[1]]
+
+
+async def test_list_limit_defaults_to_20(client: httpx.AsyncClient) -> None:
+    await create_many(client, *[PATIENT] * 21)
+
+    response = await client.get("/v1/appointments")
+
+    assert len(response.json()) == 20
+
+
+@pytest.mark.parametrize("limit", ["0", "101", "-1", "abc"])
+async def test_list_limit_out_of_range_is_422(client: httpx.AsyncClient, limit: str) -> None:
+    problem = _problem(
+        await client.get("/v1/appointments", params={"limit": limit}), 422, "validation_error"
+    )
+
+    assert [e["loc"] for e in problem["errors"]] == [["query", "limit"]]
+
+
+async def test_list_accepts_the_limit_bounds(client: httpx.AsyncClient) -> None:
+    for limit in (1, 100):
+        response = await client.get("/v1/appointments", params={"limit": limit})
+        assert response.status_code == 200, limit
+
+
+async def test_list_filters_by_patient_ref(client: httpx.AsyncClient) -> None:
+    other = "pt_AAAAAAAAAAAAAAAAAAAAAAAAAA"
+    ids = await create_many(client, PATIENT, other, PATIENT)
+
+    response = await client.get("/v1/appointments", params={"patient_ref": PATIENT})
+
+    assert [a["appointment_id"] for a in response.json()] == [ids[2], ids[0]]
+    assert {a["patient_ref"] for a in response.json()} == {PATIENT}
+
+
+@pytest.mark.parametrize("patient_ref", ["12345678900", "pt_k7q2m4xzb3c6d7e5f6g7h2j4ka", "pt_"])
+async def test_list_invalid_patient_ref_is_422(client: httpx.AsyncClient, patient_ref: str) -> None:
+    problem = _problem(
+        await client.get("/v1/appointments", params={"patient_ref": patient_ref}),
+        422,
+        "validation_error",
+    )
+
+    assert [e["loc"] for e in problem["errors"]] == [["query", "patient_ref"]]
+
+
+V1_ROUTES = [
+    ("POST", "/v1/appointments"),
+    ("GET", "/v1/appointments"),
+    ("GET", "/v1/appointments/apt_01JB0000000000000000000000"),
+    ("GET", "/v1/exams/LAB-10001"),
+]
+
+
+@pytest.mark.parametrize(("method", "path"), V1_ROUTES)
+async def test_v1_rejects_a_wrong_api_key(
+    client: httpx.AsyncClient, method: str, path: str
+) -> None:
     response = await client.request(
         method,
         path,
@@ -215,6 +297,16 @@ async def test_v1_requires_api_key(client: httpx.AsyncClient, method: str, path:
     )
 
     _problem(response, 401, "unauthorized")
+
+
+@pytest.mark.parametrize(("method", "path"), V1_ROUTES)
+async def test_v1_rejects_a_missing_api_key(
+    client: httpx.AsyncClient, method: str, path: str
+) -> None:
+    request = client.build_request(method, path, json=payload() if method == "POST" else None)
+    del request.headers["X-API-Key"]
+
+    _problem(await client.send(request), 401, "unauthorized")
 
 
 async def test_request_id_is_echoed_in_problem_and_header(client: httpx.AsyncClient) -> None:

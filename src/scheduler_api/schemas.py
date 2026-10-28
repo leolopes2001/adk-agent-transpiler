@@ -12,6 +12,8 @@ APPOINTMENT_ID_PATTERN = r"^apt_[0-9A-HJKMNP-TV-Z]{26}$"
 SHA256_PATTERN = r"^[0-9a-f]{64}$"
 REQUESTER_PATTERN = r"^[a-z][a-z0-9_]{0,63}$"
 MAX_EXAMS = 30
+DEFAULT_LIST_LIMIT = 20
+MAX_LIST_LIMIT = 100
 
 ExamCode = Annotated[
     str,

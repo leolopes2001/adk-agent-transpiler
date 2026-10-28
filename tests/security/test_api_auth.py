@@ -154,6 +154,7 @@ PII_SENTINEL = "Maria Sentinela Albuquerque"
     ("method", "path"),
     [
         ("POST", "/v1/appointments"),
+        ("GET", "/v1/appointments"),
         ("GET", "/v1/appointments/apt_01JB0000000000000000000000"),
         ("GET", "/v1/exams/LAB-10001"),
     ],

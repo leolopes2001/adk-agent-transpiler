@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Path, Response, status
+from fastapi import APIRouter, Body, Depends, Path, Query, Response, status
 
 from scheduler_api.api import docs
 from scheduler_api.api.deps import (
@@ -10,7 +10,14 @@ from scheduler_api.api.deps import (
     require_api_key,
 )
 from scheduler_api.api.middleware import REQUEST_ID_HEADER
-from scheduler_api.schemas import APPOINTMENT_ID_PATTERN, AppointmentCreate, AppointmentOut
+from scheduler_api.schemas import (
+    APPOINTMENT_ID_PATTERN,
+    DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
+    PATIENT_REF_PATTERN,
+    AppointmentCreate,
+    AppointmentOut,
+)
 
 router = APIRouter(
     prefix="/v1",
@@ -84,6 +91,43 @@ def create_appointment(
         response.headers[_REPLAYED_HEADER] = "true"
 
     return AppointmentOut.from_domain(appointment)
+
+
+@router.get(
+    "/appointments",
+    summary="List scheduling requests",
+    description="Newest first, optionally only those of one `patient_ref`.",
+    response_description="The appointments.",
+    responses={
+        200: {"content": {"application/json": {"example": [docs.APPOINTMENT_EXAMPLE]}}},
+        **docs.problem_responses(
+            {
+                401: ["unauthorized"],
+                422: ["validation_error"],
+                500: ["internal_error"],
+            }
+        ),
+    },
+)
+def list_appointments(
+    service: AppointmentServiceDep,
+    limit: Annotated[
+        int,
+        Query(ge=1, le=MAX_LIST_LIMIT, description=f"1 to {MAX_LIST_LIMIT} appointments."),
+    ] = DEFAULT_LIST_LIMIT,
+    patient_ref: Annotated[
+        str | None,
+        Query(
+            pattern=PATIENT_REF_PATTERN,
+            description="Only this patient's appointments.",
+            examples=[docs.PATIENT_REF],
+        ),
+    ] = None,
+) -> list[AppointmentOut]:
+    return [
+        AppointmentOut.from_domain(appointment)
+        for appointment in service.list_recent(limit, patient_ref)
+    ]
 
 
 @router.get(

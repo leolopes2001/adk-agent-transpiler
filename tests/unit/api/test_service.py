@@ -49,6 +49,11 @@ class FakeAppointments:
     def get(self, appointment_id: str) -> Appointment | None:
         return self.pending.get(appointment_id) or self._store.get(appointment_id)
 
+    def list_recent(self, limit: int, patient_ref: str | None = None) -> list[Appointment]:
+        matching = [a for a in self._store.values() if patient_ref in (None, a.patient_ref)]
+        matching.sort(key=lambda a: (a.created_at, a.id), reverse=True)
+        return matching[:limit]
+
 
 class FakeIdempotency:
     """Mimics the primary key: adding a key that is already committed fails."""
@@ -246,6 +251,26 @@ def test_get_missing_raises(service: AppointmentService) -> None:
         service.get("apt_" + "9" * 26)
 
     assert info.value.appointment_id == "apt_" + "9" * 26
+
+
+def test_list_recent_is_newest_first(service: AppointmentService, clock: Clock) -> None:
+    first, _ = service.create(request(("LAB-10001", "Hemograma completo")), "key-a")
+    clock.now = NOW + timedelta(minutes=1)
+    second, _ = service.create(request(("LAB-10001", "Hemograma completo")), "key-b")
+
+    assert service.list_recent(20) == [second, first]
+    assert service.list_recent(1) == [second]
+
+
+def test_list_recent_filters_by_patient(service: AppointmentService) -> None:
+    mine, _ = service.create(request(("LAB-10001", "Hemograma completo")), "key-a")
+    other = AppointmentRequest(
+        "pt_AAAAAAAAAAAAAAAAAAAAAAAAAA", (ExamRef("LAB-10001", "Hemograma completo"),), SHA, "x"
+    )
+    service.create(other, "key-b")
+
+    assert service.list_recent(20, mine.patient_ref) == [mine]
+    assert service.list_recent(20, "pt_" + "Z" * 26) == []
 
 
 def test_default_ids_are_prefixed_ulids() -> None:

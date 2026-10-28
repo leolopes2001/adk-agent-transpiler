@@ -27,6 +27,9 @@ class AppointmentRepository(Protocol):
 
     def get(self, appointment_id: str) -> Appointment | None: ...
 
+    def list_recent(self, limit: int, patient_ref: str | None = None) -> list[Appointment]:
+        """Newest first."""
+
 
 class IdempotencyRepository(Protocol):
     def get(self, key: str) -> IdempotencyRecord | None: ...
@@ -97,6 +100,10 @@ class AppointmentService:
             raise AppointmentNotFoundError(appointment_id)
 
         return appointment
+
+    def list_recent(self, limit: int, patient_ref: str | None = None) -> list[Appointment]:
+        with self._unit_of_work_factory() as unit_of_work:
+            return unit_of_work.appointments.list_recent(limit, patient_ref)
 
     def _create_in_transaction(
         self,

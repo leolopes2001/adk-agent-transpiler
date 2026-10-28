@@ -1,10 +1,11 @@
 """Core statements, not the ORM identity map: each call hits the database in code order."""
 
+from collections import defaultdict
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import Self
 
-from sqlalchemy import delete, insert, select
+from sqlalchemy import Row, delete, insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -47,33 +48,41 @@ class SqlAppointmentRepository:
 
     def get(self, appointment_id: str) -> Appointment | None:
         row = self._session.execute(
-            select(
-                AppointmentRow.id,
-                AppointmentRow.status,
-                AppointmentRow.patient_ref,
-                AppointmentRow.source_document_sha256,
-                AppointmentRow.requested_by,
-                AppointmentRow.created_at,
-            ).where(AppointmentRow.id == appointment_id)
+            _APPOINTMENT_COLUMNS.where(AppointmentRow.id == appointment_id)
         ).one_or_none()
         if row is None:
             return None
 
+        exams = self._exams_by_appointment([appointment_id])
+        return _appointment(row, exams.get(appointment_id, ()))
+
+    def list_recent(self, limit: int, patient_ref: str | None = None) -> list[Appointment]:
+        query = _APPOINTMENT_COLUMNS.order_by(
+            AppointmentRow.created_at.desc(), AppointmentRow.id.desc()
+        ).limit(limit)
+        if patient_ref is not None:
+            query = query.where(AppointmentRow.patient_ref == patient_ref)
+
+        rows = self._session.execute(query).all()
+        exams = self._exams_by_appointment([row.id for row in rows])
+        return [_appointment(row, exams.get(row.id, ())) for row in rows]
+
+    def _exams_by_appointment(self, appointment_ids: list[str]) -> dict[str, tuple[ExamRef, ...]]:
+        if not appointment_ids:
+            return {}
+
         exam_rows = self._session.execute(
-            select(AppointmentExamRow.code, AppointmentExamRow.name)
-            .where(AppointmentExamRow.appointment_id == appointment_id)
+            select(
+                AppointmentExamRow.appointment_id, AppointmentExamRow.code, AppointmentExamRow.name
+            )
+            .where(AppointmentExamRow.appointment_id.in_(appointment_ids))
             .order_by(AppointmentExamRow.code)
         ).all()
-        return Appointment(
-            id=row.id,
-            status=row.status,
-            patient_ref=row.patient_ref,
-            exams=tuple(ExamRef(code=exam.code, name=exam.name) for exam in exam_rows),
-            source_document_sha256=row.source_document_sha256,
-            requested_by=row.requested_by,
-            # The driver returns the session time zone; the API always speaks UTC.
-            created_at=row.created_at.astimezone(UTC),
-        )
+        exams: dict[str, list[ExamRef]] = defaultdict(list)
+        for exam in exam_rows:
+            exams[exam.appointment_id].append(ExamRef(code=exam.code, name=exam.name))
+
+        return {appointment_id: tuple(refs) for appointment_id, refs in exams.items()}
 
 
 class SqlIdempotencyRepository:
@@ -150,6 +159,31 @@ class SqlUnitOfWork:
 
     def commit(self) -> None:
         self._session.commit()
+
+
+_AppointmentColumns = Row[str, str, str, str, str, datetime]
+
+_APPOINTMENT_COLUMNS = select(
+    AppointmentRow.id,
+    AppointmentRow.status,
+    AppointmentRow.patient_ref,
+    AppointmentRow.source_document_sha256,
+    AppointmentRow.requested_by,
+    AppointmentRow.created_at,
+)
+
+
+def _appointment(row: _AppointmentColumns, exams: tuple[ExamRef, ...]) -> Appointment:
+    return Appointment(
+        id=row.id,
+        status=row.status,
+        patient_ref=row.patient_ref,
+        exams=exams,
+        source_document_sha256=row.source_document_sha256,
+        requested_by=row.requested_by,
+        # The driver returns the session time zone; the API always speaks UTC.
+        created_at=row.created_at.astimezone(UTC),
+    )
 
 
 def _violated_constraint_name(exc: IntegrityError) -> str | None:

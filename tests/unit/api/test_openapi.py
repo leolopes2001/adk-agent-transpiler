@@ -18,6 +18,7 @@ ROOT = Path(__file__).parents[3]
 PROBLEM_JSON = "application/problem+json"
 V1_OPERATIONS = [
     ("/v1/appointments", "post"),
+    ("/v1/appointments", "get"),
     ("/v1/appointments/{appointment_id}", "get"),
     ("/v1/exams/{code}", "get"),
 ]
