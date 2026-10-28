@@ -149,6 +149,25 @@ class TestPlaceholders:
         assert (result.text, result.lines, result.counts) == ("", ("",), {})
 
 
+class TestLabeledAddress:
+    # Found by test_masked_output_never_has_residual ("ENDERECO0"): the re-scan read
+    # the label followed by its own placeholder as an address, and the OCR server
+    # refused every order with a labeled address (PII_ENGINE_FAILURE).
+    @pytest.mark.parametrize(
+        "text", ["Endereço: Rua das Flores, 10", "ENDERECO0", "Endereço residencial - Av. Brasil"]
+    )
+    def test_is_masked_without_residual(self, text: str) -> None:
+        result = PiiRedactor(default_detectors()).redact(text)
+
+        assert result.text.endswith("[ENDERECO_1]")
+        assert not result.has_residual
+
+    def test_text_after_a_placeholder_is_still_an_address(self) -> None:
+        result = PiiRedactor(default_detectors()).redact("Endereço: [ENDERECO_1] e Rua X")
+
+        assert result.text == "Endereço: [ENDERECO_1]"
+
+
 class TestOverlaps:
     def test_highest_score_wins(self) -> None:
         low = span(PiiEntity.PHONE, 0, 10, 0.7)
