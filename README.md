@@ -1,4 +1,4 @@
-# lab-exam-agent
+# ADK Agent Transpiler
 
 Transpilador que transforma uma especificação JSON em um agente **Google ADK 2**.
 
@@ -271,6 +271,26 @@ Prints de execução real, gerados com os comandos deste README.
 
 ![Testes e cobertura](evidence/tests/01-test.jpeg)
 
-## Uso de IA
+## Transparência e Uso de IA
 
+### Abordagem de desenvolvimento
 
+Desenvolvi por etapas, com IA como apoio ao planejamento, implementação e elaboração de testes. Revisei as entregas, pedi ajustes e validei manualmente o fluxo completo, registrando evidências de funcionamento.
+
+### Referências técnicas
+
+- [Google ADK](https://adk.dev): Workflows em grafo, agentes, callbacks e retomada de execução.
+- [Model Context Protocol](https://modelcontextprotocol.io) e o [SDK Python](https://github.com/modelcontextprotocol/python-sdk): servidores MCP via SSE.
+- [FastAPI](https://fastapi.tiangolo.com) e [Pydantic](https://docs.pydantic.dev): contratos e validação de dados.
+- [Tesseract](https://tesseract-ocr.github.io): OCR local.
+- [OWASP Top 10 for LLM Applications](https://genai.owasp.org/llm-top-10/): defesas contra prompt injection e excesso de autonomia.
+
+### Estratégia de orquestração
+
+O agente é um Workflow em grafo do Google ADK 2, com rotas explícitas decididas por código:
+
+- **Sequencial:** OCR → guard → extração → busca no catálogo → gate → agendamento.
+- **Paralelo:** o Gemini e a busca no catálogo (RAG) rodam juntos e se encontram num `JoinNode`.
+- **Human-in-the-loop:** itens ambíguos pausam o fluxo e retomam com a escolha do operador.
+
+O LLM atua em um único passo, interpretando o pedido, sem ferramentas e com saída estruturada. OCR e RAG são chamados via MCP por passos determinísticos, e as decisões críticas (mascaramento de PII, escolha do código do exame e agendamento) ficam no código, para garantir previsibilidade e segurança.
