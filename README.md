@@ -30,53 +30,43 @@ O agente de exemplo lê a foto de um pedido médico, extrai os exames, encontra 
 
 Para rodar não é preciso Python, uv nem make: só Docker.
 
-### Comandos
+### Passo a passo
 
 ```bash
-cp .env.example .env         
-# preencha GOOGLE_API_KEY no .env
+# 1. Configurar (preencha GOOGLE_API_KEY no .env)
+cp .env.example .env
 
+# 2. Subir os serviços
 docker compose up -d --build --wait
+
+# 3. Gerar o agente a partir da spec
 docker compose run --rm transpile /app/agent_specs/exam_scheduling_agent.json
-docker compose run --rm agent run --agent exam_scheduling_agent --image /app/inputs/samples/pedido_medico_ficticio.png
+
+# 4. Rodar o agente com um pedido médico
+docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png
+
+# 5. Desligar tudo
+docker compose --profile "*" down -v
 ```
+
+### Outros cenários
 
 | Cenário | Comando |
 |---|---|
 | Revisão humana | `docker compose run --rm agent run --image /app/inputs/samples/pedido_ambiguo.png` |
 | Prompt injection | `docker compose run --rm agent run --image /app/inputs/samples/pedido_injecao.png` |
-| Gerar a spec alternativa | `docker compose run --rm transpile /app/agent_specs/examples/exam_lookup_only.json` |
-| Rodar a spec alternativa | `docker compose run --rm agent run --agent exam_lookup_only --image /app/inputs/samples/pedido_medico_ficticio.png` |
-| Ver o código gerado | `docker compose run --rm export-generated` |
 | Swagger | http://localhost:8000/docs (Authorize com `SCHEDULER_API_KEY`) |
-| Desligar tudo | `docker compose --profile "*" down -v` |
 
-### Escolher o agente
+### Rodar outro agente
 
-O transpilador gera um agente por spec. Para gerar e rodar cada um:
+Cada spec gera um agente, escolhido pelo nome com `--agent`:
 
 ```bash
-# Agente principal
-docker compose run --rm transpile /app/agent_specs/exam_scheduling_agent.json
-docker compose run --rm agent run --agent exam_scheduling_agent --image /app/inputs/samples/pedido_medico_ficticio.png
-
-# Agente alternativo
 docker compose run --rm transpile /app/agent_specs/examples/exam_lookup_only.json
 docker compose run --rm agent run --agent exam_lookup_only --image /app/inputs/samples/pedido_medico_ficticio.png
-
-# Listar os agentes gerados
-docker compose run --rm agent list
+docker compose run --rm agent list          # lista os agentes gerados
+docker compose run --rm export-generated    # copia o código gerado para ./generated/
 ```
-
-Sem `--agent`, roda o agente principal (`exam_scheduling_agent`).
-
-O código gerado fica num volume do Docker, não na pasta do projeto. Para copiá-lo para `./generated/`:
-
-```bash
-docker compose run --rm export-generated
-```
-
-Ele fica no volume porque, dentro do container, o transpilador roda com um usuário sem privilégios. Se gravasse direto na pasta do projeto, no Linux daria erro de permissão ou deixaria arquivos que só se apagam com `sudo`.
 
 ## Arquitetura
 
