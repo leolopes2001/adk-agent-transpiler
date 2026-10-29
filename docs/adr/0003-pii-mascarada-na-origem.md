@@ -31,6 +31,23 @@ Depois disso, outras camadas verificam de forma independente:
 4. a API recebe só um `patient_ref` opaco (HMAC do identificador), códigos e
    nomes de exames; o contrato não tem campo para dados pessoais.
 
+### NER local e minimização (2026-10-29)
+
+As regras só achavam nomes depois de rótulos ("Paciente:", "Dr."): 8 de 27 no
+corpus sintético (`tests/data/pii_ner_cases.jsonl`). Somamos um detector de
+nomes com Presidio e spaCy `pt_core_news_md` (`pii_guard.ner`), rodando no
+OCR, no `guard` e no tripwire, sobre o texto e cada linha, no original e numa
+cópia capitalizada: 25 de 27 (os 2 restantes são sobrenomes iguais a termos
+médicos, documentados como escape), sem mascarar nenhum termo médico do corpus nem
+nenhum dos 3.100 testes do catálogo. Seus spans perdem toda sobreposição para
+as regras e são cortados em termos do catálogo, termos médicos e rótulos.
+LOCATION ficou de fora (pouco ganho, falsos positivos em exames). O nó
+`llm_extract` passou a enviar ao modelo só linhas candidatas a exame; linhas
+com rótulo de dado pessoal nunca vão, nem mascaradas. Custo: imagem do OCR de
+681 MB para 1,11 GB e do agente de 382 MB para 878 MB; cerca de 1,4 s para
+carregar o modelo na subida; mascarar um pedido passa de ~1 ms para 80–125 ms.
+O que continua escapando está no README, seção "Segurança".
+
 ## Consequências
 
 - Um defeito em uma camada não basta para vazar PII.
@@ -40,7 +57,8 @@ Depois disso, outras camadas verificam de forma independente:
 - O operador nunca vê o nome do paciente na saída; a correlação é feita pelo
   `patient_ref`.
 - O segredo do HMAC passa a ser crítico e fica restrito ao servidor OCR.
-- Implementação: `pii_guard` (detectores e redator), `ocr_mcp.server`
-  e `ocr_mcp.identity` (mascaramento e `patient_ref`), `lab_common.logging`,
-  `agent_runtime.nodes.untrusted_text_guard` e
+- Implementação: `pii_guard` (detectores, NER em `pii_guard.ner` e redator),
+  `ocr_mcp.server` e `ocr_mcp.identity` (mascaramento e `patient_ref`),
+  `lab_common.logging`, `agent_runtime.nodes.untrusted_text_guard`,
+  `agent_runtime.nodes.llm_input` (minimização) e
   `agent_runtime.guardrails.tripwire`.

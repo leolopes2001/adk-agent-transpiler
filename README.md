@@ -142,6 +142,55 @@ docker compose run --rm --entrypoint lab-transpile transpile validate /app/agent
 - **Códigos de exame** vêm só do catálogo.
 - **Containers** sem root, só leitura e numa rede interna sem internet.
 
+### Dados pessoais
+
+Tudo roda localmente; o único serviço externo é o Gemini, e não há embedding externo. As camadas, em ordem:
+
+1. **Regras** (`pii_guard`): CPF, CNS e RG com dígito verificador e tolerância a erro de OCR, telefone, e-mail, CEP, endereço, data de nascimento, CRM, carteirinha, qualquer valor depois de um rótulo de dado pessoal e nomes depois de rótulos como "Paciente" ou "Dr.".
+2. **NER local** (`pii_guard.ner`): Presidio com spaCy `pt_core_news_md`, só para nomes de pessoa. Lê o texto inteiro e cada linha, no original e numa cópia com cada palavra capitalizada (pega nomes em MAIÚSCULAS). Seus achados perdem qualquer sobreposição com as regras e são cortados nas palavras do catálogo, nos termos médicos (`medical_terms.txt`, com tolerância a erro de OCR), nos rótulos e em palavras com dígito, para nunca mascarar um exame.
+3. **Minimização** (nó `llm_extract`): o LLM recebe só linhas candidatas a exame: itens de lista, títulos de seção curtos e linhas parecidas com o catálogo. Linha com rótulo de dado pessoal nunca entra, nem mascarada.
+4. **Tripwire** antes do LLM: roda os mesmos detectores, NER incluído, sobre o trecho do documento; qualquer achado bloqueia a chamada (`PII_TRIPWIRE`), sem enviar o texto original.
+
+Regras e NER rodam no servidor OCR (que nunca devolve texto sem mascarar) e de novo no agente (nó `guard` e tripwire). Se o modelo não carregar ou falhar, nada sai: o OCR responde `PII_ENGINE_FAILURE` e o tripwire bloqueia. O mascaramento é irreversível (`[PESSOA_1]`, `[CPF_1]`); não existe mapa para recuperar os valores.
+
+**Configuração:**
+
+- O modelo é uma dependência fixada (extra `ner` no `pyproject.toml` e `uv.lock`), instalada no build das imagens do OCR e do agente; nunca é baixado em execução.
+- A minimização tem dois parâmetros no nó `llm_extract` da spec: `min_catalog_similarity` (0,7) e `max_title_chars` (40).
+- Um exame lido como nome se resolve adicionando a palavra a `src/libs/pii_guard/medical_terms.txt`.
+
+**Medição** (`uv run python scripts/measure_pii.py`): 58 trechos sintéticos em `tests/data/pii_ner_cases.jsonl`, viram testes em `tests/unit/pii/test_ner.py`; a varredura do catálogo com o NER fica em `tests/security/test_catalog_ner.py`. "Catálogo mascarado" conta os 310 nomes e aliases do catálogo, como escritos e em MAIÚSCULAS, em 5 contextos.
+
+| Configuração | Nomes /27 | CPF /7 | E-mail /2 | Telefone /3 | Endereço /2 | Cidade sem rótulo /2 | Termos médicos mascarados | Catálogo mascarado | ms/trecho |
+|---|---|---|---|---|---|---|---|---|---|
+| Regras | 8 | 7 | 2 | 3 | 2 | 0 | 0 | 0/3100 | 0,1 |
+| Regras + NER no texto original | 21 | 7 | 2 | 3 | 2 | 0 | 0 | 0/3100 | 3,0 |
+| **Regras + NER no original e na cópia capitalizada (em uso)** | **25** | 7 | 2 | 3 | 2 | 0 | 0 | 0/3100 | 5,2 |
+
+Os 2 nomes que faltam são escapes conhecidos, listados abaixo; o corpus os marca com `escapes`, e um teste falha quando um deles passa a ser mascarado, para que esta tabela seja atualizada.
+
+LOCATION (cidades e bairros) ficou de fora: achou 1 de 2 cidades, tomou "FERRLTINA" por lugar e, sem prioridade menor, quebrava endereços que as regras já pegam.
+
+**Custo** (medido nesta máquina; tamanhos de `docker images`):
+
+| | Antes (só regras) | Depois (regras + NER) |
+|---|---|---|
+| Imagem `lab-agent-ocr-mcp` | 681 MB | 1,11 GB |
+| Imagem `lab-agent-agent` | 382 MB | 878 MB |
+| Carga do modelo | — | ~1,4 s no container do OCR |
+| Mascarar um pedido das amostras (15 a 21 linhas) | ~1 ms | 80 a 125 ms |
+
+O aumento das imagens vem do spaCy (133 MB), do modelo (52 MB), do numpy e do phonenumbers do Presidio. O OCR carrega o modelo na subida, antes de o `/health` responder. O agente carrega na primeira execução que precisa dele (`guard` ou tripwire), uma vez por processo; `lab-agent list`, `--help` e erros de argumento não o carregam. Se a carga falhar, a execução para no `guard` com `PII_ENGINE_FAILURE`, antes de qualquer envio ao LLM.
+
+**O que continua escapando** (nenhuma camada promete 100%):
+
+- Cidade ou bairro sem rótulo ("Reside em Contagem").
+- Sobrenome igual a um termo médico ou epônimo no fim de um nome sem rótulo: "Ana Ferro - 42 anos" e "Maria Chagas - 30 anos" mascaram só o primeiro nome. Com rótulo ("Paciente: Ana Ferro") o nome inteiro é mascarado.
+- Um nome que seja só um termo médico, epônimo ou rótulo: "Paciente: Chagas", "Nascimento".
+- Nomes que o OCR deformou a ponto de o modelo não reconhecer.
+- O NER também mascara palavras que não são dados pessoais (o nome do laboratório, por exemplo). Nenhum exame do corpus nem do catálogo é mascarado, mas um exame fora do catálogo ainda pode ser lido como nome.
+- Os logs usam só as regras de alta precisão: por construção, não recebem texto do documento.
+
 ## Logs e traces
 
 ```bash
