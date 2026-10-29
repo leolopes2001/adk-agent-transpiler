@@ -170,3 +170,19 @@ def test_lowercase_value_ends_at_the_next_field(text: str, expected: list[str]) 
 )
 def test_lowercase_exams_and_labels_after_a_label_are_not_names(text: str) -> None:
     assert names(text) == []
+
+
+# Before a colon only a known label ends the name; any other word is part of it.
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Solicitado por Dr. João Exemplo: Ferritina", ["João Exemplo"]),
+        ("Dra. Helena Vasconcelos: retorno em 30 dias", ["Helena Vasconcelos"]),
+        ("Paciente: Maria Silva CPF: 202.393.613-69", ["Maria Silva"]),
+        ("Paciente: Maria Silva Nascimento: 14/03/1985", ["Maria Silva"]),
+        ("Paciente: Maria Silva Exames: Hemograma", ["Maria Silva"]),
+        ("Dr. João Exemplo Solicito: TSH", ["João Exemplo"]),
+    ],
+)
+def test_only_known_labels_end_a_name_before_a_colon(text: str, expected: list[str]) -> None:
+    assert names(text) == expected

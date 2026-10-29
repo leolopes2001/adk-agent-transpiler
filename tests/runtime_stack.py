@@ -28,11 +28,12 @@ from alembic.config import Config
 from google.adk.models import LlmRequest
 from google.adk.sessions import InMemorySessionService, Session
 from sqlalchemy import create_engine, text
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from testcontainers.community.postgres import PostgresContainer
 
 from agent_runtime import cli
 from agent_runtime.models import FakeLlm
+from agent_runtime.report import render_text
 from agent_runtime.settings import AgentSettings
 from lab_common import logging as lab_logging
 from lab_common.mcp_server import LibraryLogFilter
@@ -70,6 +71,13 @@ SAMPLE_PII = (
     "João Exemplo",
     "CRM-MG 000000",
     "Rua Imaginária",
+    # tests/data/images/nomes_sem_rotulo.png: no label, only the NER model finds them.
+    "ANA BEATRIZ",
+    "MOURA",
+    "Roberto",
+    "Almeida",
+    "Carlos Eduardo",
+    "Lima",
     # tests/data/images/nomes_sem_capitalizacao.png (audit F01).
     "maria",
     "fictícia da silva",
@@ -102,6 +110,37 @@ def serve(app: ASGIApp) -> Iterator[str]:
         thread.join(timeout=10)
 
 
+class Recorder:
+    """Every request and response body of an ASGI app: what crossed the wire."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+        self.received: list[bytes] = []
+        self.sent: list[bytes] = []
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        async def recording_receive() -> Message:
+            message = await receive()
+            if message["type"] == "http.request":
+                self.received.append(message.get("body", b""))
+            return message
+
+        async def recording_send(message: Message) -> None:
+            if message["type"] == "http.response.body":
+                self.sent.append(message.get("body", b""))
+            await send(message)
+
+        await self._app(scope, recording_receive, recording_send)
+
+    def text(self, *, received: bool = True, sent: bool = True) -> str:
+        chunks = (self.received if received else []) + (self.sent if sent else [])
+        return b"\n".join(chunks).decode("utf-8", errors="replace")
+
+
 @contextmanager
 def _served(app: ASGIApp) -> Iterator[str]:
     generator = serve(app)
@@ -124,6 +163,8 @@ class Stack:
     agent_dir: Path
     database_url: str
     env: dict[str, str]
+    wire: dict[str, Recorder]
+    """Bodies sent to and from the "ocr", "rag" and "api" servers."""
 
     def count(self, table: str) -> int:
         engine = create_engine(self.database_url)
@@ -164,9 +205,14 @@ def runtime_stack(work: Path) -> Iterator[Stack]:
         api = Settings(database_url=database_url, scheduler_api_key=API_KEY, catalog_path=CATALOG)
         ocr = OcrSettings(mcp_auth_token=MCP_TOKEN, pii_hmac_secret=HMAC_SECRET, host="127.0.0.1")
         rag = RagSettings(mcp_auth_token=MCP_TOKEN, host="127.0.0.1", catalog_path=CATALOG)
-        api_url = stack.enter_context(_served(create_app(api)))
-        ocr_url = stack.enter_context(_served(build_ocr_app(ocr, TesseractEngine())))
-        rag_url = stack.enter_context(_served(build_rag_app(rag, load_catalog(CATALOG))))
+        wire = {
+            "api": Recorder(create_app(api)),
+            "ocr": Recorder(build_ocr_app(ocr, TesseractEngine())),
+            "rag": Recorder(build_rag_app(rag, load_catalog(CATALOG))),
+        }
+        api_url = stack.enter_context(_served(wire["api"]))
+        ocr_url = stack.enter_context(_served(wire["ocr"]))
+        rag_url = stack.enter_context(_served(wire["rag"]))
 
         (work / "samples").mkdir(parents=True, exist_ok=True)
         for sample in SAMPLES:
@@ -187,7 +233,13 @@ def runtime_stack(work: Path) -> Iterator[Stack]:
             "LOG_LEVEL": "INFO",
         }
         try:
-            yield Stack(work=work, agent_dir=package.path, database_url=database_url, env=env)
+            yield Stack(
+                work=work,
+                agent_dir=package.path,
+                database_url=database_url,
+                env=env,
+                wire=wire,
+            )
         finally:
             forget_generated_package()
             sys.path[:] = [p for p in sys.path if p != str(work / "generated")]
@@ -203,6 +255,8 @@ class AgentRun:
     """Final state of the ADK sessions the run created."""
     llm_requests: list[LlmRequest]
     """Requests the FakeLlm received during the run."""
+    output: str
+    """What `lab-agent run --verbose` prints for the run (table output)."""
 
 
 class _RecordingSessions(InMemorySessionService):
@@ -276,4 +330,5 @@ async def run_agent(  # noqa: PLR0913 - the CLI options
                 sessions.append(session)
     model = _fake_llm()
     requests = list(model.requests[seen:]) if model else []
-    return AgentRun(outcome.exit_code, outcome.report, logs.getvalue(), sessions, requests)
+    output = render_text(outcome.report, outcome.result, verbose=True)
+    return AgentRun(outcome.exit_code, outcome.report, logs.getvalue(), sessions, requests, output)

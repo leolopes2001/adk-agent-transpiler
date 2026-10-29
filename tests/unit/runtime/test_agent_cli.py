@@ -7,11 +7,13 @@ FakeLlm. The real servers are exercised in tests/integration/runtime.
 
 import base64
 import hashlib
+import importlib
 import json
 import logging
 import re
 import shutil
 import signal
+import subprocess
 import sys
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
@@ -1046,3 +1048,53 @@ def test_run_by_name_refuses_code_out_of_date_with_its_spec(
 
     assert code == 7
     assert message in capsys.readouterr().err
+
+
+def test_ner_libraries_are_redacted_like_the_others() -> None:
+    assert {"presidio-analyzer", "presidio_analyzer", "spacy"} <= set(cli.LIBRARY_LOGGERS)
+
+
+# The NER model is loaded by the first run that needs it, never to list or explain agents.
+@pytest.mark.parametrize("argv", [["list"], ["--help"], ["run", "--help"], ["run", "--bogus"]])
+def test_commands_that_run_nothing_do_not_load_the_ner_model(argv: list[str]) -> None:
+    script = (
+        "import sys\n"
+        "from agent_runtime import cli\n"
+        "try:\n"
+        f"    cli.main({argv!r})\n"
+        "except SystemExit:\n"
+        "    pass\n"
+        "loaded = sorted(m for m in ('spacy', 'presidio_analyzer') if m in sys.modules)\n"
+        "sys.stderr.write('LOADED=' + ','.join(loaded))\n"
+    )
+    env = {"GENERATED_ROOT": str(GOLDEN), "INPUT_ROOT": str(ROOT), "APP_ENV": "test"}
+    result = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env={**env, "PATH": "/usr/bin:/bin"},
+        timeout=120,
+        check=False,
+    )
+
+    assert result.stderr.rstrip().endswith("LOADED="), result.stderr
+
+
+async def test_a_model_that_cannot_load_stops_the_run_before_the_llm(
+    services: Services, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken() -> list[Any]:
+        raise OSError("model files missing")
+
+    # The package exports the factory under the module's name, hence import_module.
+    guard = importlib.import_module("agent_runtime.nodes.untrusted_text_guard")
+    monkeypatch.setattr(guard, "document_detectors", broken)
+
+    outcome = await _execute()
+
+    model = sys.modules[f"{AGENT_DIR.name}.agent"].exam_extractor.model
+    assert model.requests == []
+    assert outcome.report["error_code"] == "PII_ENGINE_FAILURE"
+    assert outcome.report["path"] == ["ocr", "guard"]
+    assert services.requests == []

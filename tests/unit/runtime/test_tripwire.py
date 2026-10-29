@@ -9,8 +9,9 @@ from google.genai import types
 from runtime_fakes import ScriptedLlm, run_node
 from structlog.testing import capture_logs
 
-from agent_runtime.guardrails import pii_tripwire
+from agent_runtime.guardrails import pii_tripwire, tripwire
 from agent_runtime.guardrails.tripwire import TRIPWIRE_STATE_KEY, findings
+from agent_runtime.nodes.llm_input import render
 from agent_runtime.schemas import ExtractedExams
 
 pytestmark = pytest.mark.unit
@@ -136,3 +137,29 @@ async def test_inside_an_agent_the_model_is_never_called() -> None:
     assert model.requests == []
     assert run.state[TRIPWIRE_STATE_KEY] is True
     assert any(e.error_code == "PII_TRIPWIRE" for e in run.events)
+
+
+def test_the_document_block_is_scanned_with_the_ner_model() -> None:
+    request = _request(render("1. Hemograma completo\nANA BEATRIZ MOURA - 42 anos"))
+
+    assert findings(request) == {"PERSON": 1}
+
+
+def test_masked_exam_lines_pass() -> None:
+    request = _request(render("Exames solicitados:\n1. Hemograma completo\n2. T4 livre"))
+
+    assert findings(request) is None
+
+
+def test_outside_the_document_block_names_are_not_looked_for() -> None:
+    # The instruction and the header are fixed text written by the project.
+    assert findings(_request("Exemplo: Maria Silva", render("1. TSH"))) is None
+
+
+def test_a_model_that_cannot_load_blocks_the_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken() -> list[Any]:
+        raise OSError("model files missing")
+
+    monkeypatch.setattr(tripwire, "document_detectors", broken)
+
+    assert findings(_request(render("1. TSH"))) == {"ENGINE_FAILURE": 1}

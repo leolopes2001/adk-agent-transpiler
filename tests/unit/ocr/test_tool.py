@@ -143,7 +143,8 @@ class TestSampleOrder:
         result = ok(await call(server()))
 
         assert "Paciente: [PESSOA_1]" in result.text
-        assert "Dr. [PESSOA_2] — [CRM_1]" in result.text
+        # The NER model also masks "(fictício)" on the health plan line, so the number varies.
+        assert re.search(r"^Dr\. \[PESSOA_\d+\] — \[CRM_1\]$", result.text, re.MULTILINE)
         for exam in ["Hemograma completo", "Glicemia de jejum", "TSH", "T4 livre", "7. PCR"]:
             assert exam in result.text
 

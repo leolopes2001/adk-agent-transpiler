@@ -35,11 +35,13 @@ from telemetry_capture import Exported
 pytestmark = pytest.mark.security
 
 UNCAPITALIZED = "nomes_sem_capitalizacao.png"
+NO_LABEL = "nomes_sem_rotulo.png"
 RUNS = [
     ("samples/pedido_medico_ficticio.png", "pedido_medico_ficticio.json"),
     ("samples/pedido_ambiguo.png", "pedido_ambiguo.json"),
     ("samples/pedido_injecao.png", "pedido_medico_ficticio.json"),
     (UNCAPITALIZED, "pedido_medico_ficticio.json"),
+    (NO_LABEL, "pedido_medico_ficticio.json"),
 ]
 MIN_CHUNK = 12
 """Prompt and document lines are searched in pieces of at least this many characters."""
@@ -83,7 +85,8 @@ def monkeypatch_module() -> Iterator[pytest.MonkeyPatch]:
 def runs(
     stack: Stack, _exported_session: Exported, monkeypatch_module: pytest.MonkeyPatch
 ) -> list[TelemetryRun]:
-    shutil.copy(REPO_ROOT / "tests" / "data" / "images" / UNCAPITALIZED, stack.work)
+    for image in (UNCAPITALIZED, NO_LABEL):
+        shutil.copy(REPO_ROOT / "tests" / "data" / "images" / image, stack.work)
     exported = _exported_session
     results = []
     for image, fixture in RUNS:

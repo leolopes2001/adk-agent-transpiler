@@ -1,3 +1,4 @@
+import importlib
 from typing import Any
 
 import pytest
@@ -81,6 +82,17 @@ async def test_personal_data_left_by_ocr_is_masked_again() -> None:
     [event] = [e for e in logs if e["event"] == "pii_residual_detected"]
     assert event["counts"] == {"CPF": 1, "EMAIL": 1}
     assert "529" not in str(logs)
+
+
+async def test_names_without_a_label_are_masked_by_the_model() -> None:
+    doc = document("ANA BEATRIZ MOURA - 42 anos", "Solicito exames para Roberto Almeida.", "1. TSH")
+
+    run = await run_node(_node(Scanner()), doc)
+
+    guarded = GuardedDocument.model_validate(run.output)
+    for value in ("ANA", "BEATRIZ", "MOURA", "Roberto", "Almeida"):
+        assert value not in guarded.text
+    assert guarded.lines[-1].text == "1. TSH"
 
 
 @pytest.mark.parametrize(
@@ -170,3 +182,16 @@ def test_pii_engine_failure_fails_closed() -> None:
 def test_severity_order() -> None:
     assert is_blocked("high", "medium")
     assert not is_blocked("low", "high")
+
+
+async def test_a_model_that_cannot_load_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken() -> list[Any]:
+        raise OSError("model files missing")
+
+    guard = importlib.import_module("agent_runtime.nodes.untrusted_text_guard")
+    monkeypatch.setattr(guard, "document_detectors", broken)
+
+    with pytest.raises(PermanentError) as raised:
+        await run_node(_node(Scanner()), document("1. TSH"))
+
+    assert raised.value.code == "PII_ENGINE_FAILURE"

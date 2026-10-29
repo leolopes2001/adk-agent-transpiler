@@ -31,7 +31,7 @@ from ocr_mcp.engine import TesseractEngine
 from ocr_mcp.logs import configure_logging
 from ocr_mcp.server import OcrService, build_app, build_server
 from ocr_mcp.settings import OcrSettings
-from pii_guard import PiiRedactor, PiiSpan, default_detectors
+from pii_guard import NerPersonDetector, PiiRedactor, PiiSpan, default_detectors
 
 pytestmark = pytest.mark.security
 
@@ -230,6 +230,36 @@ async def test_pii_engine_failure_on_real_ocr_releases_nothing(logs: io.StringIO
     assert result.structuredContent is not None
     assert result.structuredContent["code"] == "PII_ENGINE_FAILURE"
     assert "Hemograma" not in wire(result)
+    assert_no_pii(wire(result))
+    assert_no_pii(logs.getvalue())
+
+
+class _BrokenAnalyzer:
+    """A spaCy or Presidio failure whose message quotes the document, as some do."""
+
+    def analyze(self, text: str, **_: object) -> list[object]:
+        logging.getLogger("presidio-analyzer").error("failed on: %s", text)
+        raise RuntimeError(f"[E088] Text of length {len(text)}: {text}")
+
+
+async def test_ner_failure_on_real_ocr_releases_nothing(logs: io.StringIO) -> None:
+    redactor = PiiRedactor([*default_detectors(), NerPersonDetector(_BrokenAnalyzer())])
+    mcp = build_server(OcrService(settings(), TesseractEngine(), redactor), settings())
+
+    result = await mcp.call_tool(
+        "extract_text",
+        {
+            "image_base64": base64.b64encode(SAMPLES[0].read_bytes()).decode(),
+            "request_id": str(uuid.uuid4()),
+        },
+    )
+
+    assert isinstance(result, CallToolResult)
+    assert result.isError
+    assert result.structuredContent is not None
+    assert result.structuredContent["code"] == "PII_ENGINE_FAILURE"
+    assert "Hemograma" not in wire(result)
+    assert "Hemograma" not in logs.getvalue()
     assert_no_pii(wire(result))
     assert_no_pii(logs.getvalue())
 

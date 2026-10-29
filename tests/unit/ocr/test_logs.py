@@ -43,6 +43,18 @@ def record(
 
 
 class TestLibraryRecords:
+    @pytest.mark.parametrize("logger", ["presidio-analyzer", "presidio_analyzer.nlp", "spacy"])
+    def test_ner_library_messages_are_redacted(self, stream: io.StringIO, logger: str) -> None:
+        try:
+            raise ValueError("Paciente: Maria Fictícia da Silva")
+        except ValueError:
+            logging.getLogger(logger).exception("Entity failed: Maria Fictícia da Silva")
+
+        [rec] = records(stream)
+        assert rec["event"] == f"Entity failed: {REDACTED}"
+        assert rec["exception"] == REDACTED
+        assert "Maria" not in stream.getvalue()
+
     def test_exception_keeps_only_its_type(self, stream: io.StringIO) -> None:
         try:
             raise ValueError(f"input_value='{PAYLOAD}'")

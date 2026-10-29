@@ -22,6 +22,7 @@ from agent_runtime.bootstrap import RuntimeDeps
 from agent_runtime.nodes.confidence_gate import ConfidenceGateParams
 from agent_runtime.nodes.human_review import HumanReviewParams
 from agent_runtime.nodes.lexical_extract import LexicalExtractParams
+from agent_runtime.nodes.llm_input import LlmInputParams
 from agent_runtime.nodes.ocr_extract import OcrExtractParams
 from agent_runtime.nodes.present import PresentParams
 from agent_runtime.nodes.rag_resolve import RagResolveParams
@@ -36,6 +37,7 @@ WITH_FACTORY = [spec for spec in REGISTRY.values() if spec.factory is not None]
 RUNTIME_PARAMS: dict[NodeKind, type[BaseModel]] = {
     NodeKind.OCR_EXTRACT: OcrExtractParams,
     NodeKind.UNTRUSTED_TEXT_GUARD: UntrustedTextGuardParams,
+    NodeKind.LLM_EXTRACT: LlmInputParams,
     NodeKind.LEXICAL_EXTRACT: LexicalExtractParams,
     NodeKind.RECONCILE: ReconcileParams,
     NodeKind.RAG_RESOLVE: RagResolveParams,
@@ -52,9 +54,10 @@ def _ids(spec: NodeKindSpec) -> str:
 
 
 def _expected_keywords(spec: NodeKindSpec) -> set[str]:
-    if spec.kind is NodeKind.LLM_EXTRACT:
-        return {"name"}  # the factory builds the <id>_input node; the Agent is emitted inline
     params = set(spec.params_model.model_fields) if spec.params_model else set()
+    if spec.kind is NodeKind.LLM_EXTRACT:
+        # The factory builds the <id>_input node; the Agent is emitted inline.
+        return {"name"} | params
     io = {"retry", "timeout"} if spec.accepts_retry else set()
     requires = set()
     if spec.requires & {"server", "service"}:

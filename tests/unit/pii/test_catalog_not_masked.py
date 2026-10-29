@@ -1,4 +1,8 @@
-"""Exam names must survive masking: a masked exam is an exam the agent cannot schedule."""
+"""Exam names must survive masking: a masked exam is an exam the agent cannot schedule.
+
+The rules are checked here; the same sweep with the NER model, slower, is in
+tests/security/test_catalog_ner.py.
+"""
 
 import json
 from pathlib import Path
@@ -34,12 +38,15 @@ def test_catalog_has_names_and_aliases() -> None:
     assert len(MENTIONS) > 120
 
 
+@pytest.mark.parametrize("case", ["as_written", "upper"])
 @pytest.mark.parametrize("context", NEUTRAL_CONTEXTS)
-def test_no_detector_fires_on_catalog_mentions(redactor: PiiRedactor, context: str) -> None:
+def test_no_detector_fires_on_catalog_mentions(
+    redactor: PiiRedactor, context: str, case: str
+) -> None:
     masked = {
         mention: result.text
         for mention in MENTIONS
-        if (result := redactor.redact(context.format(mention))).spans
+        if (result := redactor.redact(context.format(_cased(mention, case)))).spans
     }
     assert masked == {}
 
@@ -66,3 +73,7 @@ def test_whole_catalog_as_one_order_keeps_every_mention(redactor: PiiRedactor) -
 
     assert result.counts == {PiiEntity.PERSON: 1}
     assert result.lines[1:] == tuple(order.splitlines()[1:])
+
+
+def _cased(mention: str, case: str) -> str:
+    return mention.upper() if case == "upper" else mention
