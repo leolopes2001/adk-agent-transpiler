@@ -62,3 +62,28 @@ O que continua escapando está no README, seção "Segurança".
   `lab_common.logging`, `agent_runtime.nodes.untrusted_text_guard`,
   `agent_runtime.nodes.llm_input` (minimização) e
   `agent_runtime.guardrails.tripwire`.
+
+## Detecção de nomes com modelo local
+
+**Decisão:** a detecção de dados pessoais combina regras (CPF, telefone,
+data de nascimento, nomes com rótulo) com um modelo local de NER (Presidio +
+spaCy `pt_core_news_md`), que roda dentro do `ocr-mcp`, na rede sem internet.
+O NER marca só PERSON, com score mínimo (0,55), e ignora termos do catálogo,
+termos médicos, rótulos e palavras com dígito, para não mascarar exames. O
+NER é um modelo de classificação, não generativo, e serve só para proteger os
+dados; o Gemini interpreta o texto já mascarado.
+
+**Motivo:** detectar nomes sem rótulo sem enviar o texto para fora da rede
+interna.
+
+**Consequências:** o modelo é carregado no início do `ocr-mcp` e a imagem
+fica maior; a minimização e o tripwire continuam como camadas extras.
+
+**Referências:**
+
+- OWASP Top 10 for LLM Applications 2025, LLM02 Sensitive Information
+  Disclosure: <https://genai.owasp.org/llmrisk/llm02/>
+- Microsoft Presidio: <https://microsoft.github.io/presidio>
+- spaCy, modelos em português: <https://spacy.io/models/pt>
+- LGPD, Lei 13.709/2018, art. 6º, III, e art. 46:
+  <https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm>
