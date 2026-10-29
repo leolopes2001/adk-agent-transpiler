@@ -518,6 +518,13 @@
           "minimum": 0,
           "title": "Min Catalog Similarity",
           "type": "number"
+        },
+        "min_kept_lines": {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Min Kept Lines",
+          "type": "integer"
         }
       },
       "title": "LlmExtractParams",

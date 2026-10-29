@@ -23,6 +23,7 @@ MIN_WORD_CHARS = 3
 _PLACEHOLDER = re.compile(r"\[[A-Z_]+_\d+\]")
 _DEFAULT_MIN_CATALOG_SIMILARITY = 0.7
 _DEFAULT_MAX_TITLE_CHARS = 40
+_DEFAULT_MIN_KEPT_LINES = 1
 
 log = lab_logging.get_logger(__name__)
 
@@ -30,6 +31,7 @@ log = lab_logging.get_logger(__name__)
 class LlmInputParams(Params):
     min_catalog_similarity: Annotated[float, Field(ge=0, le=1)] = _DEFAULT_MIN_CATALOG_SIMILARITY
     max_title_chars: Annotated[int, Field(ge=1)] = _DEFAULT_MAX_TITLE_CHARS
+    min_kept_lines: Annotated[int, Field(ge=1)] = _DEFAULT_MIN_KEPT_LINES
 
 
 def render(text: str) -> str:
@@ -47,21 +49,31 @@ def llm_input(
     name: str,
     min_catalog_similarity: float = _DEFAULT_MIN_CATALOG_SIMILARITY,
     max_title_chars: int = _DEFAULT_MAX_TITLE_CHARS,
+    min_kept_lines: int = _DEFAULT_MIN_KEPT_LINES,
 ) -> FunctionNode:
     params = LlmInputParams(
-        min_catalog_similarity=min_catalog_similarity, max_title_chars=max_title_chars
+        min_catalog_similarity=min_catalog_similarity,
+        max_title_chars=max_title_chars,
+        min_kept_lines=min_kept_lines,
     )
 
     async def run(ctx: Context, node_input: Any) -> Event:
         document = parse_input(GuardedDocument, node_input)
-        lines = candidate_lines(document.text, params)
+        lines = document.text.split("\n") if document.text else []
+        kept = candidate_lines(document.text, params)
+        # A filter this sure of a layout it does not know would hide the exams from the model:
+        # it reads the whole text, which the guard masked again and the tripwire still checks.
+        fallback = len(kept) < params.min_kept_lines
+        if fallback:
+            kept = lines
         log.info(
             "llm_input_minimized",
             node=name,
-            lines=document.text.count("\n") + 1 if document.text else 0,
-            kept=len(lines),
+            kept=len(kept),
+            dropped=len(lines) - len(kept),
+            fallback=fallback,
         )
-        return Event(output=render("\n".join(lines)))
+        return Event(output=render("\n".join(kept)))
 
     return function_node(name, run)
 

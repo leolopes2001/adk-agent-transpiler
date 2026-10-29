@@ -21,7 +21,7 @@ ner = [
 ]
 agent = [
     "lab-exam-agent[transpiler,ner]",
-    "google-adk>=2,<3",
+    "google-adk==2.13.0",
     "httpx",
     "rich",
     "rapidfuzz",

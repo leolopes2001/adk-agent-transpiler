@@ -1,7 +1,11 @@
 import pytest
+from google.adk.models import LlmRequest
+from google.genai import types
 from runtime_fakes import run_node
+from structlog.testing import capture_logs
 
 from agent_runtime.guardrails.document import CLOSE_TAG, OPEN_TAG
+from agent_runtime.guardrails.tripwire import findings
 from agent_runtime.nodes.llm_input import (
     LlmInputParams,
     candidate_lines,
@@ -140,3 +144,49 @@ def test_cutoff_and_title_length_are_parameters() -> None:
         "FERRLTINA",
         "Exames solicitados:",
     ]
+
+
+async def test_without_candidate_lines_the_masked_document_reaches_the_model() -> None:
+    text = "Paciente: [PESSOA_1]\nRetorno em 30 dias"
+    assert candidate_lines(text, LlmInputParams()) == []
+
+    with capture_logs() as logs:
+        run = await run_node(llm_input(name="llm_extract_input"), _guarded(text))
+
+    assert run.output == render(text)
+    [event] = [e for e in logs if e["event"] == "llm_input_minimized"]
+    assert event == {
+        "event": "llm_input_minimized",
+        "log_level": "info",
+        "node": "llm_extract_input",
+        "kept": 2,
+        "dropped": 0,
+        "fallback": True,
+    }
+
+
+async def test_fewer_kept_lines_than_the_minimum_send_the_masked_document() -> None:
+    text = "Paciente: [PESSOA_1]\n1. TSH\nRetorno em 30 dias"
+    node = llm_input(name="llm_extract_input", min_kept_lines=2)
+
+    assert (await run_node(node, _guarded(text))).output == render(text)
+    assert (await run_node(llm_input(name="llm_extract_input"), _guarded(text))).output == (
+        render("1. TSH")
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "blocked"),
+    [
+        ("Paciente: [PESSOA_1]\nRetorno em 30 dias", None),
+        ("Paciente: [PESSOA_1]\nCPF 529.982.247-25", {"CPF": 1}),
+    ],
+)
+async def test_the_fallback_text_still_goes_through_the_tripwire(
+    text: str, blocked: dict[str, int] | None
+) -> None:
+    run = await run_node(llm_input(name="llm_extract_input"), _guarded(text))
+    request = LlmRequest(contents=[types.Content(role="user", parts=[types.Part(text=run.output)])])
+
+    assert text in run.output
+    assert findings(request) == blocked

@@ -65,7 +65,7 @@
     "extraction": {
       "nodes": [
         { "id": "llm_extract", "kind": "llm_extract", "agent": "exam_extractor",
-          "params": { "min_catalog_similarity": 0.7, "max_title_chars": 40 },
+          "params": { "min_catalog_similarity": 0.7, "max_title_chars": 40, "min_kept_lines": 1 },
           "retry": { "max_attempts": 2, "initial_delay_s": 1, "max_delay_s": 4 }, "timeout_s": 30 },
         { "id": "lexical_extract", "kind": "lexical_extract", "server": "rag", "tool": "batch_search",
           "params": { "min_score": 0.8, "max_lines": 60 }, "timeout_s": 20 },

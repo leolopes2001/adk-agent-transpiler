@@ -142,6 +142,8 @@ class LlmExtractParams(_Model):
 
     min_catalog_similarity: Threshold = 0.7
     max_title_chars: Annotated[int, Field(ge=10, le=200)] = 40
+    # Fewer kept lines than this and the model reads the whole masked text.
+    min_kept_lines: Annotated[int, Field(ge=1, le=20)] = 1
 
 
 class LexicalExtractParams(_Model):

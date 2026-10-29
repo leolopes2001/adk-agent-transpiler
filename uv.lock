@@ -841,7 +841,7 @@ requires-dist = [
     { name = "alembic", marker = "extra == 'api'" },
     { name = "anyio", marker = "extra == 'ocr'" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.162" },
-    { name = "google-adk", marker = "extra == 'agent'", specifier = ">=2,<3" },
+    { name = "google-adk", marker = "extra == 'agent'", specifier = "==2.13.0" },
     { name = "httpx", marker = "extra == 'agent'" },
     { name = "jinja2", marker = "extra == 'transpiler'" },
     { name = "lab-exam-agent", extras = ["ner"], marker = "extra == 'ocr'" },

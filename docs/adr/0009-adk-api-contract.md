@@ -10,7 +10,8 @@ estabiliza: assinatura de nós, roteamento, `JoinNode`, workflow aninhado,
 `Agent` em modo `single_turn`, retry, HITL e MCP. Antes de implementar os nós,
 cada suposição virou um teste em `tests/contract/test_adk_contract.py`,
 rodando contra a versão instalada (`google-adk` 2.13.0, `mcp` 1.30.0,
-`google-genai` 2.33.0, fixadas no `uv.lock`). O primeiro teste falha se a
+`google-genai` 2.33.0, fixadas no `uv.lock`; o `google-adk` também no
+`pyproject.toml`). O primeiro teste falha se a
 versão mudar, para obrigar a refazer esta verificação.
 
 ## Decisão

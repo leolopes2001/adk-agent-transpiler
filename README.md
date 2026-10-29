@@ -76,6 +76,8 @@ docker compose run --rm export-generated    # copia o código gerado para ./gene
 
 - **A IA interpreta, o código decide.** O Gemini só lê o texto mascarado; quem escolhe o código e agenda é o gate.
 - **OCR e RAG são servidores MCP via SSE**, chamados por nós de código, nunca pelo LLM.
+- **O `rag-mcp` faz a etapa de recuperação** (busca léxica no catálogo); os candidatos não são entregues ao LLM, de propósito: quem decide é o gate.
+- **Modelo `gemini-flash-latest`:** o apelido evita quebra quando versões antigas forem aposentadas; em produção, a versão seria fixada e trocada só depois de validar com testes.
 - **Workflow em grafo (ADK 2):** sequencial, com fan-out/join paralelo e human-in-the-loop. Equivale a `SequentialAgent` + `ParallelAgent` do ADK 1.
 
 ### Estrutura de pastas
@@ -156,7 +158,7 @@ Regras e NER rodam no servidor OCR (que nunca devolve texto sem mascarar) e de n
 **Configuração:**
 
 - O modelo é uma dependência fixada (extra `ner` no `pyproject.toml` e `uv.lock`), instalada no build das imagens do OCR e do agente; nunca é baixado em execução.
-- A minimização tem dois parâmetros no nó `llm_extract` da spec: `min_catalog_similarity` (0,7) e `max_title_chars` (40).
+- A minimização tem três parâmetros no nó `llm_extract` da spec: `min_catalog_similarity` (0,7), `max_title_chars` (40) e `min_kept_lines` (1). Com menos linhas candidatas que `min_kept_lines`, o LLM recebe o texto inteiro já mascarado pelo `guard`, que ainda passa pelo tripwire.
 - Um exame lido como nome se resolve adicionando a palavra a `src/libs/pii_guard/medical_terms.txt`.
 
 **Medição** (`uv run python scripts/measure_pii.py`): 58 trechos sintéticos em `tests/data/pii_ner_cases.jsonl`, viram testes em `tests/unit/pii/test_ner.py`; a varredura do catálogo com o NER fica em `tests/security/test_catalog_ner.py`. "Catálogo mascarado" conta os 310 nomes e aliases do catálogo, como escritos e em MAIÚSCULAS, em 5 contextos.
@@ -190,6 +192,10 @@ O aumento das imagens vem do spaCy (133 MB), do modelo (52 MB), do numpy e do ph
 - Nomes que o OCR deformou a ponto de o modelo não reconhecer.
 - O NER também mascara palavras que não são dados pessoais (o nome do laboratório, por exemplo). Nenhum exame do corpus nem do catálogo é mascarado, mas um exame fora do catálogo ainda pode ser lido como nome.
 - Os logs usam só as regras de alta precisão: por construção, não recebem texto do documento.
+
+## Limitações
+
+- A calibração (limiares da busca, do gate e da minimização) foi feita com pedidos fictícios gerados para o projeto; com layouts muito diferentes, mais itens vão para a revisão humana ou ficam sem agendar, e nunca são agendados sem passar pelo gate (exemplos em `tests/data/images/pedido_*`).
 
 ## Logs e traces
 
