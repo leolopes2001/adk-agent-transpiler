@@ -5,16 +5,24 @@ from google.adk import Context
 from google.adk.models import LlmRequest, LlmResponse
 from google.genai import types
 
+from agent_runtime.guardrails.document import split_document
 from lab_common import logging as lab_logging
-from pii_guard import LabeledFieldDetector, PiiEngineError, high_precision_detectors
+from pii_guard import (
+    LabeledFieldDetector,
+    PiiDetector,
+    PiiEngineError,
+    document_detectors,
+    high_precision_detectors,
+)
 from pii_guard.redactor import detect_all
 
 # ADK does not fail the agent on the blocking response (ADR-0009): reconcile fails the run on it.
 TRIPWIRE_STATE_KEY = "run.pii_tripwire"
 ERROR_CODE = "PII_TRIPWIRE"
 
-# Valid CPF, CNS, e-mail and phone, plus any value after a personal-data label at the start
-# of a line, as the OCR server masks it; placeholders such as [CPF_1] never match.
+# Outside the document block (instruction, header): valid CPF, CNS, e-mail and phone, plus
+# any value after a personal-data label; placeholders such as [CPF_1] never match. The
+# document block gets every detector the OCR server masks with, the NER model included.
 _DETECTORS = (*high_precision_detectors(), LabeledFieldDetector())
 
 log = lab_logging.get_logger(__name__)
@@ -42,13 +50,24 @@ def findings(request: LlmRequest) -> dict[str, int] | None:
     try:
         counts: Counter[str] = Counter()
         for text in request_texts(request):
-            counts.update(span.entity.value for span in detect_all(_DETECTORS, text, 0.0))
+            documents, rest = split_document(text)
+            spans = detect_all(_DETECTORS, rest, 0.0)
+            for document in documents:
+                spans += detect_all(_document_detectors(), document, 0.0)
+            counts.update(span.entity.value for span in spans)
     except _Uninspectable:
         return {"UNINSPECTABLE": 1}
     except PiiEngineError:
         return {"ENGINE_FAILURE": 1}
 
     return dict(sorted(counts.items())) or None
+
+
+def _document_detectors() -> list[PiiDetector]:
+    try:
+        return document_detectors()
+    except Exception:  # noqa: BLE001 - a model that cannot load must block the call
+        raise PiiEngineError("document detectors are unavailable") from None
 
 
 def request_texts(request: LlmRequest) -> list[str]:

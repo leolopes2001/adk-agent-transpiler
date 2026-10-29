@@ -1,9 +1,9 @@
 {
   "transpiler_version": "0.1.0",
   "spec_path": "agent_specs/exam_scheduling_agent.json",
-  "spec_sha256": "048447ed84b84205ebcd899cd5446a7c927d2faf98f45b4ae41429206459e936",
+  "spec_sha256": "6ae8f30fd4a3c8f59382b0809a16dd318ebcc1727494f596b81c2c5687c01438",
   "description": "Agenda exames a partir da imagem de um pedido médico: OCR, resolução no catálogo e solicitação de agendamento.",
-  "ir_digest": "52c4736f5d0c14fba1aa1ddd36ceff2fa7b46c59ee69c365d5efdabb7a4f1f5e",
+  "ir_digest": "385dcaed7bfcbf2d7fb296591b80645f09fa7e0052eb7bd3cdc3ba0fdca0a2c1",
   "instructions": {
     "exam_extractor": "3a6f658eb5ae03223e7534860203182d0aade880b42e8c1e1c98f2ce0f74ea95"
   },

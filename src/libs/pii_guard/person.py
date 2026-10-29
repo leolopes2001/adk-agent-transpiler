@@ -3,6 +3,7 @@ from collections.abc import Iterable
 from functools import cache
 from importlib import resources
 
+from pii_guard.labels import LABELS_ENDING_NAME, PERSONAL_LABELS, SECTION_TITLES
 from pii_guard.text import tokens
 from pii_guard.types import PiiEntity, PiiSpan
 
@@ -49,31 +50,8 @@ _LABELED_NAME = re.compile(
 _ANY_CASE_WORD_RE = re.compile(_ANY_CASE_WORD)
 
 _NAME_PATTERNS = ((_CAPITALIZED_NAME, _CAPITALIZED_WORD), (_LABELED_NAME, _ANY_CASE_WORD_RE))
-
-# So "Dr. João CRM 1" leaves the CRM to its own detector.
-_LABELS_ENDING_NAME = frozenset(
-    {
-        "cpf",
-        "rg",
-        "cns",
-        "crm",
-        "cep",
-        "tel",
-        "telefone",
-        "celular",
-        "data",
-        "nascimento",
-        "dn",
-        "idade",
-        "sexo",
-        "convenio",
-        "carteirinha",
-        "matricula",
-        "endereco",
-        "email",
-        "assinatura",
-    }
-)
+# Before a colon only these end the name: "Dr. João Exemplo: Ferritina" keeps "Exemplo".
+_LABELS_BEFORE_COLON = PERSONAL_LABELS | SECTION_TITLES
 
 
 class PersonDetector:
@@ -112,22 +90,46 @@ class PersonDetector:
         )
 
 
+_CATALOG_SECTION = "# Every non-numeric token"
+
+
 @cache
 def medical_terms() -> frozenset[str]:
-    content = resources.files(__package__).joinpath("medical_terms.txt").read_text("utf-8")
-    terms: set[str] = set()
-    for line in content.splitlines():
-        terms.update(tokens(line.split("#", 1)[0]))
+    return frozenset().union(*_term_sections().values())
 
-    return frozenset(terms)
+
+@cache
+def catalog_terms() -> frozenset[str]:
+    sections = _term_sections()
+    return next(terms for title, terms in sections.items() if title.startswith(_CATALOG_SECTION))
+
+
+# Sections are separated by a line holding only "#" and named by their first comment.
+@cache
+def _term_sections() -> dict[str, frozenset[str]]:
+    content = resources.files(__package__).joinpath("medical_terms.txt").read_text("utf-8")
+    sections: dict[str, set[str]] = {}
+    title = ""
+    for line in content.splitlines():
+        if line.strip() == "#":
+            title = ""
+        elif line.startswith("#"):
+            title = title or line
+        else:
+            sections.setdefault(title, set()).update(tokens(line.split("#", 1)[0]))
+
+    return {title: frozenset(terms) for title, terms in sections.items()}
 
 
 def _name_words(match: re.Match[str], words: re.Pattern[str]) -> list[re.Match[str]]:
     offset = match.start("value")
     kept: list[re.Match[str]] = []
     for word in words.finditer(match["value"]):
+        word_tokens = tokens(word[0])
         followed_by_colon = match.string.startswith(":", offset + word.end())
-        if followed_by_colon or _LABELS_ENDING_NAME.intersection(tokens(word[0])):
+        if LABELS_ENDING_NAME.intersection(word_tokens) or (
+            followed_by_colon and _LABELS_BEFORE_COLON.intersection(word_tokens)
+        ):
             break
 
         kept.append(word)

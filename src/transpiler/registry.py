@@ -107,6 +107,7 @@ REGISTRY: Mapping[NodeKind, NodeKindSpec] = MappingProxyType(
                 kind=NodeKind.LLM_EXTRACT,
                 input_types=frozenset({_T.GUARDED_DOCUMENT}),
                 output_type=_T.LLM_MENTIONS,
+                params_model=models.LlmExtractParams,
                 requires=frozenset({"agent"}),
                 adk_primitive="agent",
                 factory="llm_input",

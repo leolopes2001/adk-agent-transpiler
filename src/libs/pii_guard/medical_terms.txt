@@ -354,3 +354,18 @@ vldl
 vsg
 x
 zinco
+#
+# Eponyms and words of exam names outside the catalog, which the NER model reads as names
+# ("Doença de Chagas", "Teste de Coombs", "Raio-X de Tórax PA").
+ap
+chagas
+coombs
+direto
+doenca
+doppler
+holter
+incidencia
+lateral
+pa
+papanicolau
+sindrome

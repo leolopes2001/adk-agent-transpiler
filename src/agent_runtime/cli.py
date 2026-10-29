@@ -74,7 +74,17 @@ NO_AGENTS = (
     "Gere um com lab-transpile (docker compose run --rm transpile)."
 )
 # Their log records may quote payloads, so LibraryLogFilter cuts their messages.
-LIBRARY_LOGGERS = ("google_adk", "google.adk", "google_genai", "google.genai", "mcp", "httpx")
+LIBRARY_LOGGERS = (
+    "google_adk",
+    "google.adk",
+    "google_genai",
+    "google.genai",
+    "mcp",
+    "httpx",
+    "presidio-analyzer",
+    "presidio_analyzer",
+    "spacy",
+)
 LLM_KEY_ENV = "GOOGLE_API_KEY"
 # The warnings of a run (retries, injection, grounding) are in the report already.
 QUIET_LOG_LEVEL = "ERROR"

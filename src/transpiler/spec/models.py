@@ -137,6 +137,13 @@ class UntrustedTextGuardParams(_Model):
     block_at: Literal["high", "medium"] = "high"
 
 
+class LlmExtractParams(_Model):
+    """Minimization: which lines of the masked document the model reads."""
+
+    min_catalog_similarity: Threshold = 0.7
+    max_title_chars: Annotated[int, Field(ge=10, le=200)] = 40
+
+
 class LexicalExtractParams(_Model):
     min_score: Threshold = 0.8
     max_lines: Annotated[int, Field(ge=1, le=500)] = 60
@@ -201,6 +208,7 @@ class UntrustedTextGuardNode(_Node):
 class LlmExtractNode(_IoNode):
     kind: Literal["llm_extract"]
     agent: Identifier
+    params: LlmExtractParams = Field(default_factory=LlmExtractParams)
 
 
 class LexicalExtractNode(_IoNode):

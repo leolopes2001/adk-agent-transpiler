@@ -12,7 +12,7 @@ from lab_common import logging as lab_logging
 from lab_common import telemetry as lab_telemetry
 from lab_common.contracts.ocr import OcrLine
 from lab_common.text import sanitize
-from pii_guard import PiiEngineError, PiiRedactor, default_detectors
+from pii_guard import PiiEngineError, PiiRedactor, document_detectors
 
 BLOCKED_MESSAGE = (
     "O pedido tem conteúdo suspeito e precisa de revisão manual antes de qualquer agendamento."
@@ -61,11 +61,9 @@ def is_blocked(severity: str, block_at: str) -> bool:
 def _guard_node(
     name: str, params: UntrustedTextGuardParams, scan: Scanner = injection.scan
 ) -> FunctionNode:
-    redactor = PiiRedactor(default_detectors())
-
     async def run(ctx: Context, node_input: Any) -> Event:
         document = parse_input(OcrDocument, node_input)
-        guarded, residual, truncated = guard_document(document, params, scan, redactor)
+        guarded, residual, truncated = guard_document(document, params, scan, _redactor())
         if residual:
             log.warning("pii_residual_detected", node=name, counts=residual)
 
@@ -90,6 +88,15 @@ def _guard_node(
         return routed(guarded, "clean")
 
     return function_node(name, run)
+
+
+# Built per run: the NER model loads on the first one (once per process), so listing or
+# importing agents never loads it. A model that cannot load stops the run before the LLM.
+def _redactor() -> PiiRedactor:
+    try:
+        return PiiRedactor(document_detectors())
+    except Exception:  # noqa: BLE001 - any loading failure must fail closed
+        raise PermanentError("PII_ENGINE_FAILURE", "PII detectors are unavailable") from None
 
 
 def _sanitized_lines(lines: list[OcrLine], max_chars: int) -> tuple[list[OcrLine], int, bool]:

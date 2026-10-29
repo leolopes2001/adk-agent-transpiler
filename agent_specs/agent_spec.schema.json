@@ -464,6 +464,9 @@
           "title": "Kind",
           "type": "string"
         },
+        "params": {
+          "$ref": "#/$defs/LlmExtractParams"
+        },
         "retry": {
           "anyOf": [
             {
@@ -496,6 +499,28 @@
         "agent"
       ],
       "title": "LlmExtractNode",
+      "type": "object"
+    },
+    "LlmExtractParams": {
+      "additionalProperties": false,
+      "description": "Minimization: which lines of the masked document the model reads.",
+      "properties": {
+        "max_title_chars": {
+          "default": 40,
+          "maximum": 200,
+          "minimum": 10,
+          "title": "Max Title Chars",
+          "type": "integer"
+        },
+        "min_catalog_similarity": {
+          "default": 0.7,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Min Catalog Similarity",
+          "type": "number"
+        }
+      },
+      "title": "LlmExtractParams",
       "type": "object"
     },
     "McpServerSpec": {

@@ -211,7 +211,12 @@ def _in_degrees(graph: GraphIR) -> dict[str, int]:
 
 def _llm_extract_nodes(node: NodeIR, agent: LlmAgentIR) -> list[AdkNode]:
     return [
-        AdkNode(var=f"{node.id}_input", primitive="function", factory=kind_spec(node.kind).factory),
+        AdkNode(
+            var=f"{node.id}_input",
+            primitive="function",
+            factory=kind_spec(node.kind).factory,
+            kwargs=MappingProxyType(dict(node.params)),
+        ),
         AdkNode(
             var=agent.key,
             primitive="agent",

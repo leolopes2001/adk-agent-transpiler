@@ -7,7 +7,9 @@ from pii_guard.crm import CrmDetector
 from pii_guard.email import EmailDetector
 from pii_guard.health_card import HealthCardDetector
 from pii_guard.labeled_field import LabeledFieldDetector
-from pii_guard.person import PersonDetector
+from pii_guard.labels import has_personal_label
+from pii_guard.ner import NerPersonDetector, shared_ner_detector
+from pii_guard.person import PersonDetector, catalog_terms
 from pii_guard.phone import PhoneDetector
 from pii_guard.redactor import PiiEngineError, PiiRedactor, RedactionResult
 from pii_guard.rg import RgDetector
@@ -23,6 +25,7 @@ __all__ = [
     "EmailDetector",
     "HealthCardDetector",
     "LabeledFieldDetector",
+    "NerPersonDetector",
     "PersonDetector",
     "PhoneDetector",
     "PiiDetector",
@@ -32,10 +35,14 @@ __all__ = [
     "PiiSpan",
     "RedactionResult",
     "RgDetector",
+    "catalog_terms",
     "default_detectors",
+    "document_detectors",
+    "has_personal_label",
     "high_precision_detectors",
     "is_valid_cns",
     "is_valid_cpf",
+    "shared_ner_detector",
 ]
 
 
@@ -54,6 +61,11 @@ def default_detectors() -> list[PiiDetector]:
         HealthCardDetector(),
         LabeledFieldDetector(),
     ]
+
+
+# Rules plus the NER model: for document text, never for log lines.
+def document_detectors() -> list[PiiDetector]:
+    return [*default_detectors(), shared_ner_detector()]
 
 
 # Values that are personal data wherever they appear (check digits, unambiguous format).

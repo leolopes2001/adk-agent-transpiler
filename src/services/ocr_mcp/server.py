@@ -26,7 +26,7 @@ from ocr_mcp.logs import SERVICE, configure_logging
 from ocr_mcp.preprocess import preprocess
 from ocr_mcp.settings import OcrSettings
 from ocr_mcp.validation import validate_image
-from pii_guard import PiiRedactor, RedactionResult, default_detectors
+from pii_guard import PiiRedactor, RedactionResult, document_detectors
 
 TOOL_DESCRIPTION = (
     "Extract the text of a medical order image (PNG or JPEG, base64) with Tesseract. "
@@ -46,7 +46,7 @@ class OcrService:
     ) -> None:
         self._settings = settings
         self._engine = engine
-        self._redactor = redactor or PiiRedactor(default_detectors())
+        self._redactor = redactor or PiiRedactor(document_detectors())
         self._secret = settings.pii_hmac_secret.get_secret_value().encode("utf-8")
         self._limiter = anyio.CapacityLimiter(settings.max_concurrency)
 

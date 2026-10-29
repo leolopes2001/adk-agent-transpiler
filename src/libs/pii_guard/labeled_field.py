@@ -1,6 +1,7 @@
 import re
 import unicodedata
 
+from pii_guard.text import LETTERS_PER_EDIT, edit_distance
 from pii_guard.types import PiiEntity, PiiSpan
 
 SCORE = 1.0
@@ -23,8 +24,6 @@ _FUZZY_LABELS = {
     "NASCIMENTO": PiiEntity.BIRTH_DATE,
     "CARTEIRINHA": PiiEntity.HEALTH_CARD,
 }
-# One edit per six letters: "JELEFONE" and "PATA DE NAScIMENTO" match, "CRESCIMENTO" does not.
-_LETTERS_PER_EDIT = 6
 _DIGITS_READ_AS_LETTERS = str.maketrans("015", "OIS")
 
 _LINE = re.compile(r"[^\n]+")
@@ -55,6 +54,10 @@ class LabeledFieldDetector:
                 spans.append(PiiSpan(entity, offset + start, offset + end, SCORE, self.name))
 
         return spans
+
+
+def starts_with_label(line: str) -> bool:
+    return _label_at_start(line) is not None
 
 
 def _labeled_value(line: str) -> tuple[PiiEntity, int, int] | None:
@@ -93,9 +96,9 @@ def _label_entity(candidate: str, *, single_word: bool) -> PiiEntity | None:
         return _EXACT_LABELS[candidate]
 
     for label, entity in _FUZZY_LABELS.items():
-        max_edits = len(label) // _LETTERS_PER_EDIT
+        max_edits = len(label) // LETTERS_PER_EDIT
         if abs(len(candidate) - len(label)) <= max_edits and (
-            _edit_distance(candidate, label) <= max_edits
+            edit_distance(candidate, label) <= max_edits
         ):
             return entity
 
@@ -106,16 +109,3 @@ def _letters(word: str) -> str:
     decomposed = unicodedata.normalize("NFKD", word.upper())
     stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
     return stripped.translate(_DIGITS_READ_AS_LETTERS)
-
-
-def _edit_distance(a: str, b: str) -> int:
-    previous = list(range(len(b) + 1))
-    for i, char_a in enumerate(a, start=1):
-        current = [i]
-        for j, char_b in enumerate(b, start=1):
-            current.append(
-                min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (char_a != char_b))
-            )
-        previous = current
-
-    return previous[-1]
