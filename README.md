@@ -288,7 +288,7 @@ Prints de execução real, gerados com os comandos deste README.
 
 ### Abordagem de desenvolvimento
 
-Desenvolvi por etapas, com IA como apoio ao planejamento, implementação e elaboração de testes. Revisei as entregas, pedi ajustes e validei manualmente o fluxo completo, registrando evidências de funcionamento.
+Desenvolvi por etapas, com IA como apoio ao planejamento, implementação e elaboração de testes. Ao longo do processo, tomei decisões técnicas, como a escolha de um modelo local para mascarar os dados do cliente antes do envio ao LLM externo. Revisei as entregas, solicitei ajustes e validei manualmente o fluxo completo, registrando evidências de funcionamento.
 
 ### Referências técnicas
 
