@@ -1,0 +1,237 @@
+{
+  "spec_version": "1.0",
+  "agent": {
+    "name": "full_agent",
+    "description": "Fixture de teste que usa todos os node kinds.",
+    "version": "0.1.0"
+  },
+  "models": {
+    "extractor": {
+      "provider": "gemini",
+      "name": "gemini-flash-latest",
+      "temperature": 0.0,
+      "max_output_tokens": 1024
+    }
+  },
+  "mcp_servers": {
+    "ocr": {
+      "transport": "sse",
+      "url_env": "OCR_MCP_URL",
+      "auth_token_env": "MCP_AUTH_TOKEN",
+      "allowed_tools": [
+        "extract_text"
+      ],
+      "connect_timeout_s": 5,
+      "read_timeout_s": 40
+    },
+    "rag": {
+      "transport": "sse",
+      "url_env": "RAG_MCP_URL",
+      "auth_token_env": "MCP_AUTH_TOKEN",
+      "allowed_tools": [
+        "batch_search"
+      ],
+      "connect_timeout_s": 5,
+      "read_timeout_s": 15
+    }
+  },
+  "http_services": {
+    "scheduler": {
+      "base_url_env": "SCHEDULER_API_URL",
+      "api_key_env": "SCHEDULER_API_KEY",
+      "timeout_s": 10
+    }
+  },
+  "llm_agents": {
+    "extractor_agent": {
+      "model": "extractor",
+      "instruction_file": "instructions/extractor.md",
+      "output_schema": "ExtractedExams",
+      "tools": [],
+      "input_trust": "untrusted"
+    }
+  },
+  "workflow": {
+    "nodes": [
+      {
+        "id": "ocr",
+        "kind": "ocr_extract",
+        "server": "ocr",
+        "tool": "extract_text",
+        "params": {
+          "min_mean_confidence": 0.5
+        },
+        "retry": {
+          "max_attempts": 2,
+          "initial_delay_s": 0.5,
+          "max_delay_s": 2
+        },
+        "timeout_s": 45
+      },
+      {
+        "id": "guard",
+        "kind": "untrusted_text_guard"
+      },
+      {
+        "id": "extraction",
+        "kind": "subworkflow",
+        "ref": "extraction"
+      },
+      {
+        "id": "resolve",
+        "kind": "rag_resolve",
+        "server": "rag",
+        "tool": "batch_search",
+        "timeout_s": 20
+      },
+      {
+        "id": "gate",
+        "kind": "confidence_gate",
+        "params": {
+          "accept_threshold": 0.85,
+          "review_threshold": 0.6,
+          "min_margin": 0.05
+        }
+      },
+      {
+        "id": "review",
+        "kind": "human_review"
+      },
+      {
+        "id": "schedule",
+        "kind": "schedule",
+        "service": "scheduler",
+        "timeout_s": 15
+      },
+      {
+        "id": "present",
+        "kind": "present"
+      },
+      {
+        "id": "abort",
+        "kind": "abort"
+      }
+    ],
+    "edges": [
+      {
+        "from": "START",
+        "to": "ocr"
+      },
+      {
+        "from": "ocr",
+        "to": "guard",
+        "route": "ok"
+      },
+      {
+        "from": "ocr",
+        "to": "abort",
+        "route": "low_quality"
+      },
+      {
+        "from": "guard",
+        "to": "extraction",
+        "route": "clean"
+      },
+      {
+        "from": "guard",
+        "to": "abort",
+        "route": "blocked"
+      },
+      {
+        "from": "extraction",
+        "to": "resolve"
+      },
+      {
+        "from": "resolve",
+        "to": "gate"
+      },
+      {
+        "from": "gate",
+        "to": "schedule",
+        "route": "accepted"
+      },
+      {
+        "from": "gate",
+        "to": "review",
+        "route": "review"
+      },
+      {
+        "from": "gate",
+        "to": "abort",
+        "route": "empty"
+      },
+      {
+        "from": "review",
+        "to": "schedule",
+        "route": "confirmed"
+      },
+      {
+        "from": "review",
+        "to": "present",
+        "route": "rejected"
+      },
+      {
+        "from": "schedule",
+        "to": "present"
+      },
+      {
+        "from": "present",
+        "to": "abort"
+      }
+    ]
+  },
+  "subworkflows": {
+    "extraction": {
+      "nodes": [
+        {
+          "id": "llm_extract",
+          "kind": "llm_extract",
+          "agent": "extractor_agent",
+          "timeout_s": 30
+        },
+        {
+          "id": "lexical_extract",
+          "kind": "lexical_extract",
+          "server": "rag",
+          "tool": "batch_search",
+          "timeout_s": 20
+        },
+        {
+          "id": "merge",
+          "kind": "join"
+        },
+        {
+          "id": "reconcile",
+          "kind": "reconcile"
+        }
+      ],
+      "edges": [
+        {
+          "from": "START",
+          "to": "llm_extract"
+        },
+        {
+          "from": "START",
+          "to": "lexical_extract"
+        },
+        {
+          "from": "llm_extract",
+          "to": "merge"
+        },
+        {
+          "from": "lexical_extract",
+          "to": "merge"
+        },
+        {
+          "from": "merge",
+          "to": "reconcile"
+        }
+      ]
+    }
+  },
+  "policies": {
+    "pii": {
+      "fail_closed": true
+    }
+  }
+}

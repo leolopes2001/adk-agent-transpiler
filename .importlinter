@@ -1,0 +1,104 @@
+[importlinter]
+root_packages =
+    pii_guard
+    lab_common
+    transpiler
+    agent_runtime
+    ocr_mcp
+    rag_mcp
+    scheduler_api
+include_external_packages = True
+
+[importlinter:contract:pii-guard-standalone]
+name = pii_guard imports no other project package
+type = forbidden
+source_modules =
+    pii_guard
+forbidden_modules =
+    lab_common
+    transpiler
+    agent_runtime
+    ocr_mcp
+    rag_mcp
+    scheduler_api
+
+[importlinter:contract:common-is-leaf]
+name = lab_common depends on no other project package but pii_guard
+type = forbidden
+source_modules =
+    lab_common
+forbidden_modules =
+    transpiler
+    agent_runtime
+    ocr_mcp
+    rag_mcp
+    scheduler_api
+
+[importlinter:contract:transpiler-isolated]
+# Only top-level external packages can be forbidden, so this bans all of google.*;
+# the generated-code import probe runs in a subprocess instead.
+name = transpiler does not import the runtime, the servers or google (adk)
+type = forbidden
+source_modules =
+    transpiler
+forbidden_modules =
+    agent_runtime
+    ocr_mcp
+    rag_mcp
+    scheduler_api
+    google
+
+[importlinter:contract:runtime-isolated]
+name = agent_runtime does not import the transpiler or the servers
+type = forbidden
+source_modules =
+    agent_runtime
+forbidden_modules =
+    transpiler
+    ocr_mcp
+    rag_mcp
+    scheduler_api
+
+[importlinter:contract:servers-independent]
+name = ocr_mcp, rag_mcp and scheduler_api are independent of each other
+type = independence
+modules =
+    ocr_mcp
+    rag_mcp
+    scheduler_api
+
+[importlinter:contract:mcp-servers-isolated]
+name = MCP servers do not import the transpiler or the runtime
+type = forbidden
+source_modules =
+    ocr_mcp
+    rag_mcp
+forbidden_modules =
+    transpiler
+    agent_runtime
+
+[importlinter:contract:scheduler-api-external]
+name = scheduler_api imports no project package
+type = forbidden
+source_modules =
+    scheduler_api
+forbidden_modules =
+    pii_guard
+    lab_common
+    transpiler
+    agent_runtime
+    ocr_mcp
+    rag_mcp
+
+[importlinter:contract:nothing-imports-scheduler-api]
+name = no project package imports scheduler_api
+type = forbidden
+source_modules =
+    pii_guard
+    lab_common
+    transpiler
+    agent_runtime
+    ocr_mcp
+    rag_mcp
+forbidden_modules =
+    scheduler_api

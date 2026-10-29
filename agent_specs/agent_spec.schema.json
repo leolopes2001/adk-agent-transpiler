@@ -1,0 +1,1160 @@
+{
+  "$defs": {
+    "AbortNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "abort",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "AbortNode",
+      "type": "object"
+    },
+    "AgentInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "version"
+      ],
+      "title": "AgentInfo",
+      "type": "object"
+    },
+    "ConfidenceGateNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "confidence_gate",
+          "title": "Kind",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ConfidenceGateParams"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "params"
+      ],
+      "title": "ConfidenceGateNode",
+      "type": "object"
+    },
+    "ConfidenceGateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "accept_threshold": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Accept Threshold",
+          "type": "number"
+        },
+        "min_margin": {
+          "maximum": 0.5,
+          "minimum": 0,
+          "title": "Min Margin",
+          "type": "number"
+        },
+        "review_threshold": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Review Threshold",
+          "type": "number"
+        }
+      },
+      "required": [
+        "accept_threshold",
+        "review_threshold",
+        "min_margin"
+      ],
+      "title": "ConfidenceGateParams",
+      "type": "object"
+    },
+    "EdgeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "pattern": "^(START|[a-z][a-z0-9_]{0,62})$",
+          "title": "From",
+          "type": "string"
+        },
+        "route": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,62}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route"
+        },
+        "to": {
+          "pattern": "^(START|[a-z][a-z0-9_]{0,62})$",
+          "title": "To",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "title": "EdgeSpec",
+      "type": "object"
+    },
+    "GraphSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/EdgeSpec"
+          },
+          "maxItems": 1000,
+          "title": "Edges",
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "abort": "#/$defs/AbortNode",
+                "confidence_gate": "#/$defs/ConfidenceGateNode",
+                "human_review": "#/$defs/HumanReviewNode",
+                "join": "#/$defs/JoinNodeSpec",
+                "lexical_extract": "#/$defs/LexicalExtractNode",
+                "llm_extract": "#/$defs/LlmExtractNode",
+                "ocr_extract": "#/$defs/OcrExtractNode",
+                "present": "#/$defs/PresentNode",
+                "rag_resolve": "#/$defs/RagResolveNode",
+                "reconcile": "#/$defs/ReconcileNode",
+                "schedule": "#/$defs/ScheduleNode",
+                "subworkflow": "#/$defs/SubworkflowNode",
+                "untrusted_text_guard": "#/$defs/UntrustedTextGuardNode"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/OcrExtractNode"
+              },
+              {
+                "$ref": "#/$defs/UntrustedTextGuardNode"
+              },
+              {
+                "$ref": "#/$defs/LlmExtractNode"
+              },
+              {
+                "$ref": "#/$defs/LexicalExtractNode"
+              },
+              {
+                "$ref": "#/$defs/JoinNodeSpec"
+              },
+              {
+                "$ref": "#/$defs/ReconcileNode"
+              },
+              {
+                "$ref": "#/$defs/RagResolveNode"
+              },
+              {
+                "$ref": "#/$defs/ConfidenceGateNode"
+              },
+              {
+                "$ref": "#/$defs/HumanReviewNode"
+              },
+              {
+                "$ref": "#/$defs/ScheduleNode"
+              },
+              {
+                "$ref": "#/$defs/PresentNode"
+              },
+              {
+                "$ref": "#/$defs/AbortNode"
+              },
+              {
+                "$ref": "#/$defs/SubworkflowNode"
+              }
+            ]
+          },
+          "maxItems": 200,
+          "minItems": 1,
+          "title": "Nodes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "nodes",
+        "edges"
+      ],
+      "title": "GraphSpec",
+      "type": "object"
+    },
+    "HttpServiceSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "api_key_env": {
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "title": "Api Key Env",
+          "type": "string"
+        },
+        "base_url_env": {
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "title": "Base Url Env",
+          "type": "string"
+        },
+        "timeout_s": {
+          "exclusiveMinimum": 0,
+          "maximum": 300,
+          "title": "Timeout S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "base_url_env",
+        "api_key_env",
+        "timeout_s"
+      ],
+      "title": "HttpServiceSpec",
+      "type": "object"
+    },
+    "HumanReviewNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "human_review",
+          "title": "Kind",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/HumanReviewParams"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "HumanReviewNode",
+      "type": "object"
+    },
+    "HumanReviewParams": {
+      "additionalProperties": false,
+      "properties": {
+        "max_candidates": {
+          "default": 3,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Max Candidates",
+          "type": "integer"
+        },
+        "on_non_interactive": {
+          "const": "reject",
+          "default": "reject",
+          "title": "On Non Interactive",
+          "type": "string"
+        }
+      },
+      "title": "HumanReviewParams",
+      "type": "object"
+    },
+    "JoinNodeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "join",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "JoinNodeSpec",
+      "type": "object"
+    },
+    "LexicalExtractNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "lexical_extract",
+          "title": "Kind",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/LexicalExtractParams"
+        },
+        "retry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetrySpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "server": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Server",
+          "type": "string"
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 300,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout S"
+        },
+        "tool": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "server",
+        "tool"
+      ],
+      "title": "LexicalExtractNode",
+      "type": "object"
+    },
+    "LexicalExtractParams": {
+      "additionalProperties": false,
+      "properties": {
+        "max_lines": {
+          "default": 60,
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Max Lines",
+          "type": "integer"
+        },
+        "min_score": {
+          "default": 0.8,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Min Score",
+          "type": "number"
+        }
+      },
+      "title": "LexicalExtractParams",
+      "type": "object"
+    },
+    "LlmAgentSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "input_trust": {
+          "default": "untrusted",
+          "enum": [
+            "untrusted",
+            "trusted"
+          ],
+          "title": "Input Trust",
+          "type": "string"
+        },
+        "instruction_file": {
+          "maxLength": 255,
+          "minLength": 1,
+          "pattern": "^[^\\x00\\\\]+$",
+          "title": "Instruction File",
+          "type": "string"
+        },
+        "model": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Model",
+          "type": "string"
+        },
+        "output_schema": {
+          "const": "ExtractedExams",
+          "title": "Output Schema",
+          "type": "string"
+        },
+        "tools": {
+          "default": [],
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,62}$",
+            "type": "string"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "required": [
+        "model",
+        "instruction_file",
+        "output_schema"
+      ],
+      "title": "LlmAgentSpec",
+      "type": "object"
+    },
+    "LlmExtractNode": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Agent",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "llm_extract",
+          "title": "Kind",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/LlmExtractParams"
+        },
+        "retry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetrySpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 300,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout S"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "agent"
+      ],
+      "title": "LlmExtractNode",
+      "type": "object"
+    },
+    "LlmExtractParams": {
+      "additionalProperties": false,
+      "description": "Minimization: which lines of the masked document the model reads.",
+      "properties": {
+        "max_title_chars": {
+          "default": 40,
+          "maximum": 200,
+          "minimum": 10,
+          "title": "Max Title Chars",
+          "type": "integer"
+        },
+        "min_catalog_similarity": {
+          "default": 0.7,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Min Catalog Similarity",
+          "type": "number"
+        },
+        "min_kept_lines": {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Min Kept Lines",
+          "type": "integer"
+        }
+      },
+      "title": "LlmExtractParams",
+      "type": "object"
+    },
+    "McpServerSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_tools": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,62}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Allowed Tools",
+          "type": "array"
+        },
+        "auth_token_env": {
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "title": "Auth Token Env",
+          "type": "string"
+        },
+        "connect_timeout_s": {
+          "exclusiveMinimum": 0,
+          "maximum": 300,
+          "title": "Connect Timeout S",
+          "type": "number"
+        },
+        "read_timeout_s": {
+          "exclusiveMinimum": 0,
+          "maximum": 300,
+          "title": "Read Timeout S",
+          "type": "number"
+        },
+        "transport": {
+          "const": "sse",
+          "title": "Transport",
+          "type": "string"
+        },
+        "url_env": {
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "title": "Url Env",
+          "type": "string"
+        }
+      },
+      "required": [
+        "transport",
+        "url_env",
+        "auth_token_env",
+        "allowed_tools",
+        "connect_timeout_s",
+        "read_timeout_s"
+      ],
+      "title": "McpServerSpec",
+      "type": "object"
+    },
+    "ModelSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "max_output_tokens": {
+          "maximum": 65536,
+          "minimum": 1,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "name": {
+          "pattern": "^[a-z0-9][a-z0-9.\\-]{0,62}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "provider": {
+          "const": "gemini",
+          "title": "Provider",
+          "type": "string"
+        },
+        "temperature": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Temperature",
+          "type": "number"
+        }
+      },
+      "required": [
+        "provider",
+        "name",
+        "temperature",
+        "max_output_tokens"
+      ],
+      "title": "ModelSpec",
+      "type": "object"
+    },
+    "NodeDefaults": {
+      "additionalProperties": false,
+      "properties": {
+        "retry": {
+          "$ref": "#/$defs/RetrySpec"
+        },
+        "timeout_s": {
+          "default": 30,
+          "exclusiveMinimum": 0,
+          "maximum": 300,
+          "title": "Timeout S",
+          "type": "number"
+        }
+      },
+      "title": "NodeDefaults",
+      "type": "object"
+    },
+    "OcrExtractNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "ocr_extract",
+          "title": "Kind",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/OcrExtractParams"
+        },
+        "retry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetrySpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "server": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Server",
+          "type": "string"
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 300,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout S"
+        },
+        "tool": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "server",
+        "tool"
+      ],
+      "title": "OcrExtractNode",
+      "type": "object"
+    },
+    "OcrExtractParams": {
+      "additionalProperties": false,
+      "properties": {
+        "max_image_bytes": {
+          "default": 8388608,
+          "maximum": 8388608,
+          "minimum": 1,
+          "title": "Max Image Bytes",
+          "type": "integer"
+        },
+        "min_mean_confidence": {
+          "default": 0.55,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Min Mean Confidence",
+          "type": "number"
+        }
+      },
+      "title": "OcrExtractParams",
+      "type": "object"
+    },
+    "PiiPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "fail_closed": {
+          "title": "Fail Closed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "fail_closed"
+      ],
+      "title": "PiiPolicy",
+      "type": "object"
+    },
+    "Policies": {
+      "additionalProperties": false,
+      "properties": {
+        "defaults": {
+          "$ref": "#/$defs/NodeDefaults"
+        },
+        "pii": {
+          "$ref": "#/$defs/PiiPolicy"
+        }
+      },
+      "required": [
+        "pii"
+      ],
+      "title": "Policies",
+      "type": "object"
+    },
+    "PresentNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "present",
+          "title": "Kind",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PresentParams"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "PresentNode",
+      "type": "object"
+    },
+    "PresentParams": {
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "default": "table",
+          "enum": [
+            "table",
+            "json"
+          ],
+          "title": "Format",
+          "type": "string"
+        }
+      },
+      "title": "PresentParams",
+      "type": "object"
+    },
+    "RagResolveNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "rag_resolve",
+          "title": "Kind",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/RagResolveParams"
+        },
+        "retry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetrySpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "server": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Server",
+          "type": "string"
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 300,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout S"
+        },
+        "tool": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "server",
+        "tool"
+      ],
+      "title": "RagResolveNode",
+      "type": "object"
+    },
+    "RagResolveParams": {
+      "additionalProperties": false,
+      "properties": {
+        "top_k": {
+          "default": 5,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Top K",
+          "type": "integer"
+        }
+      },
+      "title": "RagResolveParams",
+      "type": "object"
+    },
+    "ReconcileNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "reconcile",
+          "title": "Kind",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ReconcileParams"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "ReconcileNode",
+      "type": "object"
+    },
+    "ReconcileParams": {
+      "additionalProperties": false,
+      "properties": {
+        "grounding_min_ratio": {
+          "default": 90,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Grounding Min Ratio",
+          "type": "integer"
+        },
+        "max_items": {
+          "default": 30,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        }
+      },
+      "title": "ReconcileParams",
+      "type": "object"
+    },
+    "RetrySpec": {
+      "additionalProperties": false,
+      "properties": {
+        "initial_delay_s": {
+          "maximum": 10,
+          "minimum": 0.1,
+          "title": "Initial Delay S",
+          "type": "number"
+        },
+        "max_attempts": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Max Attempts",
+          "type": "integer"
+        },
+        "max_delay_s": {
+          "exclusiveMinimum": 0,
+          "maximum": 30,
+          "title": "Max Delay S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "max_attempts",
+        "initial_delay_s",
+        "max_delay_s"
+      ],
+      "title": "RetrySpec",
+      "type": "object"
+    },
+    "ScheduleNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "schedule",
+          "title": "Kind",
+          "type": "string"
+        },
+        "retry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetrySpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "service": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Service",
+          "type": "string"
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 300,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout S"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "service"
+      ],
+      "title": "ScheduleNode",
+      "type": "object"
+    },
+    "SubworkflowNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "subworkflow",
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "ref"
+      ],
+      "title": "SubworkflowNode",
+      "type": "object"
+    },
+    "UntrustedTextGuardNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "untrusted_text_guard",
+          "title": "Kind",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/UntrustedTextGuardParams"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "UntrustedTextGuardNode",
+      "type": "object"
+    },
+    "UntrustedTextGuardParams": {
+      "additionalProperties": false,
+      "properties": {
+        "block_at": {
+          "default": "high",
+          "enum": [
+            "high",
+            "medium"
+          ],
+          "title": "Block At",
+          "type": "string"
+        },
+        "max_chars": {
+          "default": 8000,
+          "maximum": 100000,
+          "minimum": 100,
+          "title": "Max Chars",
+          "type": "integer"
+        }
+      },
+      "title": "UntrustedTextGuardParams",
+      "type": "object"
+    }
+  },
+  "$id": "https://lab-exam-agent.local/schemas/agent-spec-1.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "$Schema"
+    },
+    "agent": {
+      "$ref": "#/$defs/AgentInfo"
+    },
+    "http_services": {
+      "default": {},
+      "maxProperties": 32,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,62}$": {
+          "$ref": "#/$defs/HttpServiceSpec"
+        }
+      },
+      "title": "Http Services",
+      "type": "object"
+    },
+    "llm_agents": {
+      "default": {},
+      "maxProperties": 32,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,62}$": {
+          "$ref": "#/$defs/LlmAgentSpec"
+        }
+      },
+      "title": "Llm Agents",
+      "type": "object"
+    },
+    "mcp_servers": {
+      "default": {},
+      "maxProperties": 32,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,62}$": {
+          "$ref": "#/$defs/McpServerSpec"
+        }
+      },
+      "title": "Mcp Servers",
+      "type": "object"
+    },
+    "models": {
+      "default": {},
+      "maxProperties": 32,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,62}$": {
+          "$ref": "#/$defs/ModelSpec"
+        }
+      },
+      "title": "Models",
+      "type": "object"
+    },
+    "policies": {
+      "$ref": "#/$defs/Policies"
+    },
+    "spec_version": {
+      "const": "1.0",
+      "title": "Spec Version",
+      "type": "string"
+    },
+    "subworkflows": {
+      "default": {},
+      "maxProperties": 32,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,62}$": {
+          "$ref": "#/$defs/GraphSpec"
+        }
+      },
+      "title": "Subworkflows",
+      "type": "object"
+    },
+    "workflow": {
+      "$ref": "#/$defs/GraphSpec"
+    }
+  },
+  "required": [
+    "spec_version",
+    "agent",
+    "workflow",
+    "policies"
+  ],
+  "title": "AgentSpec",
+  "type": "object"
+}

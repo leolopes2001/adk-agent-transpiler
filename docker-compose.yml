@@ -1,0 +1,200 @@
+name: lab-agent
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs: ["/tmp:size=64m"]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+x-otlp-endpoint: &otlp-endpoint http://observability:18890
+
+x-after-collector: &after-collector
+  condition: service_started
+  required: false
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+    environment:
+      POSTGRES_DB: scheduler
+      POSTGRES_USER: scheduler
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp:size=64m", "/var/run/postgresql:size=1m"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    # The entrypoint fixes the data directory's ownership before dropping to the postgres user.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  scheduler-api:
+    <<: *hardening
+    build: { context: ., dockerfile: docker/scheduler-api.Dockerfile }
+    environment:
+      DATABASE_URL: postgresql+psycopg://scheduler:${POSTGRES_PASSWORD}@postgres:5432/scheduler
+      SCHEDULER_API_KEY: ${SCHEDULER_API_KEY:?set SCHEDULER_API_KEY in .env}
+      CATALOG_PATH: /app/data/exams_catalog.json
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: *otlp-endpoint
+    volumes:
+      - ./data:/app/data:ro
+    ports: ["127.0.0.1:8000:8000"]
+    networks: [backend, edge]
+    depends_on:
+      postgres: { condition: service_healthy }
+      observability: *after-collector
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ocr-mcp:
+    <<: *hardening
+    build: { context: ., dockerfile: docker/ocr-mcp.Dockerfile }
+    environment:
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?set MCP_AUTH_TOKEN in .env}
+      PII_HMAC_SECRET: ${PII_HMAC_SECRET:?set PII_HMAC_SECRET in .env}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: *otlp-endpoint
+    networks: [backend]
+    depends_on:
+      observability: *after-collector
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rag-mcp:
+    <<: *hardening
+    build: { context: ., dockerfile: docker/rag-mcp.Dockerfile }
+    environment:
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?set MCP_AUTH_TOKEN in .env}
+      CATALOG_PATH: /app/data/exams_catalog.json
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: *otlp-endpoint
+    volumes:
+      - ./data:/app/data:ro
+    networks: [backend]
+    depends_on:
+      observability: *after-collector
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8102/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  observability:
+    <<: *hardening
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:13.6.0@sha256:064b50d557fcaffd10f06bf79ba4069bd50994a84034f1a0fc35c165500482d7
+    profiles: [observability]
+    environment:
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+      DOTNET_DASHBOARD_OTLP_ENDPOINT_URL: ""
+      DOTNET_DASHBOARD_MCP_ENDPOINT_URL: ""
+    ports: ["127.0.0.1:18888:18888"]
+    networks: [backend, edge]
+    deploy:
+      resources:
+        limits: { memory: 256m }
+
+  agent:
+    <<: *hardening
+    image: lab-agent-agent
+    build: { context: ., dockerfile: docker/agent.Dockerfile }
+    profiles: [cli]
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      AGENT_LLM_BACKEND: ${AGENT_LLM_BACKEND:-gemini}
+      OCR_MCP_URL: http://ocr-mcp:8101/sse
+      RAG_MCP_URL: http://rag-mcp:8102/sse
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?set MCP_AUTH_TOKEN in .env}
+      SCHEDULER_API_URL: http://scheduler-api:8000
+      SCHEDULER_API_KEY: ${SCHEDULER_API_KEY:?set SCHEDULER_API_KEY in .env}
+      INPUT_ROOT: /app/inputs
+      GENERATED_ROOT: /app/generated
+      OTEL_EXPORTER_OTLP_ENDPOINT: *otlp-endpoint
+    volumes:
+      - ./agent_specs:/app/agent_specs:ro
+      - ./samples:/app/inputs/samples:ro
+      - generated:/app/generated
+    networks: [backend, egress]
+    depends_on:
+      scheduler-api: { condition: service_healthy }
+      ocr-mcp: { condition: service_healthy }
+      rag-mcp: { condition: service_healthy }
+    stdin_open: true
+    tty: true
+
+  transpile:
+    <<: *hardening
+    image: lab-agent-agent
+    build: { context: ., dockerfile: docker/agent.Dockerfile }
+    profiles: [tools]
+    network_mode: none
+    entrypoint: [lab-transpile, generate, --out, /app/generated]
+    command: [/app/agent_specs/exam_scheduling_agent.json]
+    volumes:
+      - ./agent_specs:/app/agent_specs:ro
+      - generated:/app/generated
+
+  export-generated:
+    <<: *hardening
+    image: lab-agent-agent
+    build: { context: ., dockerfile: docker/agent.Dockerfile }
+    profiles: [tools]
+    network_mode: none
+    user: "0:0"
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    volumes:
+      - ./agent_specs:/app/agent_specs:ro
+      - generated:/app/generated:ro
+      - ./generated:/export
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        owner=$$(stat -c %u:%g /app/agent_specs)
+        exported=0
+        for dir in /app/generated/*/; do
+          [ -d "$$dir" ] || continue
+          name=$$(basename "$$dir")
+          rm -rf "/export/$$name"
+          cp -R "$${dir%/}" "/export/$$name"
+          chown -R "$$owner" "/export/$$name" 2>/dev/null || true
+          echo "exported generated/$$name"
+          exported=$$((exported + 1))
+        done
+        chown "$$owner" /export 2>/dev/null || true
+        if [ "$$exported" -eq 0 ]; then
+          echo "nothing to export: run 'docker compose run --rm transpile' first" >&2
+          exit 1
+        fi
+
+networks:
+  backend:
+    internal: true
+  egress: {}
+  edge:
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+
+volumes:
+  pgdata: {}
+  generated: {}

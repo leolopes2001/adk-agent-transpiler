@@ -1,0 +1,229 @@
+import json
+import shutil
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from transpiler.cli import main
+from transpiler.spec.schema_export import render_schema
+
+pytestmark = pytest.mark.unit
+
+ROOT = Path(__file__).parents[3]
+SPECS = ROOT / "agent_specs"
+INVALID = ROOT / "tests" / "data" / "specs" / "invalid"
+
+type Capture = pytest.CaptureFixture[str]
+
+
+@pytest.fixture
+def workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A project-like directory with the main spec; the CWD is the allowed output root."""
+    shutil.copytree(SPECS, tmp_path / "agent_specs")
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+def test_validate_main_spec(capsys: Capture) -> None:
+    assert main(["validate", str(SPECS / "exam_scheduling_agent.json")]) == 0
+    assert capsys.readouterr().out.startswith("✔ spec válida:")
+
+
+def test_validate_reports_semantic_error(capsys: Capture) -> None:
+    code = main(["validate", str(INVALID / "E_ROUTE_NOT_COVERED.json")])
+
+    err = capsys.readouterr().err.splitlines()
+    assert code == 3
+    assert err[0] == '✖ E_ROUTE_NOT_COVERED  /workflow/nodes/4  (node "gate", kind confidence_gate)'
+    assert err[-1] == "1 erro. Nenhum arquivo foi gerado."
+
+
+def test_validate_json(capsys: Capture) -> None:
+    code = main(["validate", str(INVALID / "E_ROUTE_NOT_COVERED.json"), "--format", "json"])
+
+    document = json.loads(capsys.readouterr().out)
+    assert code == 3
+    assert document["ok"] is False
+    assert document["diagnostics"][0]["code"] == "E_ROUTE_NOT_COVERED"
+
+
+def test_validate_json_success_with_warning(capsys: Capture) -> None:
+    code = main(["validate", str(INVALID / "W_UNUSED_DECLARATION.json"), "--format", "json"])
+
+    document = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert (document["ok"], document["warnings"]) == (True, 1)
+
+
+def test_warnings_do_not_fail(capsys: Capture) -> None:
+    assert main(["validate", str(INVALID / "W_UNUSED_DECLARATION.json")]) == 0
+
+    captured = capsys.readouterr()
+    assert "W_UNUSED_DECLARATION" in captured.err
+    assert "(1 aviso(s))" in captured.out
+
+
+def test_inline_secret_exit_code(tmp_path: Path, capsys: Capture) -> None:
+    spec = json.loads((SPECS / "exam_scheduling_agent.json").read_text(encoding="utf-8"))
+    spec["http_services"]["scheduler"]["api_key"] = "hunter2"
+    path = tmp_path / "secret.json"
+    path.write_text(json.dumps(spec), encoding="utf-8")
+
+    assert main(["validate", str(path)]) == 2
+    err = capsys.readouterr().err
+    assert "E_INLINE_SECRET" in err
+    assert "hunter2" not in err
+
+
+def test_schema_error_exit_code(tmp_path: Path, capsys: Capture) -> None:
+    spec = tmp_path / "bad.json"
+    spec.write_text('{"spec_version": "9"}', encoding="utf-8")
+
+    assert main(["validate", str(spec)]) == 2
+
+
+def test_missing_file_is_io_error(tmp_path: Path, capsys: Capture) -> None:
+    assert main(["validate", str(tmp_path / "nope.json")]) == 1
+    assert "E_IO" in capsys.readouterr().err
+
+
+def test_usage_error_exits_1(capsys: Capture) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["frobnicate"])
+    assert exc.value.code == 1
+
+
+def test_schema_command(capsys: Capture) -> None:
+    assert main(["schema"]) == 0
+    assert capsys.readouterr().out == render_schema()
+
+
+def test_generate(workdir: Path, capsys: Capture) -> None:
+    code = main(["generate", "agent_specs/exam_scheduling_agent.json", "--out", "generated/"])
+
+    package = workdir / "generated" / "exam_scheduling_agent"
+    assert code == 0
+    assert sorted(p.name for p in package.iterdir()) == [
+        "__init__.py",
+        "_manifest.json",
+        "agent.py",
+    ]
+    manifest = json.loads((package / "_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["spec_path"] == "agent_specs/exam_scheduling_agent.json"
+    assert manifest["adk_requirement"].startswith("google-adk==")
+    assert set(manifest["instructions"]) == {"exam_extractor"}
+    assert "extraction" in manifest["node_names"]
+    out = capsys.readouterr().out
+    assert out == (
+        "✔ gerado: generated/exam_scheduling_agent (agent.py, __init__.py, _manifest.json)\n"
+    )
+
+
+def test_generate_json(workdir: Path, capsys: Capture) -> None:
+    code = main(["generate", "agent_specs/exam_scheduling_agent.json", "--format", "json"])
+
+    document = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert document["files"] == ["agent.py", "__init__.py", "_manifest.json"]
+    assert document["output"].endswith("generated/exam_scheduling_agent")
+
+
+def test_generate_invalid_writes_nothing(workdir: Path, capsys: Capture) -> None:
+    shutil.copy(INVALID / "E_ROUTE_NOT_COVERED.json", workdir / "agent_specs" / "bad.json")
+
+    assert main(["generate", "agent_specs/bad.json", "--out", "generated"]) == 3
+    assert not (workdir / "generated").exists()
+    assert "Nenhum arquivo foi gerado." in capsys.readouterr().err
+
+
+def test_generate_out_must_stay_in_project(workdir: Path, capsys: Capture) -> None:
+    code = main(["generate", "agent_specs/exam_scheduling_agent.json", "--out", "../elsewhere"])
+
+    assert code == 1
+    assert "E_OUTPUT" in capsys.readouterr().err
+    assert not (workdir.parent / "elsewhere").exists()
+
+
+def _edited_main_spec(workdir: Path, edit: Callable[[dict[str, Any]], None]) -> Path:
+    path = workdir / "agent_specs" / "exam_scheduling_agent.json"
+    spec = json.loads(path.read_text(encoding="utf-8"))
+    edit(spec)
+    path.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_gate_fed_by_a_single_candidate_is_rejected(workdir: Path, capsys: Capture) -> None:
+    # Audit F03: with top_k=1 the gate never sees the runner-up, so "T4"
+    # (T4 livre and T4 total tied) would be accepted instead of reviewed.
+    def one_candidate(spec: dict[str, Any]) -> None:
+        resolve = next(n for n in spec["workflow"]["nodes"] if n["kind"] == "rag_resolve")
+        resolve["params"]["top_k"] = 1
+
+    code = main(["validate", str(_edited_main_spec(workdir, one_candidate)), "--format", "json"])
+
+    document = json.loads(capsys.readouterr().out)
+    assert code == 3
+    [diagnostic] = document["diagnostics"]
+    assert diagnostic["code"] == "E_GATE_CANDIDATES"
+    assert diagnostic["pointer"] == "/workflow/nodes/3/params/top_k"
+    assert "confidence_gate" in diagnostic["message"]
+    assert "top_k" in diagnostic["message"]
+
+
+def _join_inside_a_subworkflow(spec: dict[str, Any]) -> None:
+    """Extractors and join move to `fanout`; `extraction` keeps only reconcile after it."""
+    extraction = spec["subworkflows"]["extraction"]
+    reconcile = next(n for n in extraction["nodes"] if n["kind"] == "reconcile")
+    spec["subworkflows"]["fanout"] = {
+        "nodes": [n for n in extraction["nodes"] if n["kind"] != "reconcile"],
+        "edges": [e for e in extraction["edges"] if e["to"] != reconcile["id"]],
+    }
+    spec["subworkflows"]["extraction"] = {
+        "nodes": [{"id": "fanout", "kind": "subworkflow", "ref": "fanout"}, reconcile],
+        "edges": [
+            {"from": "START", "to": "fanout"},
+            {"from": "fanout", "to": reconcile["id"]},
+        ],
+    }
+
+
+@pytest.mark.parametrize("command", ["validate", "generate"])
+def test_reconcile_without_a_direct_join_is_a_semantic_error(
+    workdir: Path, capsys: Capture, command: str
+) -> None:
+    # Audit F05: this composition passed the semantic pass and then crashed
+    # the lowering with StopIteration (exit 1, traceback).
+    path = _edited_main_spec(workdir, _join_inside_a_subworkflow)
+    args = [command, str(path), "--format", "json"]
+    if command == "generate":
+        args += ["--out", str(workdir / "out")]
+
+    code = main(args)
+
+    captured = capsys.readouterr()
+    assert code == 3
+    assert "Traceback" not in captured.err
+    [diagnostic] = json.loads(captured.out)["diagnostics"]
+    assert diagnostic["code"] == "E_RECONCILE_WITHOUT_JOIN"
+    assert diagnostic["pointer"] == "/subworkflows/extraction/edges/1"
+    assert '"fanout"' in diagnostic["message"]
+    assert not (workdir / "out").exists()
+
+
+@pytest.mark.parametrize("depth", [1_100, 200_000])
+def test_deeply_nested_spec_is_a_schema_error(tmp_path: Path, capsys: Capture, depth: int) -> None:
+    # Audit F06: 1,100 nested lists (about 2 KB) ended in RecursionError and
+    # exit 1; 200,000 (about 400 KB, under the size limit) break the parser.
+    path = tmp_path / "deep.json"
+    path.write_text('{"x": ' + "[" * depth + "]" * depth + "}", encoding="utf-8")
+
+    code = main(["validate", str(path), "--format", "json"])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "Traceback" not in captured.err
+    [diagnostic] = json.loads(captured.out)["diagnostics"]
+    assert diagnostic["code"] == "E_SCHEMA"
+    assert "aninhamento" in diagnostic["message"]

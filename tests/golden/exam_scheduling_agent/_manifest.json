@@ -1,0 +1,27 @@
+{
+  "transpiler_version": "0.1.0",
+  "spec_path": "agent_specs/exam_scheduling_agent.json",
+  "spec_sha256": "577eb865c9f1fc39e12533fb266fac043ede4d9fb2d1ef0fb6c951dccfd32784",
+  "description": "Agenda exames a partir da imagem de um pedido médico: OCR, resolução no catálogo e solicitação de agendamento.",
+  "ir_digest": "63794230dec2e9322ec49fa03acd5a9a78f4db2e3522b21bfecf8c641d44454b",
+  "instructions": {
+    "exam_extractor": "3a6f658eb5ae03223e7534860203182d0aade880b42e8c1e1c98f2ce0f74ea95"
+  },
+  "adk_requirement": "google-adk==2.13.0",
+  "node_names": [
+    "abort",
+    "exam_extractor",
+    "extraction",
+    "gate",
+    "guard",
+    "lexical_extract",
+    "llm_extract_input",
+    "merge",
+    "ocr",
+    "present",
+    "reconcile",
+    "resolve",
+    "review",
+    "schedule"
+  ]
+}

@@ -1,0 +1,23 @@
+# LF in every checkout, Windows included: scripts and Dockerfiles run in Linux
+# containers, where CRLF breaks them, and generated code is compared byte for
+# byte with tests/golden.
+*.sh            text eol=lf
+*.Dockerfile    text eol=lf
+Dockerfile      text eol=lf
+.dockerignore   text eol=lf
+*.py            text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.json          text eol=lf
+*.jsonl         text eol=lf
+*.md            text eol=lf
+*.toml          text eol=lf
+*.ini           text eol=lf
+*.lock          text eol=lf
+*.j2            text eol=lf
+*.mako          text eol=lf
+.env.example    text eol=lf
+
+*.png           binary
+*.jpg           binary
+*.ttf           binary

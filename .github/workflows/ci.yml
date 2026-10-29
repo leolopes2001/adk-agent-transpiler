@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+  # Manual runs also start `e2e-llm`, the only job that calls the real Gemini.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked --all-extras --group dev
+      # The same hooks as the development check: ruff, ruff format, mypy, import-linter.
+      - name: Pre-commit hooks
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked --all-extras --group dev
+      - name: Unit and contract tests
+        run: uv run pytest -m "unit or contract" --cov --cov-report=term --cov-report=xml
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  integration-security:
+    needs: [quality, unit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The OCR integration and security tests need Tesseract with Portuguese data;
+      # they fail (not skip) when it is missing.
+      INSTALL_TESSERACT: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Tesseract
+        if: env.INSTALL_TESSERACT == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-por
+          tesseract --version
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked --all-extras --group dev
+      # Testcontainers starts Postgres through the runner's Docker daemon.
+      - name: Check Docker
+        run: docker info --format '{{.ServerVersion}}'
+      # The end-to-end security checks need the Compose stack: they run in `e2e`.
+      - name: Integration and security tests
+        run: >-
+          uv run pytest -m "(integration or security) and not e2e"
+          --cov --cov-report=term --cov-report=xml
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-integration-xml
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  # The whole stack in Docker Compose (project lab-agent-e2e), FakeLlm as the model.
+  # The tests generate their own secrets: no .env and no secret needed. The smoke
+  # tests also check that the API published on 127.0.0.1 answers, which on Docker
+  # Engine for Linux proves the `edge` network forwards without IP masquerading.
+  e2e:
+    needs: [integration-security]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Keep the service and agent logs (already redacted) as an artifact.
+      KEEP_EVIDENCE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked --all-extras --group dev
+      - name: Check Docker Compose
+        run: docker compose version
+      - name: End-to-end tests
+        run: >-
+          uv run pytest -m "e2e and not llm" -v --durations=0
+          tests/e2e tests/security/test_e2e_pii.py
+      - name: Upload compose logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-logs
+          path: evidence/e2e/
+          if-no-files-found: ignore
+
+  # Manual only: the happy path with the real Gemini (Actions secret GOOGLE_API_KEY).
+  e2e-llm:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+    steps:
+      - name: Check the secret
+        run: |
+          if [ -z "$GOOGLE_API_KEY" ]; then
+            echo "::error::the Actions secret GOOGLE_API_KEY is not set"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked --all-extras --group dev
+      # A quota error (429/402) ends as a skip with the reason, not a retry loop.
+      - name: End-to-end test with Gemini
+        run: uv run pytest -m "e2e and llm" -v -rs tests/e2e

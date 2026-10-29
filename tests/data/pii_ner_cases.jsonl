@@ -1,0 +1,58 @@
+{"id": "name-label", "text": "Paciente: Maria Fictícia da Silva", "pii": [{"entity": "PERSON", "value": "Maria Fictícia da Silva"}], "medical": []}
+{"id": "name-label-lower", "text": "Nome: joana teixeira", "pii": [{"entity": "PERSON", "value": "joana teixeira"}], "medical": []}
+{"id": "name-label-caps", "text": "PACIENTE: BEATRIZ INVENTADA MOURA", "pii": [{"entity": "PERSON", "value": "BEATRIZ INVENTADA MOURA"}], "medical": []}
+{"id": "name-label-doctor", "text": "Dra. Helena Vasconcelos CRM-SP 123456", "pii": [{"entity": "PERSON", "value": "Helena Vasconcelos"}], "medical": []}
+{"id": "name-label-mother", "text": "Mãe: Antônia Ferreira", "pii": [{"entity": "PERSON", "value": "Antônia Ferreira"}], "medical": []}
+{"id": "name-label-nextline", "text": "Paciente: Rafael\nCosta Mendes", "pii": [{"entity": "PERSON", "value": "Rafael"}, {"entity": "PERSON", "value": "Costa Mendes"}], "medical": []}
+{"id": "name-label-dr-noperiod", "text": "Retorno com Dr Marcos Vinícius Prado", "pii": [{"entity": "PERSON", "value": "Marcos Vinícius Prado"}], "medical": []}
+{"id": "name-label-patient-lower", "text": "Nome do paciente: josé da conceição", "pii": [{"entity": "PERSON", "value": "josé da conceição"}], "medical": []}
+{"id": "name-age", "text": "Ana Beatriz Moura - 42 anos", "pii": [{"entity": "PERSON", "value": "Ana Beatriz Moura"}], "medical": []}
+{"id": "name-age-2", "text": "Carlos Eduardo Lima - 35 anos", "pii": [{"entity": "PERSON", "value": "Carlos Eduardo Lima"}], "medical": []}
+{"id": "name-age-caps", "text": "MARIA FICTÍCIA DA SILVA - 42 anos", "pii": [{"entity": "PERSON", "value": "MARIA FICTÍCIA DA SILVA"}], "medical": []}
+{"id": "name-age-caps-2", "text": "JULIANA RIBEIRO SANTOS - 29 anos", "pii": [{"entity": "PERSON", "value": "JULIANA RIBEIRO SANTOS"}], "medical": []}
+{"id": "name-caps-nextline", "text": "RAFAEL\nCOSTA MENDES - 50 anos", "pii": [{"entity": "PERSON", "value": "RAFAEL"}, {"entity": "PERSON", "value": "COSTA MENDES"}], "medical": []}
+{"id": "name-mid-1", "text": "Solicito exames para Roberto Almeida conforme protocolo.", "pii": [{"entity": "PERSON", "value": "Roberto Almeida"}], "medical": []}
+{"id": "name-mid-2", "text": "Atendido por Luiz Henrique Prado em consulta de rotina.", "pii": [{"entity": "PERSON", "value": "Luiz Henrique Prado"}], "medical": []}
+{"id": "name-mid-3", "text": "Entregar o resultado para Sandra Melo na recepção.", "pii": [{"entity": "PERSON", "value": "Sandra Melo"}], "medical": []}
+{"id": "name-mid-caps", "text": "PEDIDO PARA JULIANA RIBEIRO, GESTANTE", "pii": [{"entity": "PERSON", "value": "JULIANA RIBEIRO"}], "medical": []}
+{"id": "name-alone", "text": "Beatriz Inventada", "pii": [{"entity": "PERSON", "value": "Beatriz Inventada"}], "medical": []}
+{"id": "name-alone-caps", "text": "FERNANDA ROCHA ALVES", "pii": [{"entity": "PERSON", "value": "FERNANDA ROCHA ALVES"}], "medical": []}
+{"id": "name-comma", "text": "Pedro Henrique Souza, 61 anos, hipertenso", "pii": [{"entity": "PERSON", "value": "Pedro Henrique Souza"}], "medical": []}
+{"id": "name-lower-mid", "text": "paciente encaminhado por gustavo nunes", "pii": [{"entity": "PERSON", "value": "gustavo nunes"}], "medical": []}
+{"id": "cpf-label", "text": "CPF: 202.393.613-69", "pii": [{"entity": "CPF", "value": "202.393.613-69"}], "medical": []}
+{"id": "cpf-digits", "text": "CPF 20239361369", "pii": [{"entity": "CPF", "value": "20239361369"}], "medical": []}
+{"id": "cpf-nolabel", "text": "Documento 529.982.247-25 apresentado", "pii": [{"entity": "CPF", "value": "529.982.247-25"}], "medical": []}
+{"id": "cpf-ocr-letters", "text": "CPF: 2O2.393.6l3-69", "pii": [{"entity": "CPF", "value": "2O2.393.6l3-69"}], "medical": []}
+{"id": "cpf-ocr-label", "text": "CPE: 202.393.613-69", "pii": [{"entity": "CPF", "value": "202.393.613-69"}], "medical": []}
+{"id": "cpf-ocr-missing", "text": "CPF: 202.393.613-6", "pii": [{"entity": "CPF", "value": "202.393.613-6"}], "medical": []}
+{"id": "cpf-ocr-spaces", "text": "CPF: 202 393. 613 69", "pii": [{"entity": "CPF", "value": "202 393. 613 69"}], "medical": []}
+{"id": "email-label", "text": "E-mail: maria.ficticia@example.com", "pii": [{"entity": "EMAIL", "value": "maria.ficticia@example.com"}], "medical": []}
+{"id": "email-mid", "text": "Enviar laudo para joana_t@exemplo.com.br", "pii": [{"entity": "EMAIL", "value": "joana_t@exemplo.com.br"}], "medical": []}
+{"id": "phone-label", "text": "Tel: (31) 90000-0000", "pii": [{"entity": "PHONE", "value": "(31) 90000-0000"}], "medical": []}
+{"id": "phone-mobile", "text": "Celular 31 98765-4321", "pii": [{"entity": "PHONE", "value": "31 98765-4321"}], "medical": []}
+{"id": "phone-intl", "text": "Telefone: +55 11 3456-7890", "pii": [{"entity": "PHONE", "value": "+55 11 3456-7890"}], "medical": []}
+{"id": "address-label", "text": "Endereço: Rua Imaginária, 123 - Centro", "pii": [{"entity": "ADDRESS", "value": "Rua Imaginária, 123 - Centro"}], "medical": []}
+{"id": "address-street", "text": "Av. das Flores, 45, apto 12", "pii": [{"entity": "ADDRESS", "value": "Av. das Flores, 45, apto 12"}], "medical": []}
+{"id": "address-city", "text": "Reside em Contagem, bairro Eldorado", "pii": [{"entity": "LOCATION", "value": "Contagem"}, {"entity": "LOCATION", "value": "Eldorado"}], "medical": [], "escapes": true}
+{"id": "exam-list", "text": "1. Hemograma completo", "pii": [], "medical": ["Hemograma completo"]}
+{"id": "exam-pcr", "text": "2. Proteína C Reativa (PCR)", "pii": [], "medical": ["Proteína C Reativa"]}
+{"id": "exam-chagas", "text": "3. Sorologia para Doença de Chagas", "pii": [], "medical": ["Doença de Chagas"]}
+{"id": "exam-chagas-caps", "text": "SOROLOGIA PARA DOENÇA DE CHAGAS IGG", "pii": [], "medical": ["DOENÇA DE CHAGAS"]}
+{"id": "exam-ferritin-ocr", "text": "- FERRLTINA", "pii": [], "medical": ["FERRLTINA"]}
+{"id": "exam-glicemia-ocr", "text": "Glicemia de jejum 15H", "pii": [], "medical": ["Glicemia de jejum"]}
+{"id": "exam-tsh", "text": "TSH + T4 livre", "pii": [], "medical": ["TSH", "T4 livre"]}
+{"id": "exam-colesterol", "text": "- Colesterol total e frações", "pii": [], "medical": ["Colesterol total e frações"]}
+{"id": "exam-tgo", "text": "TGO (AST) / TGP (ALT)", "pii": [], "medical": ["TGO", "TGP"]}
+{"id": "exam-dengue", "text": "Dengue NS1 e Dengue IgM", "pii": [], "medical": ["Dengue NS1", "Dengue IgM"]}
+{"id": "exam-caps", "text": "HEMOGLOBINA GLICADA, VITAMINA B12, FERRITINA", "pii": [], "medical": ["HEMOGLOBINA GLICADA", "VITAMINA B12", "FERRITINA"]}
+{"id": "exam-usg", "text": "Ultrassonografia de abdome total", "pii": [], "medical": ["Ultrassonografia de abdome total"]}
+{"id": "exam-rx", "text": "Raio-X de Tórax PA e Perfil", "pii": [], "medical": ["Raio-X de Tórax"]}
+{"id": "exam-header", "text": "EXAMES SOLICITADOS:", "pii": [], "medical": ["EXAMES SOLICITADOS"]}
+{"id": "exam-coombs", "text": "Teste de Coombs direto", "pii": [], "medical": ["Coombs"]}
+{"id": "exam-anti-hiv", "text": "Anti-HIV 1 e 2; Anti-HCV; HBsAg", "pii": [], "medical": ["Anti-HIV", "Anti-HCV", "HBsAg"]}
+{"id": "exam-rubeola", "text": "Rubéola IgG / Toxoplasmose IgM", "pii": [], "medical": ["Rubéola IgG", "Toxoplasmose IgM"]}
+{"id": "exam-dhea", "text": "Sulfato de Dehidroepiandrosterona", "pii": [], "medical": ["Sulfato de Dehidroepiandrosterona"]}
+{"id": "mixed-name-exam", "text": "Maria Fictícia da Silva - Hemograma completo", "pii": [{"entity": "PERSON", "value": "Maria Fictícia da Silva"}], "medical": ["Hemograma completo"]}
+{"id": "mixed-doctor-exam", "text": "Solicitado por Dr. João Exemplo: Ferritina e Ferro sérico", "pii": [{"entity": "PERSON", "value": "João Exemplo"}], "medical": ["Ferritina", "Ferro sérico"]}
+{"id": "name-surname-is-medical", "text": "Ana Ferro - 42 anos", "pii": [{"entity": "PERSON", "value": "Ana Ferro"}], "medical": [], "escapes": true}
+{"id": "name-surname-is-eponym", "text": "Maria Chagas - 30 anos", "pii": [{"entity": "PERSON", "value": "Maria Chagas"}], "medical": [], "escapes": true}

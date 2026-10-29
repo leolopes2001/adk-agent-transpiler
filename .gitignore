@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Environments and secrets
+.venv/
+.env
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.import_linter_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Transpiler output
+generated/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Logs saved by the e2e tests (KEEP_EVIDENCE=1 or a failure); a CI artifact
+evidence/e2e/
+
+samples/pedido.jpg

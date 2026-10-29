@@ -1,0 +1,105 @@
+{"query": "1. Hemograma completo", "expected": "LAB-10001", "kind": "exact"}
+{"query": "2. Glicemia de jejum", "expected": "LAB-10012", "kind": "exact"}
+{"query": "3. TSH", "expected": "LAB-10043", "kind": "exact"}
+{"query": "4. T4 livre", "expected": "LAB-10044", "kind": "exact"}
+{"query": "5. Colesterol total e frações", "expected": "LAB-10016", "kind": "exact"}
+{"query": "8. Triglicerídeos", "expected": "LAB-10020", "kind": "exact"}
+{"query": "Creatinina", "expected": "LAB-10021", "kind": "exact"}
+{"query": "Ureia", "expected": "LAB-10022", "kind": "exact"}
+{"query": "Ferritina", "expected": "LAB-10109", "kind": "exact"}
+{"query": "Urocultura", "expected": "LAB-10099", "kind": "exact"}
+{"query": "Hemoglobina glicada", "expected": "LAB-10013", "kind": "exact"}
+{"query": "PSA total", "expected": "LAB-10093", "kind": "exact"}
+{"query": "Beta-HCG", "expected": "LAB-10049", "kind": "exact"}
+{"query": "Ultrassonografia de abdome total", "expected": "LAB-10115", "kind": "exact"}
+{"query": "ÁCIDO ÚRICO", "expected": "LAB-10030", "kind": "exact"}
+{"query": "Vitamina B12", "expected": "LAB-10108", "kind": "exact"}
+{"query": "Tempo de protrombina", "expected": "LAB-10087", "kind": "exact"}
+{"query": "6. Urina tipo 1 (EAS)", "expected": "LAB-10079", "kind": "alias"}
+{"query": "glicose", "expected": "LAB-10012", "kind": "alias"}
+{"query": "lipidograma", "expected": "LAB-10016", "kind": "alias"}
+{"query": "perfil lipídico", "expected": "LAB-10016", "kind": "alias"}
+{"query": "urina rotina", "expected": "LAB-10079", "kind": "alias"}
+{"query": "RT-PCR covid", "expected": "LAB-10104", "kind": "alias"}
+{"query": "Vitamina D", "expected": "LAB-10107", "kind": "alias"}
+{"query": "tiroxina livre", "expected": "LAB-10044", "kind": "alias"}
+{"query": "3) TGP", "expected": "LAB-10024", "kind": "alias"}
+{"query": "- Parasitológico de fezes (EPF)", "expected": "LAB-10080", "kind": "alias"}
+{"query": "Colesterol HDL", "expected": "LAB-10017", "kind": "alias"}
+{"query": "Urocultura com antibiograma", "expected": "LAB-10099", "kind": "alias"}
+{"query": "7. PCR", "expected": "LAB-10037", "kind": "abbrev"}
+{"query": "PCR", "expected": "LAB-10037", "kind": "abbrev"}
+{"query": "HMG", "expected": "LAB-10001", "kind": "abbrev"}
+{"query": "HbA1c", "expected": "LAB-10013", "kind": "abbrev"}
+{"query": "TGO", "expected": "LAB-10023", "kind": "abbrev"}
+{"query": "T4L", "expected": "LAB-10044", "kind": "abbrev"}
+{"query": "EAS", "expected": "LAB-10079", "kind": "abbrev"}
+{"query": "EPF", "expected": "LAB-10080", "kind": "abbrev"}
+{"query": "TP/INR", "expected": "LAB-10087", "kind": "abbrev"}
+{"query": "VHS", "expected": "LAB-10004", "kind": "abbrev"}
+{"query": "GGT", "expected": "LAB-10025", "kind": "abbrev"}
+{"query": "TTPA", "expected": "LAB-10088", "kind": "abbrev"}
+{"query": "BHCG", "expected": "LAB-10049", "kind": "abbrev"}
+{"query": "USG abdome total", "expected": "LAB-10115", "kind": "abbrev"}
+{"query": "glic jejum", "expected": "LAB-10012", "kind": "abbrev"}
+{"query": "Hemogrma completo", "expected": "LAB-10001", "kind": "typo"}
+{"query": "Glicemla de jejum", "expected": "LAB-10012", "kind": "typo"}
+{"query": "Creatinlna", "expected": "LAB-10021", "kind": "typo"}
+{"query": "Urocultra", "expected": "LAB-10099", "kind": "typo"}
+{"query": "Ferritlna", "expected": "LAB-10109", "kind": "typo"}
+{"query": "Colesterol totl e frações", "expected": "LAB-10016", "kind": "typo"}
+{"query": "Hemoglobina glicda", "expected": "LAB-10013", "kind": "typo"}
+{"query": "Potásio", "expected": "LAB-10032", "kind": "typo"}
+{"query": "Fosfatase alcalna", "expected": "LAB-10026", "kind": "typo"}
+{"query": "Albumna", "expected": "LAB-10029", "kind": "typo"}
+{"query": "Testosterona totl", "expected": "LAB-10055", "kind": "typo"}
+{"query": "Vitamna B12", "expected": "LAB-10108", "kind": "typo"}
+{"query": "1. Hemograrna completo", "expected": "LAB-10001", "kind": "ocr_noise"}
+{"query": "2. GIicemia de jejum", "expected": "LAB-10012", "kind": "ocr_noise"}
+{"query": "3. T5H", "expected": "LAB-10043", "kind": "ocr_noise"}
+{"query": "4. T4 Iivre", "expected": "LAB-10044", "kind": "ocr_noise"}
+{"query": "5. Colesterol total e fraçöes", "expected": "LAB-10016", "kind": "ocr_noise"}
+{"query": "6. Urina tipo l (EAS)", "expected": "LAB-10079", "kind": "ocr_noise"}
+{"query": "7. PCR.", "expected": "LAB-10037", "kind": "ocr_noise"}
+{"query": "Hemograma cornpleto", "expected": "LAB-10001", "kind": "ocr_noise"}
+{"query": "Proteina C reatlva", "expected": "LAB-10037", "kind": "ocr_noise"}
+{"query": "Vitamlna D (25-0H)", "expected": "LAB-10107", "kind": "ocr_noise"}
+{"query": "| Ferritina", "expected": "LAB-10109", "kind": "ocr_noise"}
+{"query": "Creatinina ;", "expected": "LAB-10021", "kind": "ocr_noise"}
+{"query": "Glicemia de jejum —", "expected": "LAB-10012", "kind": "ocr_noise"}
+{"query": "T4", "expected": null, "kind": "ambiguous", "acceptable": ["LAB-10044", "LAB-10045"]}
+{"query": "4. T4", "expected": null, "kind": "ambiguous", "acceptable": ["LAB-10044", "LAB-10045"]}
+{"query": "T3", "expected": null, "kind": "ambiguous", "acceptable": ["LAB-10046", "LAB-10047"]}
+{"query": "colesterol", "expected": null, "kind": "ambiguous", "acceptable": ["LAB-10016", "LAB-10017", "LAB-10018", "LAB-10019"]}
+{"query": "5. Colesterol", "expected": null, "kind": "ambiguous", "acceptable": ["LAB-10016", "LAB-10017", "LAB-10018", "LAB-10019"]}
+{"query": "Ultrassonografia", "expected": null, "kind": "ambiguous", "acceptable": ["LAB-10115", "LAB-10116", "LAB-10117", "LAB-10118"]}
+{"query": "Hemoglobina", "expected": null, "kind": "ambiguous", "acceptable": ["LAB-10001", "LAB-10010", "LAB-10013"]}
+{"query": "Cultura", "expected": null, "kind": "ambiguous", "acceptable": ["LAB-10099", "LAB-10100", "LAB-10101", "LAB-10102"]}
+{"query": "Ressonância magnética de crânio", "expected": null, "kind": "negative"}
+{"query": "Tomografia de tórax", "expected": null, "kind": "negative"}
+{"query": "Eletrocardiograma", "expected": null, "kind": "negative"}
+{"query": "Colonoscopia", "expected": null, "kind": "negative"}
+{"query": "Mamografia bilateral", "expected": null, "kind": "negative"}
+{"query": "Ecocardiograma", "expected": null, "kind": "negative"}
+{"query": "Endoscopia digestiva alta", "expected": null, "kind": "negative"}
+{"query": "Vitamina E", "expected": null, "kind": "negative"}
+{"query": "Apolipoproteina B", "expected": null, "kind": "negative"}
+{"query": "Vitamina A", "expected": null, "kind": "negative"}
+{"query": "Testosterona livre", "expected": null, "kind": "negative"}
+{"query": "Cálcio iônico", "expected": null, "kind": "negative"}
+{"query": "Ultrassonografia de mamas", "expected": null, "kind": "negative"}
+{"query": "Holter 24 horas", "expected": null, "kind": "negative"}
+{"query": "Cortisol salivar", "expected": null, "kind": "negative"}
+{"query": "[PESSOA_1]", "expected": null, "kind": "negative"}
+{"query": "Paciente: [PESSOA_1]", "expected": null, "kind": "negative"}
+{"query": "CPF: [CPF_1]", "expected": null, "kind": "negative"}
+{"query": "Dr. [PESSOA_2] — [CRM_1]", "expected": null, "kind": "negative"}
+{"query": "Belo Horizonte, 20/10/2026", "expected": null, "kind": "negative"}
+{"query": "Indicação clínica: avaliação de rotina.", "expected": null, "kind": "negative"}
+{"query": "SOLICITAÇÃO DE EXAMES LABORATORIAIS", "expected": null, "kind": "negative"}
+{"query": "Laboratório Exemplo (fictício)", "expected": null, "kind": "negative"}
+{"query": "Convênio: Plano Exemplo Saúde (fictício)", "expected": null, "kind": "negative"}
+{"query": "Exames solicitados:", "expected": null, "kind": "negative"}
+{"query": "|||| ~~ ;;", "expected": null, "kind": "negative"}
+{"query": "lI1l |", "expected": null, "kind": "negative"}
+{"query": "xkqzv wpt", "expected": null, "kind": "negative"}

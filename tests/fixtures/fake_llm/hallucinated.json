@@ -1,0 +1,7 @@
+{
+  "exams": [
+    {"name": "Ressonância magnética de crânio", "evidence": "Ressonância magnética de crânio"},
+    {"name": "[PESSOA_1]", "evidence": "Paciente: [PESSOA_1]"},
+    {"name": "Hemograma completo", "evidence": "1. Hemograma completo"}
+  ]
+}

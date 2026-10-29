@@ -1,0 +1,309 @@
+# ADK Agent Transpiler
+
+Transpilador que transforma uma especificação JSON em um agente **Google ADK 2**.
+
+O agente de exemplo lê a foto de um pedido médico, extrai os exames, encontra os códigos no catálogo e registra o agendamento numa API.
+
+## Tecnologias
+
+| Parte | Tecnologias |
+|---|---|
+| Transpilador | Python 3.12, Pydantic, Jinja2 |
+| Agente | Google ADK 2 (Workflow, JoinNode, RequestInput), Gemini |
+| OCR | MCP via SSE, Tesseract, OpenCV, Presidio e spaCy (NER local) |
+| RAG | MCP via SSE, BM25, RapidFuzz |
+| API | FastAPI, PostgreSQL, SQLAlchemy, Alembic |
+| Infra | Docker Compose |
+| Observabilidade | OpenTelemetry, Aspire Dashboard |
+| Qualidade | pytest, Ruff, mypy, import-linter, GitHub Actions |
+
+## Como rodar
+
+### Requisitos
+
+| Item | Versão |
+|---|---|
+| Docker | Docker Desktop (Windows, macOS) ou Docker Engine (Linux) |
+| Docker Compose | 2.24 ou mais novo |
+| Chave do Gemini | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| Python e uv (só para desenvolvimento) | Python 3.12, uv 0.12 ou mais novo |
+
+Para rodar não é preciso Python, uv nem make: só Docker.
+
+### Passo a passo
+
+```bash
+# 1. Configurar (preencha GOOGLE_API_KEY no .env)
+cp .env.example .env
+
+# 2. Subir os serviços
+docker compose up -d --build --wait
+
+# 3. Gerar o agente a partir da spec
+docker compose run --rm transpile /app/agent_specs/exam_scheduling_agent.json
+
+# 4. Rodar o agente com um pedido médico
+docker compose run --rm agent run --image /app/inputs/samples/pedido_medico_ficticio.png
+
+# 5. Desligar tudo
+docker compose --profile "*" down -v
+```
+
+### Outros cenários
+
+| Cenário | Comando |
+|---|---|
+| Revisão humana | `docker compose run --rm agent run --image /app/inputs/samples/pedido_ambiguo.png` |
+| Prompt injection | `docker compose run --rm agent run --image /app/inputs/samples/pedido_injecao.png` |
+| Swagger | http://localhost:8000/docs (Authorize com `SCHEDULER_API_KEY`) |
+
+### Rodar outro agente
+
+Cada spec gera um agente, escolhido pelo nome com `--agent`:
+
+```bash
+docker compose run --rm transpile /app/agent_specs/examples/exam_lookup_only.json
+docker compose run --rm agent run --agent exam_lookup_only --image /app/inputs/samples/pedido_medico_ficticio.png
+docker compose run --rm agent list          # lista os agentes gerados
+docker compose run --rm export-generated    # copia o código gerado para ./generated/
+```
+
+## Arquitetura
+
+![Arquitetura](evidence/architecture/arquitetura.png)
+
+![Fluxo do agente](evidence/architecture/fluxo-principal.png)
+
+- **A IA interpreta, o código decide.** O Gemini só lê o texto mascarado; quem escolhe o código e agenda é o gate.
+- **Dados pessoais detectados por regras e por um modelo local de NER**, dentro do servidor de OCR, sem sair da rede interna. O NER não é generativo e serve só para proteger os dados; o Gemini interpreta o texto já mascarado.
+- **OCR e RAG são servidores MCP via SSE**, chamados por nós de código, nunca pelo LLM.
+- **O `rag-mcp` faz a etapa de recuperação** (busca léxica no catálogo); os candidatos não são entregues ao LLM, de propósito: quem decide é o gate.
+- **Modelo `gemini-flash-latest`:** o apelido evita quebra quando versões antigas forem aposentadas; em produção, a versão seria fixada e trocada só depois de validar com testes.
+- **Workflow em grafo (ADK 2):** sequencial, com fan-out/join paralelo e human-in-the-loop. Equivale a `SequentialAgent` + `ParallelAgent` do ADK 1.
+
+### Estrutura de pastas
+
+```text
+.github/workflows/       CI: lint, tipos, testes e E2E
+src/
+├── transpiler/          spec JSON → validação → geração do agente ADK
+├── agent_runtime/       nós do workflow, guardrails e CLI
+├── libs/
+│   ├── pii_guard/       detecção e mascaramento de dados pessoais
+│   └── lab_common/      regra do gate, contratos, logs
+└── services/
+    ├── ocr_mcp/         servidor MCP de OCR
+    ├── rag_mcp/         servidor MCP de busca no catálogo
+    └── scheduler_api/   API de agendamento (FastAPI)
+agent_specs/             specs dos agentes e o schema do formato
+data/                    catálogo de exames
+samples/                 imagens de pedidos fictícios
+tests/                   unit, contract, integration, security, e2e
+docs/                    ADRs
+docker/                  Dockerfiles
+evidence/                prints e logs de execução
+```
+
+## Transpilador
+
+```text
+JSON → validação → representação interna → geração (Jinja2) → validação do código → pacote
+```
+
+- Mostra todos os erros de uma vez, com o caminho exato na spec.
+- Recusa agentes inseguros (por exemplo, agendar sem passar pelo gate).
+- A mesma spec gera sempre o mesmo código.
+
+| Spec | Gera |
+|---|---|
+| [`exam_scheduling_agent.json`](agent_specs/exam_scheduling_agent.json) | Fluxo completo: LLM, revisão humana e agendamento |
+| [`examples/exam_lookup_only.json`](agent_specs/examples/exam_lookup_only.json) | Só identifica os exames, sem LLM nem agendamento |
+| [`examples/exam_validation_errors.json`](agent_specs/examples/exam_validation_errors.json) | Spec inválida de propósito, para ver os erros |
+
+```bash
+# Gerar outro agente e rodá-lo pelo nome
+docker compose run --rm transpile /app/agent_specs/examples/exam_lookup_only.json
+docker compose run --rm agent run --agent exam_lookup_only --image /app/inputs/samples/pedido_medico_ficticio.png
+
+# Ver os erros de uma spec inválida, sem gerar nada
+docker compose run --rm --entrypoint lab-transpile transpile validate /app/agent_specs/examples/exam_validation_errors.json
+```
+
+## API
+
+| Rota | O que faz |
+|---|---|
+| `POST /v1/appointments` | Registra um agendamento (idempotente) |
+| `GET /v1/appointments` | Lista os agendamentos |
+| `GET /v1/appointments/{id}` | Consulta um agendamento |
+| `GET /v1/exams/{code}` | Consulta um exame do catálogo |
+
+## Segurança
+
+- **Dados pessoais** detectados por regras + modelo local de NER ([ADR-0003](docs/adr/0003-pii-mascarada-na-origem.md)), mascarados no OCR e checados de novo antes do LLM e nos logs. A API só recebe um pseudônimo.
+- **Prompt injection** bloqueado antes do LLM, que não tem ferramentas.
+- **Códigos de exame** vêm só do catálogo.
+- **Containers** sem root, só leitura e numa rede interna sem internet.
+
+### Dados pessoais
+
+Tudo roda localmente; o único serviço externo é o Gemini, e ele só recebe texto mascarado. São quatro camadas:
+
+1. **Regras** (`pii_guard`): CPF, CNS, RG, telefone, e-mail, CEP, endereço, datas, CRM e nomes depois de rótulos como "Paciente" ou "Dr.".
+2. **NER local** (Presidio + spaCy): acha nomes sem rótulo, inclusive em MAIÚSCULAS, sem mascarar exames nem termos médicos.
+3. **Minimização:** o LLM recebe só as linhas que parecem exames.
+4. **Tripwire:** se ainda sobrar algum dado pessoal, a chamada ao LLM é bloqueada.
+
+Se o modelo de NER falhar, nada sai (`PII_ENGINE_FAILURE`). O mascaramento é irreversível (`[PESSOA_1]`, `[CPF_1]`).
+
+**Resultado** (58 trechos de teste, `uv run python scripts/measure_pii.py`):
+
+| | Nomes encontrados | Exames mascarados por engano | Tempo para mascarar um pedido |
+|---|---|---|---|
+| Só regras | 8/27 | 0 | ~1 ms |
+| **Regras + NER (em uso)** | **25/27** | 0 | 80 a 125 ms |
+
+Mais detalhes na [ADR-0003](docs/adr/0003-pii-mascarada-na-origem.md).
+
+## Logs e traces
+
+```bash
+docker compose --profile observability up -d --build --wait
+```
+
+Abra http://localhost:18888 e procure pelo `run_id` que a CLI mostra no final.
+
+## Testes
+
+```bash
+uv sync --all-extras --group dev
+uv run pytest -m "unit or contract"
+uv run pytest -m "e2e and not llm" tests/e2e
+```
+
+Mais de 2.000 testes, com 98% de cobertura.
+
+## Decisões de arquitetura
+
+| ADR | Decisão |
+|---|---|
+| [0001](docs/adr/0001-workflow-em-grafo-adk.md) | Workflow em grafo; LLM num único nó |
+| [0002](docs/adr/0002-codigo-gerado-como-composicao.md) | Código gerado só compõe peças testadas |
+| [0003](docs/adr/0003-pii-mascarada-na-origem.md) | PII mascarada no OCR, com regras e NER local |
+| [0004](docs/adr/0004-mcp-chamado-por-nos-deterministicos.md) | MCP chamado por código, não pelo LLM |
+| [0005](docs/adr/0005-rag-lexico-hibrido.md) | Busca léxica híbrida, calibrada |
+| [0006](docs/adr/0006-idempotencia-por-chave-deterministica.md) | Idempotência por chave derivada do conteúdo |
+| [0007](docs/adr/0007-sse-como-transporte-mcp.md) | SSE como transporte MCP |
+| [0008](docs/adr/0008-ocr-local-tesseract.md) | OCR local com Tesseract |
+| [0009](docs/adr/0009-adk-api-contract.md) | Contrato com a API do ADK 2.13.0 |
+
+## Evidências
+
+Prints de execução real, gerados com os comandos deste README.
+
+| Área | O que mostra |
+|---|---|
+| [Transpilador](#transpilador-1) | Geração do agente, erros de validação e lista de agentes |
+| [Agente (CLI)](#agente-cli) | Fluxo completo, idempotência, revisão humana, prompt injection e pedido manuscrito |
+| [API](#api-1) | Swagger e consulta dos agendamentos registrados |
+| [Logs e traces](#logs-e-traces-1) | Logs estruturados e trace de uma execução no Aspire |
+| [Docker](#docker) | Serviços do Compose no ar |
+| [Testes](#testes-1) | Suíte de testes e cobertura |
+
+### Transpilador
+
+**Geração do agente.** A spec vira `agent.py`, `__init__.py` e `_manifest.json`.
+
+![Geração do agente exam_scheduling_agent](evidence/transpiler/01-generate.jpeg)
+
+**Spec inválida.** Todos os erros de uma vez, com caminho e dica. Nada é gerado.
+
+![Spec inválida com os erros acumulados](evidence/transpiler/02-validate-errors.jpeg)
+
+**Agentes gerados.** `agent list` mostra os agentes disponíveis.
+
+![Lista dos agentes gerados](evidence/transpiler/03-show-agent-list.png)
+
+### Agente (CLI)
+
+**Fluxo completo.** 7 exames agendados e 8 dados pessoais mascarados.
+
+![Fluxo completo com 7 exames agendados](evidence/cli/01-fluxo-completo.jpeg)
+
+**Idempotência.** Rodar de novo devolve o mesmo `ID`, sem duplicar.
+
+![Replay idempotente sem duplicar a solicitação](evidence/cli/02-idempotencia.jpeg)
+
+**Revisão humana.** "T4" é ambíguo, então o gate pede a escolha ao usuário.
+
+![Revisão humana do pedido ambíguo](evidence/cli/03-revisao-humana.jpeg)
+
+**Prompt injection.** Bloqueado antes do LLM; nada é agendado.
+
+![Prompt injection bloqueado](evidence/cli/04-prompt-injection.jpeg)
+
+**Pedido manuscrito.** Erros do OCR corrigidos pela IA e pela revisão humana. 4 exames agendados.
+
+![Pedido manuscrito com revisão humana](evidence/cli/05-pedido-manuscrito.jpeg)
+
+**Pedido manuscrito, segunda execução.** Mesmo `ID`, nada duplicado.
+
+![Replay idempotente do pedido manuscrito](evidence/cli/06-pedido-manuscrito-idempotencia.jpeg)
+
+### API
+
+**Swagger.** Rotas protegidas por `X-API-Key`, sem dados pessoais.
+
+![Endpoints no Swagger](evidence/swagger/01-endpoints.jpeg)
+
+**Consulta dos agendamentos.** `GET /v1/appointments` mostra a solicitação registrada.
+
+![GET /v1/appointments com 200 OK](evidence/swagger/02-test-endpoint.png)
+
+### Logs e traces
+
+**Logs estruturados.** Logs em JSON dos serviços no Aspire.
+
+![Logs estruturados no Aspire](evidence/observability/logs.jpeg)
+
+**Trace de uma execução.** Uma execução de ponta a ponta, do OCR ao agendamento.
+
+![Trace de uma execução no Aspire](evidence/observability/trace.jpeg)
+
+### Docker
+
+**Serviços no ar.** Todos saudáveis; só a API e o Aspire expostos, em `127.0.0.1`.
+
+![docker compose ps](evidence/docker/02-containers.png)
+
+![Containers no Docker Desktop](evidence/docker/01-containers.png)
+
+### Testes
+
+**Testes.** 2.102 testes passando, com cobertura por arquivo.
+
+![Testes e cobertura](evidence/tests/01-test.jpeg)
+
+## Transparência e Uso de IA
+
+### Abordagem de desenvolvimento
+
+Desenvolvi por etapas, com IA como apoio ao planejamento, implementação e elaboração de testes. Ao longo do processo, tomei decisões técnicas, como a escolha de um modelo local para mascarar os dados do cliente antes do envio ao LLM externo. Revisei as entregas, solicitei ajustes e validei manualmente o fluxo completo, registrando evidências de funcionamento.
+
+### Referências técnicas
+
+- [Google ADK](https://adk.dev): Workflows em grafo, agentes, callbacks e retomada de execução.
+- [Model Context Protocol](https://modelcontextprotocol.io) e o [SDK Python](https://github.com/modelcontextprotocol/python-sdk): servidores MCP via SSE.
+- [FastAPI](https://fastapi.tiangolo.com) e [Pydantic](https://docs.pydantic.dev): contratos e validação de dados.
+- [Tesseract](https://tesseract-ocr.github.io): OCR local.
+- [OWASP Top 10 for LLM Applications](https://genai.owasp.org/llm-top-10/): defesas contra prompt injection e excesso de autonomia.
+
+### Estratégia de orquestração
+
+O agente é um Workflow em grafo do Google ADK 2, com rotas explícitas decididas por código:
+
+- **Sequencial:** OCR → guard → extração → busca no catálogo → gate → agendamento.
+- **Paralelo:** o Gemini e a busca no catálogo (RAG) rodam juntos e se encontram num `JoinNode`.
+- **Human-in-the-loop:** itens ambíguos pausam o fluxo e retomam com a escolha do operador.
+
+O LLM atua em um único passo, interpretando o pedido, sem ferramentas e com saída estruturada. OCR e RAG são chamados via MCP por passos determinísticos, e as decisões críticas (mascaramento de PII, escolha do código do exame e agendamento) ficam no código, para garantir previsibilidade e segurança.

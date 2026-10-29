@@ -1,0 +1,11 @@
+# Debugging only: publishes the MCP servers on the loopback interface.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait
+
+services:
+  ocr-mcp:
+    ports: ["127.0.0.1:8101:8101"]
+    networks: [backend, edge]
+
+  rag-mcp:
+    ports: ["127.0.0.1:8102:8102"]
+    networks: [backend, edge]

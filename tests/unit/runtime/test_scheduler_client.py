@@ -1,0 +1,291 @@
+import json
+from collections.abc import Callable
+from typing import Any
+
+import httpx
+import pytest
+from opentelemetry.trace import SpanKind, StatusCode
+
+from agent_runtime.errors import PermanentError, TransientError
+from agent_runtime.gateways.scheduler import (
+    AppointmentRequest,
+    AppointmentResult,
+    SchedulerClient,
+    SchedulerRejected,
+)
+from telemetry_capture import Exported
+
+pytestmark = pytest.mark.unit
+
+API_KEY = "unit-scheduler-key-" + "k" * 32
+APPOINTMENT_ID = "apt_01JABCDEFGHJKMNPQRSTVWXYZ0"
+REQUEST = AppointmentRequest(
+    patient_ref="pt_K7Q2M4XZB3C6D7E5F6G7H2J4KA",
+    exams=(("LAB-10001", "Hemograma completo"), ("LAB-10043", "TSH")),
+    source_document_sha256="ab" * 32,
+    requested_by="exam_scheduling_agent",
+)
+KEY = "c" * 64
+RUN_ID = "2f3b5fd6-2866-4383-9a4e-6d1f0b8c7a11"
+
+type Handler = Callable[[httpx.Request], httpx.Response]
+
+
+def _client(handler: Handler, requests: list[httpx.Request] | None = None) -> SchedulerClient:
+    def record(request: httpx.Request) -> httpx.Response:
+        if requests is not None:
+            requests.append(request)
+        return handler(request)
+
+    return SchedulerClient(
+        "http://api.local:8000/", API_KEY, 10.0, transport=httpx.MockTransport(record)
+    )
+
+
+async def _create(client: SchedulerClient) -> AppointmentResult:
+    return await client.create_appointment(REQUEST, idempotency_key=KEY, request_id=RUN_ID)
+
+
+def _appointment(status: int, headers: dict[str, str] | None = None) -> Handler:
+    return lambda request: httpx.Response(status, json=_full_body(), headers=headers)
+
+
+async def test_created_sends_headers_and_body() -> None:
+    requests: list[httpx.Request] = []
+
+    result = await _create(_client(_appointment(201), requests))
+
+    assert result == AppointmentResult("scheduled", APPOINTMENT_ID)
+    [request] = requests
+    assert (request.method, str(request.url)) == ("POST", "http://api.local:8000/v1/appointments")
+    assert request.headers["X-API-Key"] == API_KEY
+    assert request.headers["Idempotency-Key"] == KEY
+    assert request.headers["X-Request-ID"] == RUN_ID
+    assert json.loads(request.content) == {
+        "patient_ref": "pt_K7Q2M4XZB3C6D7E5F6G7H2J4KA",
+        "exams": [
+            {"code": "LAB-10001", "name": "Hemograma completo"},
+            {"code": "LAB-10043", "name": "TSH"},
+        ],
+        "source_document_sha256": "ab" * 32,
+        "requested_by": "exam_scheduling_agent",
+    }
+
+
+async def test_replay_needs_the_replayed_header() -> None:
+    replayed = await _create(_client(_appointment(200, {"Idempotent-Replayed": "true"})))
+
+    assert replayed == AppointmentResult("replayed", APPOINTMENT_ID)
+    with pytest.raises(PermanentError, match="SCHEDULER_UNEXPECTED_RESPONSE"):
+        await _create(_client(_appointment(200)))
+
+
+@pytest.mark.parametrize(
+    ("status", "title"),
+    [
+        (400, "Invalid Idempotency-Key"),
+        (401, "Unauthorized"),
+        (409, "Idempotency key reuse"),
+        (422, "Unknown exam code"),
+    ],
+)
+async def test_client_errors_are_rejections_with_the_problem_title(status: int, title: str) -> None:
+    requests: list[httpx.Request] = []
+
+    def problem(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            status,
+            json={"type": "x", "title": title, "status": status},
+            headers={"content-type": "application/problem+json"},
+        )
+
+    with pytest.raises(SchedulerRejected) as caught:
+        await _create(_client(problem, requests))
+
+    assert (caught.value.status, caught.value.title) == (status, title)
+    assert len(requests) == 1
+
+
+async def test_rejection_without_a_problem_body_uses_the_reason_phrase() -> None:
+    with pytest.raises(SchedulerRejected) as caught:
+        await _create(_client(lambda r: httpx.Response(422, text="<html>")))
+
+    assert caught.value.title == "Unprocessable Entity"
+
+
+@pytest.mark.parametrize("status", [500, 502, 503, 408, 429])
+async def test_server_errors_are_transient_and_not_retried(status: int) -> None:
+    requests: list[httpx.Request] = []
+
+    with pytest.raises(TransientError):
+        await _create(_client(lambda r: httpx.Response(status), requests))
+
+    assert len(requests) == 1
+
+
+@pytest.mark.parametrize(
+    ("exc", "code"),
+    [
+        (httpx.ReadTimeout("slow"), "SCHEDULER_TIMEOUT"),
+        (httpx.ConnectTimeout("slow"), "SCHEDULER_TIMEOUT"),
+        (httpx.ConnectError("refused"), "SCHEDULER_UNAVAILABLE"),
+        (httpx.RemoteProtocolError("bad"), "SCHEDULER_UNAVAILABLE"),
+    ],
+)
+async def test_transport_failures_are_transient(exc: httpx.HTTPError, code: str) -> None:
+    def fail(request: httpx.Request) -> httpx.Response:
+        raise exc
+
+    with pytest.raises(TransientError) as caught:
+        await _create(_client(fail))
+
+    assert caught.value.code == code
+    assert caught.value.__cause__ is None
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(201, json={"appointment_id": "apt_x"}),
+        httpx.Response(201, json=["apt"]),
+        httpx.Response(201, text="not json"),
+        httpx.Response(302, headers={"Location": "http://elsewhere/"}),
+        httpx.Response(204),
+    ],
+)
+async def test_unexpected_responses_are_permanent(response: httpx.Response) -> None:
+    with pytest.raises(PermanentError) as caught:
+        await _create(_client(lambda r: response))
+
+    assert caught.value.code == "SCHEDULER_UNEXPECTED_RESPONSE"
+
+
+async def test_client_is_reused_and_closed() -> None:
+    client = _client(_appointment(201))
+    await _create(client)
+    first = client._client
+
+    await _create(client)
+    assert client._client is first
+    await client.aclose()
+    assert client._client is None
+    await client.aclose()
+
+
+def test_repr_hides_the_api_key() -> None:
+    assert API_KEY not in repr(_client(_appointment(201)))
+
+
+def _full_body(**changes: Any) -> dict[str, Any]:
+    """What the API answers for REQUEST: exams sorted by code, official names."""
+    body = {
+        "appointment_id": APPOINTMENT_ID,
+        "status": "requested",
+        "patient_ref": REQUEST.patient_ref,
+        "exams": [
+            {"code": "LAB-10001", "name": "Hemograma completo"},
+            {"code": "LAB-10043", "name": "TSH"},
+        ],
+        "source_document_sha256": REQUEST.source_document_sha256,
+        "requested_by": REQUEST.requested_by,
+        "created_at": "2026-10-27T12:00:00Z",
+    }
+    return {**body, **changes}
+
+
+SUCCESS = [(201, {}, "scheduled"), (200, {"Idempotent-Replayed": "true"}, "replayed")]
+SUCCESS_ANSWERS = [(status, headers) for status, headers, _ in SUCCESS]
+
+
+@pytest.mark.parametrize(("status", "headers", "outcome"), SUCCESS)
+async def test_full_matching_response_is_confirmed(
+    status: int, headers: dict[str, str], outcome: str
+) -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json=_full_body(), headers=headers)
+
+    result = await _create(_client(respond))
+
+    assert (result.status, result.appointment_id) == (outcome, APPOINTMENT_ID)
+
+
+OTHER_REQUEST = {
+    "patient_ref": "pt_ABCDEFGHJKMNPQRSTVWXYZ234",
+    "source_document_sha256": "cd" * 32,
+    "exams": [{"code": "LAB-10109", "name": "Ferritina"}],
+}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # Audit F04: each of these was confirmed.
+        {"appointment_id": APPOINTMENT_ID},
+        _full_body(status="rejected"),
+        _full_body(patient_ref=OTHER_REQUEST["patient_ref"]),
+        _full_body(source_document_sha256=OTHER_REQUEST["source_document_sha256"]),
+        _full_body(exams=OTHER_REQUEST["exams"]),
+        _full_body(exams=[{"code": "LAB-10001", "name": "Hemograma completo"}]),
+        _full_body(requested_by="other_agent"),
+        _full_body(**OTHER_REQUEST),
+        _full_body(created_at="yesterday"),
+        _full_body(extra="field"),
+    ],
+    ids=[
+        "only-id",
+        "status",
+        "patient",
+        "hash",
+        "other-exams",
+        "missing-exam",
+        "requester",
+        "other-request",
+        "created-at",
+        "extra-field",
+    ],
+)
+@pytest.mark.parametrize(
+    ("status", "headers"), [(status, headers) for status, headers, _ in SUCCESS]
+)
+async def test_response_that_breaks_the_contract_or_the_request_is_unexpected(
+    body: dict[str, Any], status: int, headers: dict[str, str]
+) -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json=body, headers=headers)
+
+    with pytest.raises(PermanentError) as caught:
+        await _create(_client(respond))
+
+    assert caught.value.code == "SCHEDULER_UNEXPECTED_RESPONSE"
+    assert caught.value.__cause__ is None
+
+
+async def test_request_span_sends_traceparent_and_records_the_status(exported: Exported) -> None:
+    requests: list[httpx.Request] = []
+
+    await _create(_client(_appointment(201), requests))
+
+    [span] = exported.spans()
+    assert (span.name, span.kind) == ("POST /v1/appointments", SpanKind.CLIENT)
+    assert dict(span.attributes or {}) == {
+        "http.request.method": "POST",
+        "http.route": "/v1/appointments",
+        "http.response.status_code": 201,
+        "lab.exam_count": 2,
+    }
+    context = span.get_span_context()
+    [request] = requests
+    assert request.headers["traceparent"].split("-")[1:3] == [
+        f"{context.trace_id:032x}",
+        f"{context.span_id:016x}",
+    ]
+
+
+async def test_failed_request_span_carries_the_error_code(exported: Exported) -> None:
+    with pytest.raises(TransientError):
+        await _create(_client(_appointment(503)))
+
+    [span] = exported.spans()
+    assert span.status.status_code == StatusCode.ERROR
+    assert span.attributes is not None
+    assert span.attributes["lab.error_code"] == "SCHEDULER_UNAVAILABLE"

@@ -1,0 +1,193 @@
+[project]
+name = "lab-exam-agent"
+version = "0.1.0"
+description = "Transpiler from JSON agent specs to Google ADK workflows, plus the MCP servers and API they use."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2",
+    "structlog",
+]
+
+[project.optional-dependencies]
+transpiler = [
+    "jinja2",
+]
+# Local person-name detection for pii_guard; the model is a pinned wheel, installed at build time.
+ner = [
+    "presidio-analyzer==2.2.366",
+    "spacy==3.8.18",
+    "pt-core-news-md @ https://github.com/explosion/spacy-models/releases/download/pt_core_news_md-3.8.0/pt_core_news_md-3.8.0-py3-none-any.whl",
+]
+agent = [
+    "lab-exam-agent[transpiler,ner]",
+    "google-adk==2.13.0",
+    "httpx",
+    "rich",
+    "rapidfuzz",
+    "mcp>=1.24,<2",
+    "opentelemetry-sdk>=1.44,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
+]
+ocr = [
+    "lab-exam-agent[ner]",
+    "mcp>=1.24,<2",
+    "uvicorn",
+    "opencv-python-headless",
+    "pillow",
+    "anyio",
+    "pydantic-settings",
+    "opentelemetry-sdk>=1.44,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
+]
+rag = [
+    "mcp>=1.24,<2",
+    "uvicorn",
+    "rank-bm25",
+    "rapidfuzz",
+    "pydantic-settings",
+    "opentelemetry-sdk>=1.44,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
+]
+api = [
+    "fastapi>=0.162",
+    "uvicorn[standard]",
+    "sqlalchemy>=2",
+    "psycopg[binary]",
+    "alembic",
+    "pydantic-settings",
+    "python-ulid",
+    "opentelemetry-sdk>=1.44,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
+]
+
+[project.scripts]
+lab-transpile = "transpiler.cli:main"
+lab-agent = "agent_runtime.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "hypothesis",
+    "testcontainers[postgres]",
+    "jsonschema",
+    "ruff",
+    "mypy",
+    "import-linter",
+    "numpy",
+    "pre-commit",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "src/libs", "src/services", "tests"]
+# Golden files are transpiler output; test_golden checks that they stay ruff-formatted.
+extend-exclude = ["tests/golden"]
+# Also applies the exclusion to files pre-commit passes explicitly.
+force-exclude = true
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "BLE", "SIM", "RUF", "PL", "PT", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+# assert is the pytest idiom; literal expected values are clearer than named constants.
+"tests/**" = ["S101", "PLR2004"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "pii_guard",
+    "lab_common",
+    "transpiler",
+    "agent_runtime",
+    "ocr_mcp",
+    "rag_mcp",
+    "scheduler_api",
+]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src, src/libs, src/services"
+explicit_package_bases = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+strict_equality = true
+check_untyped_defs = true
+
+# Equivalent of --strict, which mypy only accepts globally.
+[[tool.mypy.overrides]]
+module = ["pii_guard.*", "lab_common.*", "transpiler.*", "agent_runtime.*"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+warn_return_any = true
+no_implicit_reexport = true
+extra_checks = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "unit: fast, isolated tests with no I/O outside tmp_path",
+    "contract: checks agreements between components (registry/factories, client/OpenAPI, ADK API)",
+    "integration: needs a real dependency (Postgres, Tesseract, MCP server over SSE)",
+    "security: PII leakage, injection and authentication checks",
+    "e2e: runs the full Docker Compose stack",
+    "llm: calls a real LLM; requires GOOGLE_API_KEY",
+]
+
+[tool.coverage.run]
+branch = true
+# Directories, not package names: with package names coverage matches on the
+# module name, and alembic loads migrations/env.py as a module named "env_py".
+source = [
+    "src/transpiler",
+    "src/agent_runtime",
+    "src/libs/pii_guard",
+    "src/libs/lab_common",
+    "src/services/ocr_mcp",
+    "src/services/rag_mcp",
+    "src/services/scheduler_api",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    'if __name__ == "__main__":',
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# For the pinned spaCy model wheel in the `ner` extra.
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+only-include = [
+    "src/transpiler",
+    "src/agent_runtime",
+    "src/libs/pii_guard",
+    "src/libs/lab_common",
+    "src/services/ocr_mcp",
+    "src/services/rag_mcp",
+    "src/services/scheduler_api",
+]
+
+# libs/ and services/ only group the sources: each package installs under its own name.
+[tool.hatch.build.targets.wheel.sources]
+"src/transpiler" = "transpiler"
+"src/agent_runtime" = "agent_runtime"
+"src/libs" = ""
+"src/services" = ""
