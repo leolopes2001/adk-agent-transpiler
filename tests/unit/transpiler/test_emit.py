@@ -40,12 +40,38 @@ def test_commit_replaces_previous_package(tmp_path: Path) -> None:
     old = tmp_path / "agent_x"
     old.mkdir()
     (old / "stale.py").write_text("old", encoding="utf-8")
+    (old / "_manifest.json").write_text("{}", encoding="utf-8")
 
     with staged_package(tmp_path, "agent_x") as stage:
         stage.write("agent.py", "new\n")
         stage.commit()
 
     assert sorted(p.name for p in old.iterdir()) == ["agent.py"]
+    assert _leftovers(tmp_path) == []
+
+
+def test_commit_fills_an_empty_directory(tmp_path: Path) -> None:
+    (tmp_path / "agent_x").mkdir()
+
+    with staged_package(tmp_path, "agent_x") as stage:
+        stage.write("agent.py", "new\n")
+        target = stage.commit()
+
+    assert sorted(p.name for p in target.iterdir()) == ["agent.py"]
+
+
+def test_commit_refuses_a_directory_it_did_not_generate(tmp_path: Path) -> None:
+    unrelated = tmp_path / "agent_x"
+    unrelated.mkdir()
+    (unrelated / "precious.py").write_text("keep me", encoding="utf-8")
+
+    with staged_package(tmp_path, "agent_x") as stage:
+        stage.write("agent.py", "new\n")
+        with pytest.raises(TranspileError) as exc:
+            stage.commit()
+
+    assert exc.value.diagnostics[0].code is Code.E_OUTPUT
+    assert (unrelated / "precious.py").read_text(encoding="utf-8") == "keep me"
     assert _leftovers(tmp_path) == []
 
 

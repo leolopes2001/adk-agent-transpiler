@@ -106,6 +106,17 @@ def test_header(package: RenderedPackage) -> None:
     assert package.init_py.splitlines()[0] == first
 
 
+def test_spec_name_cannot_break_out_of_the_header(spec_dict: SpecDict) -> None:
+    program = _lower(spec_dict)
+    injected = render(program, spec_name="x\nfrom agent_runtime import nodes\r\u2028#.json")
+    plain = render(program, spec_name="spec.json")
+
+    assert "from x\\nfrom agent_runtime import nodes\\r\\u2028#.json (" in injected.init_py
+    pairs = ((injected.agent_py, plain.agent_py), (injected.init_py, plain.init_py))
+    for source, expected in pairs:
+        assert ast.dump(ast.parse(source)) == ast.dump(ast.parse(expected))
+
+
 def test_generated_code_compiles(package: RenderedPackage) -> None:
     compile(package.agent_py, "agent.py", "exec")
     compile(package.init_py, "__init__.py", "exec")

@@ -84,6 +84,13 @@ def test_generated_sources_pass(package: RenderedPackage) -> None:
         "x = undefined_name",
         "with nodes:\n    pass",
         "if True:\n    x = 1",
+        "from agent_runtime import bootstrap",
+        "from agent_runtime.bootstrap import os",
+        "from google.adk.tools import FunctionTool",
+        "from .agent import os",
+        "from google.genai import types\nx = types.sys.exit(1)",
+        "y = nodes\nx = y.abort(name='x')",
+        "x = nodes.abort(name='a').name",
     ],
 )
 def test_forbidden_constructs(snippet: str) -> None:

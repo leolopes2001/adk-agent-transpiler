@@ -62,7 +62,10 @@ def test_not_utf8() -> None:
     assert _code(exc) == "E_SPEC_ENCODING"
 
 
-@pytest.mark.parametrize("data", [b"{", b'{"a": 1,}', b"", b'{"a": NaN}', b'{"a": Infinity}'])
+@pytest.mark.parametrize(
+    "data",
+    [b"{", b'{"a": 1,}', b"", b'{"a": NaN}', b'{"a": Infinity}', b'{"a": ' + b"9" * 5000 + b"}"],
+)
 def test_invalid_json(data: bytes) -> None:
     with pytest.raises(TranspileError) as exc:
         parse_json(data)

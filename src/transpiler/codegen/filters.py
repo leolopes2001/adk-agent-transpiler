@@ -40,6 +40,11 @@ def pyident(value: object) -> str:
     return value
 
 
+def comment_text(value: str) -> str:
+    """Escapes whatever could end the comment line; printable text is kept as is."""
+    return "".join(char if char.isprintable() else repr(char)[1:-1] for char in value)
+
+
 def string_lines(value: str) -> list[str]:
     return [_string(line) for line in value.splitlines(keepends=True)] or ['""']
 

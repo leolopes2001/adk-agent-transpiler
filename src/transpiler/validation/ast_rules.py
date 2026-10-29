@@ -21,11 +21,19 @@ _ALLOWED_NODES = (
     ast.List,
     ast.Dict,
 )
-_ALLOWED_IMPORTS: dict[str, frozenset[str] | None] = {
+# Exactly what the templates import: a whole module (e.g. agent_runtime.bootstrap) would expose
+# its own imports (os) as attributes.
+_ALLOWED_IMPORTS: dict[str, frozenset[str]] = {
     "__future__": frozenset({"annotations"}),
+    "google.adk": frozenset({"Agent", "Workflow"}),
+    "google.adk.apps": frozenset({"App", "ResumabilityConfig"}),
+    "google.adk.workflow": frozenset({"JoinNode", "RetryConfig"}),
     "google.genai": frozenset({"types"}),
+    "agent_runtime": frozenset({"guardrails", "nodes", "schemas"}),
+    "agent_runtime.bootstrap": frozenset({"HttpServiceConfig", "McpServerConfig", "RuntimeDeps"}),
+    "agent_runtime.models": frozenset({"resolve_model"}),
 }
-_ALLOWED_PREFIXES = ("google.adk", "agent_runtime")
+_ALLOWED_RELATIVE_IMPORTS = frozenset({"app", "root_agent"})
 _MODULE_NAMES = frozenset({"__all__"})
 
 
@@ -33,6 +41,7 @@ class _Checker:
     def __init__(self, filename: str) -> None:
         self.filename = filename
         self.bound: set[str] = set()
+        self.imported: set[str] = set()
 
     def forbid(self, node: ast.AST, message: str) -> Diagnostic:
         return _forbidden_diagnostic(node, self.filename, message)
@@ -57,6 +66,7 @@ class _Checker:
             if alias.name == "*" or alias.asname is not None:
                 yield self.forbid(node, "import com * ou alias não é permitido")
             self.bound.add(alias.asname or alias.name)
+            self.imported.add(alias.asname or alias.name)
 
     def assign(self, node: ast.Assign) -> Iterator[Diagnostic]:
         yield from self.visit(node.value)
@@ -88,8 +98,9 @@ class _Checker:
     def _check_attribute(self, node: ast.Attribute) -> Iterator[Diagnostic]:
         if node.attr.startswith("_"):
             yield self.forbid(node, f"atributo privado/dunder: {node.attr}")
-        if not isinstance(node.value, ast.Name | ast.Attribute):
-            yield self.forbid(node, "atributo só sobre nomes")
+        # No chains (types.sys.exit) and no aliases (x = types; x.sys): one hop from an import.
+        elif not isinstance(node.value, ast.Name) or node.value.id not in self.imported:
+            yield self.forbid(node, "atributo só direto sobre nomes importados")
 
     def _check_call(self, node: ast.Call) -> Iterator[Diagnostic]:
         if not isinstance(node.func, ast.Name | ast.Attribute):
@@ -133,11 +144,8 @@ def _forbidden_diagnostic(node: ast.AST, filename: str, message: str) -> Diagnos
 
 def _import_allowed(node: ast.ImportFrom) -> bool:
     if node.level:
-        return node.level == 1 and node.module == "agent"
+        allowed = _ALLOWED_RELATIVE_IMPORTS if node.level == 1 and node.module == "agent" else None
+    else:
+        allowed = _ALLOWED_IMPORTS.get(node.module or "")
 
-    module = node.module or ""
-    if module in _ALLOWED_IMPORTS:
-        allowed = _ALLOWED_IMPORTS[module]
-        return allowed is None or all(alias.name in allowed for alias in node.names)
-
-    return any(module == p or module.startswith(p + ".") for p in _ALLOWED_PREFIXES)
+    return allowed is not None and all(alias.name in allowed for alias in node.names)

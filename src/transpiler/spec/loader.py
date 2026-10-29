@@ -85,6 +85,12 @@ def parse_json(data: bytes) -> dict[str, Any]:
             Code.E_SPEC_JSON,
             f"JSON inválido na linha {exc.lineno}, coluna {exc.colno}: {exc.msg}",
         ) from exc
+    except ValueError as exc:  # integers past sys.get_int_max_str_digits()
+        raise _transpile_error(
+            Stage.SCHEMA,
+            Code.E_SPEC_JSON,
+            "JSON inválido: número fora dos limites suportados",
+        ) from exc
     except RecursionError:
         raise _transpile_error(
             Stage.SCHEMA,

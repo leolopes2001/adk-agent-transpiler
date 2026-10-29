@@ -33,6 +33,8 @@ class StagedPackage:
         target = self.out_root / self.name
         if target.is_symlink() or (target.exists() and not target.is_dir()):
             raise _output_error(f"destino existe e não é um diretório: {target}")
+        if target.exists() and not _is_replaceable(target):
+            raise _output_error(f"destino existe e não foi gerado pelo lab-transpile: {target}")
 
         previous = self.staging / _PREVIOUS_DIR
         if target.exists():
@@ -91,6 +93,11 @@ def staged_package(out_root: Path, name: str) -> Iterator[StagedPackage]:
         yield StagedPackage(out_root, name, staging)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+
+
+def _is_replaceable(target: Path) -> bool:
+    """Only an earlier package (it has a manifest) or an empty directory is ever replaced."""
+    return (target / MANIFEST_NAME).is_file() or not any(target.iterdir())
 
 
 def _output_error(message: str) -> TranspileError:
