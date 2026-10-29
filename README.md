@@ -80,22 +80,9 @@ Ele fica no volume porque, dentro do container, o transpilador roda com um usuá
 
 ## Arquitetura
 
-```mermaid
-flowchart LR
-    IMG[/"imagem"/] --> OCR["ocr<br/>OCR MCP"]
-    OCR --> GUARD["guard"]
-    subgraph EXT["extraction (paralelo)"]
-        LLM["Gemini"] --> JOIN["merge"]
-        LEX["busca no catálogo"] --> JOIN
-    end
-    GUARD --> EXT
-    EXT --> RAG["resolve<br/>RAG MCP"]
-    RAG --> GATE{"gate"}
-    GATE -->|aceito| SCH["schedule<br/>API"]
-    GATE -->|dúvida| REV["revisão humana"]
-    REV --> SCH
-    SCH --> OUT[/"resultado"/]
-```
+![Arquitetura](evidence/architecture/arquitetura.svg)
+
+![Fluxo do agente](evidence/architecture/fluxo.svg)
 
 - **A IA interpreta, o código decide.** O Gemini só lê o texto mascarado; quem escolhe o código e agenda é o gate.
 - **OCR e RAG são servidores MCP via SSE**, chamados por nós de código, nunca pelo LLM.
